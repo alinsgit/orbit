@@ -18,10 +18,11 @@
 - **Linting**: ESLint
 
 ## Sık Kullanılan Komutlar
-- `npm run dev` - Development server
-- `npm test` - Test suite
-- `npm run build` - Production build
-- `npm run lint` - Linting
+- `bun dev` - Development server
+- `bun test` - Test suite (Bun built-in)
+- `bun run build` - Production build
+- `bun run lint` - Linting
+- `bun install` - Dependency installation
 
 ## Git Workflow
 - `main` - Production branch

@@ -162,8 +162,12 @@ display_startup_errors = Off
 error_reporting = E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING
 log_errors = On
 
-; Session settings
+; Session cookie settings for iframe embedding
+; SameSite=None + Secure allows cookies in cross-origin iframes
+; 127.0.0.1 is treated as secure context by Chromium
 session.cookie_httponly = 1
+session.cookie_samesite = None
+session.cookie_secure = 1
 session.use_strict_mode = 1
 session.use_only_cookies = 1
 
@@ -212,8 +216,12 @@ ob_start();
 // Now set proper error reporting (without deprecated/warnings)
 error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING);
 
-// Session configuration - must be before session_start
+// Session cookie config for iframe embedding (cross-origin)
+// SameSite=None + Secure allows cookies in cross-origin iframes
+// 127.0.0.1 is a secure context in Chromium/WebView2
 @ini_set('session.cookie_httponly', '1');
+@ini_set('session.cookie_samesite', 'None');
+@ini_set('session.cookie_secure', '1');
 @ini_set('session.use_strict_mode', '1');
 @ini_set('session.use_only_cookies', '1');
 
@@ -253,20 +261,28 @@ error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING);
 @ini_set('display_startup_errors', '0');
 @error_reporting(0);
 
+// Session cookie config for iframe embedding
+@ini_set('session.cookie_samesite', 'None');
+@ini_set('session.cookie_secure', '1');
+@ini_set('session.cookie_httponly', '1');
+
 // Start output buffering to prevent "headers already sent" errors
 ob_start();
 
 // Error reporting - hide all notices, warnings, and deprecation
 error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING);
 
-// Blowfish secret for cookie auth
+// Blowfish secret
 $cfg['blowfish_secret'] = '{}';
 
 // Server configuration
 $i = 0;
 $i++;
 
-$cfg['Servers'][$i]['auth_type'] = 'cookie';
+// Auto-login: no login screen for local development
+$cfg['Servers'][$i]['auth_type'] = 'config';
+$cfg['Servers'][$i]['user'] = 'root';
+$cfg['Servers'][$i]['password'] = 'root';
 $cfg['Servers'][$i]['host'] = '127.0.0.1';
 $cfg['Servers'][$i]['port'] = '3306';
 $cfg['Servers'][$i]['compress'] = false;
@@ -283,8 +299,9 @@ $cfg['ThemeDefault'] = 'pmahomme';
 $cfg['Export']['compression'] = 'gzip';
 $cfg['Import']['charset'] = 'utf-8';
 
-// Increase session timeout
+// Increase session timeout (must match session.gc_maxlifetime)
 $cfg['LoginCookieValidity'] = 28800;
+@ini_set('session.gc_maxlifetime', '28800');
 
 // Allow large uploads
 $cfg['ExecTimeLimit'] = 600;
@@ -292,6 +309,9 @@ $cfg['MemoryLimit'] = '512M';
 
 // Allow embedding in iframe (for Orbit integration)
 $cfg['AllowThirdPartyFraming'] = true;
+
+// phpMyAdmin configuration storage (disable warning)
+$cfg['PmaNoRelation_DisableWarning'] = true;
 "#,
             blowfish_secret
         );
@@ -321,7 +341,7 @@ $cfg['AllowThirdPartyFraming'] = true;
 
         // PhpMyAdmin is served through nginx on port 8081
         let phpmyadmin_url = if installed {
-            "http://localhost:8081/".to_string()
+            "http://127.0.0.1:8081/".to_string()
         } else {
             String::new()
         };

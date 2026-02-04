@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings, ExternalLink } from 'lucide-react';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings, ExternalLink, ArrowLeft } from 'lucide-react';
 import {
   getDatabaseToolsStatus,
   installAdminer,
@@ -34,6 +33,7 @@ export default function DatabaseViewer() {
   const [phpRunning, setPhpRunning] = useState(false);
   const [nginxRunning, setNginxRunning] = useState(false);
   const [services, setServices] = useState<InstalledService[]>([]);
+  const [activeTool, setActiveTool] = useState<DatabaseTool | null>(null);
 
   useEffect(() => {
     loadStatus();
@@ -52,7 +52,29 @@ export default function DatabaseViewer() {
       setStatus(toolsStatus);
       setServices(installedServices);
 
-      // Check service statuses
+      // Auto-repair: ensure nginx configs exist for installed tools
+      const phpSvc = installedServices.find(s => s.service_type === 'php' || s.service_type.startsWith('php'));
+      if (phpSvc) {
+        const versionMatch = phpSvc.name.match(/php-(\d+)\.(\d+)/);
+        let phpPort = 9004;
+        if (versionMatch) {
+          const major = parseInt(versionMatch[1]);
+          const minor = parseInt(versionMatch[2]);
+          phpPort = major === 8 ? 9000 + minor : major === 7 ? 9070 + minor : 9004;
+        }
+
+        try {
+          if (toolsStatus.adminer.adminer_installed) {
+            await setupAdminerNginx(phpPort);
+          }
+          if (toolsStatus.phpmyadmin.installed) {
+            await setupPhpMyAdminNginx(phpPort);
+          }
+        } catch {
+          // Ignore - configs may already exist
+        }
+      }
+
       const mariadbService = installedServices.find(s => s.service_type === 'mariadb');
       const phpService = installedServices.find(s => s.service_type.startsWith('php'));
       const nginxService = installedServices.find(s => s.service_type === 'nginx');
@@ -224,34 +246,52 @@ export default function DatabaseViewer() {
     }
   };
 
-  const handleOpenTool = async (tool: DatabaseTool) => {
+  const handleOpenTool = (tool: DatabaseTool) => {
     if (!allServicesRunning || !status) return;
-    const url = tool === 'adminer' ? status.adminer.adminer_url : status.phpmyadmin.url;
-    const label = tool === 'adminer' ? 'Adminer' : 'phpMyAdmin';
-    const winLabel = `orbit-${tool}`;
-
-    try {
-      // Check if window already exists
-      const existing = await WebviewWindow.getByLabel(winLabel);
-      if (existing) {
-        await existing.setFocus();
-        return;
-      }
-    } catch { /* not found, create new */ }
-
-    new WebviewWindow(winLabel, {
-      url,
-      title: `${label} - Orbit`,
-      width: 1100,
-      height: 750,
-      center: true,
-    });
+    setActiveTool(tool);
   };
 
   const allServicesRunning = mariadbRunning && phpRunning && nginxRunning;
   const hasRequiredServices = services.some(s => s.service_type === 'mariadb') &&
     services.some(s => s.service_type.startsWith('php')) &&
     services.some(s => s.service_type === 'nginx');
+
+  // Embedded iframe mode
+  if (activeTool && status) {
+    const url = activeTool === 'adminer' ? status.adminer.adminer_url : status.phpmyadmin.url;
+    const toolLabel = activeTool === 'adminer' ? 'Adminer' : 'phpMyAdmin';
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-edge bg-surface-inset shrink-0">
+          <button
+            onClick={() => setActiveTool(null)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-content-secondary hover:text-content bg-surface-raised hover:bg-surface rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-orange-500" />
+            <span className="text-sm font-medium text-content">{toolLabel}</span>
+          </div>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 text-xs text-content-muted hover:text-content transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Open in browser
+          </a>
+        </div>
+        <iframe
+          src={url}
+          className="flex-1 w-full border-0"
+          title={toolLabel}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -403,7 +443,6 @@ export default function DatabaseViewer() {
                           }`}
                         >
                           Open
-                          <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={handleUninstallAdminer}
@@ -455,7 +494,6 @@ export default function DatabaseViewer() {
                           }`}
                         >
                           Open
-                          <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={handleUninstallPhpMyAdmin}
@@ -497,25 +535,7 @@ export default function DatabaseViewer() {
                     <span className="text-content-muted">Default User:</span>
                     <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">root</code>
                   </div>
-                  {status?.adminer.adminer_installed && (
-                    <div className="flex justify-between">
-                      <span className="text-content-muted">Adminer URL:</span>
-                      <code className="text-content-secondary bg-surface px-2 py-0.5 rounded text-xs">{status.adminer.adminer_url}</code>
-                    </div>
-                  )}
-                  {status?.phpmyadmin.installed && (
-                    <div className="flex justify-between">
-                      <span className="text-content-muted">PhpMyAdmin URL:</span>
-                      <code className="text-content-secondary bg-surface px-2 py-0.5 rounded text-xs">{status.phpmyadmin.url}</code>
-                    </div>
-                  )}
                 </div>
-
-                {!allServicesRunning && (
-                  <p className="text-xs text-amber-400 mt-3">
-                    Start all required services to access the database tools
-                  </p>
-                )}
               </div>
             )}
           </div>

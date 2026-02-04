@@ -4,6 +4,8 @@ node_modules/
 .pnp.js
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
+bun.lockb
 
 # Build outputs
 dist/
