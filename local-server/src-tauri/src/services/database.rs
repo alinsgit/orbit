@@ -68,6 +68,11 @@ impl DatabaseManager {
 @ini_set('display_startup_errors', '0');
 @error_reporting(0);
 
+// Session cookie config for iframe embedding
+@ini_set('session.cookie_samesite', 'None');
+@ini_set('session.cookie_secure', '1');
+@ini_set('session.cookie_httponly', '1');
+
 // Start output buffering
 ob_start();
 
@@ -80,13 +85,29 @@ function adminer_object() {{
             return 'Orbit DB Manager';
         }}
 
-        // NO hardcoded credentials - user must authenticate
+        // Auto-login credentials for local development
+        function credentials() {{
+            return array('127.0.0.1', 'root', 'root');
+        }}
+
+        function login($login, $password) {{
+            return true;
+        }}
+
+        // Auto-submit login form so user never sees it
         function loginForm() {{
+            echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {{
+                var form = document.querySelector("form");
+                if (form && !document.querySelector(".error")) {{
+                    form.submit();
+                }}
+            }});
+            </script>';
             return parent::loginForm();
         }}
 
         function permanentLogin($create = false) {{
-            // Enable "remember me" but don't auto-login
             return 'orbit_session';
         }}
 
@@ -94,7 +115,6 @@ function adminer_object() {{
             return null;
         }}
 
-        // Default to localhost
         function servers() {{
             return array('127.0.0.1' => 'Local MariaDB');
         }}
@@ -122,6 +142,13 @@ display_errors = Off
 display_startup_errors = Off
 error_reporting = E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING
 log_errors = On
+
+; Session cookie settings for iframe embedding
+session.cookie_httponly = 1
+session.cookie_samesite = None
+session.cookie_secure = 1
+session.use_strict_mode = 1
+session.use_only_cookies = 1
 
 ; Memory and execution limits for large databases
 memory_limit = 512M
@@ -152,7 +179,7 @@ post_max_size = 128M
 
         // Adminer is served through nginx on a special route
         let adminer_url = if installed {
-            "http://localhost:8080/adminer/".to_string()
+            "http://127.0.0.1:8080/adminer/".to_string()
         } else {
             String::new()
         };
