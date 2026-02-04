@@ -27,6 +27,52 @@ fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     cmd
 }
 
+/// Check if a port is in use
+fn is_port_in_use(port: u16) -> bool {
+    use std::net::TcpListener;
+    TcpListener::bind(format!("127.0.0.1:{}", port)).is_err()
+}
+
+/// Get expected port for a service by name
+fn get_service_port(service_name: &str) -> Option<u16> {
+    if service_name.contains("mariadb") || service_name.contains("mysql") {
+        Some(3306)
+    } else if service_name.contains("nginx") {
+        Some(80)
+    } else if service_name.contains("apache") || service_name.contains("httpd") {
+        Some(80)
+    } else if service_name.contains("php") {
+        if let Some(version_str) = service_name.strip_prefix("php-") {
+            let parts: Vec<&str> = version_str.split('.').collect();
+            if parts.len() >= 2 {
+                let minor: u16 = parts[1].parse().unwrap_or(4);
+                Some(9000 + minor)
+            } else {
+                Some(9004)
+            }
+        } else {
+            Some(9004)
+        }
+    } else {
+        None
+    }
+}
+
+/// Get process image names for taskkill when stopping orphaned processes
+fn get_process_names(service_name: &str) -> Vec<&'static str> {
+    if service_name.contains("mariadb") || service_name.contains("mysql") {
+        vec!["mysqld.exe", "mariadbd.exe"]
+    } else if service_name.contains("nginx") {
+        vec!["nginx.exe"]
+    } else if service_name.contains("apache") || service_name.contains("httpd") {
+        vec!["httpd.exe"]
+    } else if service_name.contains("php") {
+        vec!["php-cgi.exe"]
+    } else {
+        vec![]
+    }
+}
+
 // Global state to hold running processes
 pub struct ServiceManager {
     processes: Arc<Mutex<HashMap<String, Child>>>,
@@ -79,6 +125,14 @@ impl ServiceManager {
         bin_path: &str,
         args: &[&str],
     ) -> Result<u32, String> {
+        // Check if service is already running (covers orphaned processes)
+        if let Some(port) = get_service_port(&name) {
+            if is_port_in_use(port) {
+                log::info!("Service {} already running on port {}", name, port);
+                return Ok(0); // Already running, report success
+            }
+        }
+
         let bin_path_buf = PathBuf::from(bin_path);
         Self::ensure_config(service_type, &bin_path_buf);
 
@@ -141,7 +195,6 @@ impl ServiceManager {
         if let Some(mut child) = processes.remove(service_name) {
             let pid = child.id();
 
-            // Try taskkill first for process tree cleanup, then fall back to child.kill()
             #[cfg(target_os = "windows")]
             {
                 let _ = hidden_command("taskkill")
@@ -153,33 +206,66 @@ impl ServiceManager {
                 let _ = Command::new("kill").arg(pid.to_string()).output();
             }
 
-            // Ensure child is reaped
             let _ = child.wait();
             Ok(())
         } else {
-            Err("Service not found or not running".to_string())
+            // Not in HashMap — try to kill orphaned process by image name
+            let process_names = get_process_names(service_name);
+            let mut killed = false;
+
+            #[cfg(target_os = "windows")]
+            for pname in &process_names {
+                let output = hidden_command("taskkill")
+                    .args(&["/F", "/IM", pname, "/T"])
+                    .output();
+                if let Ok(o) = output {
+                    if o.status.success() {
+                        killed = true;
+                        break;
+                    }
+                }
+            }
+
+            #[cfg(not(target_os = "windows"))]
+            for pname in &process_names {
+                let _ = Command::new("killall").arg(pname).output();
+                killed = true;
+            }
+
+            if killed {
+                Ok(())
+            } else {
+                Err("Service not found or not running".to_string())
+            }
         }
     }
 
     pub fn get_status(&self, service_name: &str) -> Option<String> {
         let mut processes = self.processes.lock().ok()?;
 
-        let is_alive = if let Some(child) = processes.get_mut(service_name) {
+        // Check in-memory tracked processes first
+        if let Some(child) = processes.get_mut(service_name) {
             match child.try_wait() {
-                Ok(Some(_)) => false, // Process exited
-                Ok(None) => true,     // Still running
-                Err(_) => false,      // Error checking, assume dead
+                Ok(Some(_)) => {
+                    processes.remove(service_name);
+                    // Fall through to port check
+                }
+                Ok(None) => return Some("running".to_string()),
+                Err(_) => {
+                    processes.remove(service_name);
+                    // Fall through to port check
+                }
             }
-        } else {
-            return Some("stopped".to_string());
-        };
-
-        if !is_alive {
-            processes.remove(service_name);
-            Some("stopped".to_string())
-        } else {
-            Some("running".to_string())
         }
+
+        // Not tracked or exited — check if running externally (orphan from previous session)
+        if let Some(port) = get_service_port(service_name) {
+            if is_port_in_use(port) {
+                return Some("running".to_string());
+            }
+        }
+
+        Some("stopped".to_string())
     }
 
     #[allow(dead_code)]
