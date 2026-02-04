@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings } from 'lucide-react';
+import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings, ExternalLink } from 'lucide-react';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import {
   getDatabaseToolsStatus,
   installAdminer,
@@ -32,7 +33,6 @@ export default function DatabaseViewer() {
   const [mariadbRunning, setMariadbRunning] = useState(false);
   const [phpRunning, setPhpRunning] = useState(false);
   const [nginxRunning, setNginxRunning] = useState(false);
-  const [showTool, setShowTool] = useState<DatabaseTool | null>(null);
   const [services, setServices] = useState<InstalledService[]>([]);
 
   useEffect(() => {
@@ -224,45 +224,34 @@ export default function DatabaseViewer() {
     }
   };
 
-  const handleOpenTool = (tool: DatabaseTool) => {
-    if (allServicesRunning) {
-      setShowTool(tool);
-    }
+  const handleOpenTool = async (tool: DatabaseTool) => {
+    if (!allServicesRunning || !status) return;
+    const url = tool === 'adminer' ? status.adminer.adminer_url : status.phpmyadmin.url;
+    const label = tool === 'adminer' ? 'Adminer' : 'phpMyAdmin';
+    const winLabel = `orbit-${tool}`;
+
+    try {
+      // Check if window already exists
+      const existing = await WebviewWindow.getByLabel(winLabel);
+      if (existing) {
+        await existing.setFocus();
+        return;
+      }
+    } catch { /* not found, create new */ }
+
+    new WebviewWindow(winLabel, {
+      url,
+      title: `${label} - Orbit`,
+      width: 1100,
+      height: 750,
+      center: true,
+    });
   };
 
   const allServicesRunning = mariadbRunning && phpRunning && nginxRunning;
   const hasRequiredServices = services.some(s => s.service_type === 'mariadb') &&
     services.some(s => s.service_type.startsWith('php')) &&
     services.some(s => s.service_type === 'nginx');
-
-  if (showTool && status) {
-    const toolUrl = showTool === 'adminer' ? status.adminer.adminer_url : status.phpmyadmin.url;
-    const toolName = showTool === 'adminer' ? 'Adminer' : 'PhpMyAdmin';
-
-    return (
-      <div className="flex flex-col h-full bg-surface">
-        <div className="flex items-center justify-between p-3 border-b border-edge bg-surface">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-orange-500" />
-            <span className="font-medium text-content">{toolName}</span>
-          </div>
-          <button
-            onClick={() => setShowTool(null)}
-            className="px-3 py-1.5 text-sm bg-surface-raised hover:bg-hover rounded-lg transition-colors"
-          >
-            Back
-          </button>
-        </div>
-        <div className="flex-1 bg-white">
-          <iframe
-            src={toolUrl}
-            className="w-full h-full border-0"
-            title={toolName}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full flex flex-col">
@@ -407,13 +396,14 @@ export default function DatabaseViewer() {
                         <button
                           onClick={() => handleOpenTool('adminer')}
                           disabled={!allServicesRunning}
-                          className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
                             allServicesRunning
                               ? 'bg-orange-600 hover:bg-orange-700'
                               : 'bg-surface-inset cursor-not-allowed opacity-50'
                           }`}
                         >
                           Open
+                          <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={handleUninstallAdminer}
@@ -458,13 +448,14 @@ export default function DatabaseViewer() {
                         <button
                           onClick={() => handleOpenTool('phpmyadmin')}
                           disabled={!allServicesRunning}
-                          className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
                             allServicesRunning
                               ? 'bg-blue-600 hover:bg-blue-700'
                               : 'bg-surface-inset cursor-not-allowed opacity-50'
                           }`}
                         >
                           Open
+                          <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={handleUninstallPhpMyAdmin}
