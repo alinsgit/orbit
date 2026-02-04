@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, Eye, XCircle
 } from 'lucide-react';
 import { getLogFiles, readLogFile, clearLogFile, clearAllLogs, LogFile, LogEntry } from '../lib/api';
+import { useApp } from '../lib/AppContext';
 
 // Format bytes to human readable
 const formatBytes = (bytes: number): string => {
@@ -35,6 +36,7 @@ const LOG_LEVEL_CONFIG: Record<string, { color: string; bgColor: string; icon: R
 };
 
 export function LogViewer() {
+  const { addToast } = useApp();
   const [logFiles, setLogFiles] = useState<LogFile[]>([]);
   const [selectedLog, setSelectedLog] = useState<LogFile | null>(null);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -129,8 +131,6 @@ export function LogViewer() {
   // Clear log
   const handleClearLog = async () => {
     if (!selectedLog) return;
-    if (!confirm(`Clear ${selectedLog.name}?`)) return;
-
     try {
       await clearLogFile(selectedLog.path);
       loadLogEntries();
@@ -142,18 +142,15 @@ export function LogViewer() {
 
   // Clear all logs
   const handleClearAllLogs = async () => {
-    if (!confirm('Clear ALL log files? This cannot be undone.')) return;
-
     try {
-      const clearedCount = await clearAllLogs();
-      alert(`${clearedCount} log files cleared.`);
+      await clearAllLogs();
       loadLogFiles();
       if (selectedLog) {
         loadLogEntries();
       }
     } catch (e) {
       console.error('Failed to clear all logs:', e);
-      alert('Failed to clear logs: ' + e);
+      addToast({ type: 'error', message: 'Failed to clear logs: ' + e });
     }
   };
 

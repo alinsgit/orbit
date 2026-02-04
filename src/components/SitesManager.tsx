@@ -49,7 +49,7 @@ const TEMPLATE_INFO: Record<SiteTemplate, { label: string; icon: React.ReactNode
 };
 
 export function SitesManager() {
-  const { getInstalledPhpVersions, services } = useApp();
+  const { getInstalledPhpVersions, services, addToast } = useApp();
 
   // Check which web servers are installed
   const nginxInstalled = services.some(s => s.service_type === 'nginx');
@@ -173,7 +173,7 @@ export function SitesManager() {
   // Handle add site
   const handleAddSite = async () => {
     if (!newSite.domain || !newSite.path) {
-      alert('Domain and path are required');
+      addToast({ type: 'warning', message: 'Domain and path are required' });
       return;
     }
 
@@ -216,7 +216,7 @@ export function SitesManager() {
       await refreshSites();
     } catch (e: any) {
       console.error(e);
-      alert('Failed to create site: ' + e);
+      addToast({ type: 'error', message: 'Failed to create site: ' + e });
     } finally {
       setLoading(false);
     }
@@ -224,10 +224,6 @@ export function SitesManager() {
 
   // Handle delete site
   const handleDeleteSite = async (domain: string, webServer?: WebServer) => {
-    if (!confirm(`Are you sure you want to delete ${domain}?`)) {
-      return;
-    }
-
     setProcessing(domain);
     try {
       await deleteSite(domain);
@@ -240,7 +236,7 @@ export function SitesManager() {
       await refreshSites();
     } catch (e: any) {
       console.error(e);
-      alert('Failed to delete site: ' + e);
+      addToast({ type: 'error', message: 'Failed to delete site: ' + e });
     } finally {
       setProcessing(null);
     }
@@ -278,7 +274,7 @@ export function SitesManager() {
       setEditForm(null);
     } catch (e: any) {
       console.error(e);
-      alert('Failed to update site: ' + e);
+      addToast({ type: 'error', message: 'Failed to update site: ' + e });
     } finally {
       setProcessing(null);
     }
@@ -298,7 +294,7 @@ export function SitesManager() {
       await refreshSites();
     } catch (e: any) {
       console.error(e);
-      alert('Failed to regenerate config: ' + e);
+      addToast({ type: 'error', message: 'Failed to regenerate config: ' + e });
     } finally {
       setProcessing(null);
     }

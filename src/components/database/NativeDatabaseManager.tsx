@@ -155,9 +155,6 @@ export default function NativeDatabaseManager() {
   };
 
   const handleDropDatabase = async (name: string) => {
-    if (!confirm(`Are you sure you want to delete database "${name}"? This cannot be undone.`)) {
-      return;
-    }
     try {
       setLoading(true);
       await dropDatabase(name);
@@ -186,9 +183,6 @@ export default function NativeDatabaseManager() {
   };
 
   const handleDropUser = async (user: UserInfo) => {
-    if (!confirm(`Are you sure you want to delete user "${user.user}@${user.host}"?`)) {
-      return;
-    }
     try {
       setLoading(true);
       await dropUser(user.user, user.host);

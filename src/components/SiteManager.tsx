@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, FolderOpen, Globe, ExternalLink, Loader2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-shell';
+import { useApp } from '../lib/AppContext';
 // import { open as openDialog } from '@tauri-apps/plugin-dialog'; // Need to add this plugin later
 
 interface Site {
@@ -12,6 +13,7 @@ interface Site {
 }
 
 export function SiteManager() {
+  const { addToast } = useApp();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -48,7 +50,7 @@ export function SiteManager() {
       setNewSite({ domain: '', path: '', port: 80 });
       fetchSites();
     } catch (e) {
-      alert('Failed to create site: ' + e);
+      addToast({ type: 'error', message: 'Failed to create site: ' + e });
     }
   };
 

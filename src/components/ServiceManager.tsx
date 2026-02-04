@@ -191,10 +191,6 @@ export function ServiceManager() {
   };
 
   const handleUninstall = async (name: string, serviceType: string, path: string) => {
-    if (!confirm(`Are you sure you want to uninstall ${name}?`)) {
-      return;
-    }
-
     setProcessing(name);
     try {
       await uninstallService(name, serviceType, path);
