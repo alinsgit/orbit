@@ -1,0 +1,148 @@
+use crate::services::nginx::NginxManager;
+use crate::services::sites::{Site, SiteManager, SiteWithStatus};
+use serde::{Deserialize, Serialize};
+use tauri::command;
+use tauri::AppHandle;
+
+#[derive(Serialize, Deserialize)]
+pub struct SiteExport {
+    pub version: String,
+    pub exported_at: String,
+    pub sites: Vec<SiteExportEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SiteExportEntry {
+    pub name: String,
+    pub domain: String,
+    pub root_path: String,
+    pub php_version: Option<String>,
+    pub ssl_enabled: bool,
+    pub template: Option<String>,
+    pub web_server: String,
+}
+
+#[command]
+pub fn create_site(app: AppHandle, site: Site) -> Result<SiteWithStatus, String> {
+    SiteManager::create_site(&app, site)
+}
+
+#[command]
+pub fn get_sites(app: AppHandle) -> Result<Vec<SiteWithStatus>, String> {
+    SiteManager::get_sites(&app)
+}
+
+#[command]
+pub fn get_site(app: AppHandle, domain: String) -> Result<Option<SiteWithStatus>, String> {
+    SiteManager::get_site(&app, &domain)
+}
+
+#[command]
+pub fn update_site(app: AppHandle, domain: String, site: Site) -> Result<SiteWithStatus, String> {
+    SiteManager::update_site(&app, &domain, site)
+}
+
+#[command]
+pub fn delete_site(app: AppHandle, domain: String) -> Result<String, String> {
+    SiteManager::delete_site(&app, &domain)?;
+    Ok("Site deleted successfully".to_string())
+}
+
+#[command]
+pub fn regenerate_site_config(app: AppHandle, domain: String) -> Result<String, String> {
+    SiteManager::regenerate_config(&app, &domain)?;
+    Ok("Config regenerated successfully".to_string())
+}
+
+// Nginx management commands
+#[command]
+pub fn nginx_test_config(app: AppHandle) -> Result<String, String> {
+    NginxManager::test_config(&app)
+}
+
+#[command]
+pub fn nginx_reload(app: AppHandle) -> Result<String, String> {
+    NginxManager::reload(&app)
+}
+
+#[command]
+pub fn nginx_status() -> Result<bool, String> {
+    Ok(NginxManager::is_running())
+}
+
+#[command]
+pub fn export_sites(app: AppHandle) -> Result<SiteExport, String> {
+    let sites = SiteManager::get_sites(&app)?;
+
+    let export_entries: Vec<SiteExportEntry> = sites
+        .iter()
+        .map(|site| SiteExportEntry {
+            name: site.domain.replace(".local", ""),
+            domain: site.domain.clone(),
+            root_path: site.path.clone(),
+            php_version: site.php_version.clone(),
+            ssl_enabled: site.ssl_enabled,
+            template: site.template.clone(),
+            web_server: site.web_server.clone(),
+        })
+        .collect();
+
+    Ok(SiteExport {
+        version: "1.0".to_string(),
+        exported_at: chrono::Local::now().to_rfc3339(),
+        sites: export_entries,
+    })
+}
+
+#[command]
+pub fn import_sites(app: AppHandle, import_data: SiteExport, skip_existing: bool) -> Result<ImportResult, String> {
+    let existing_sites = SiteManager::get_sites(&app)?;
+    let existing_domains: Vec<String> = existing_sites.iter().map(|s| s.domain.clone()).collect();
+
+    let mut imported = 0;
+    let mut skipped = 0;
+    let mut errors: Vec<String> = vec![];
+
+    for entry in import_data.sites {
+        // Check if site already exists
+        if existing_domains.contains(&entry.domain) {
+            if skip_existing {
+                skipped += 1;
+                continue;
+            } else {
+                errors.push(format!("Site {} already exists", entry.domain));
+                continue;
+            }
+        }
+
+        // Create site from import entry
+        let site = Site {
+            domain: entry.domain.clone(),
+            path: entry.root_path,
+            port: 80,
+            php_version: entry.php_version,
+            php_port: None,
+            ssl_enabled: entry.ssl_enabled,
+            template: entry.template,
+            web_server: entry.web_server,
+        };
+
+        match SiteManager::create_site(&app, site) {
+            Ok(_) => imported += 1,
+            Err(e) => errors.push(format!("Failed to import {}: {}", entry.domain, e)),
+        }
+    }
+
+    Ok(ImportResult {
+        imported,
+        skipped,
+        errors,
+    })
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ImportResult {
+    pub imported: usize,
+    pub skipped: usize,
+    pub errors: Vec<String>,
+}
