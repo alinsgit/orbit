@@ -11,6 +11,7 @@ import {
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { open } from '@tauri-apps/plugin-dialog';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
 
 type SiteTemplate = 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static';
 
@@ -692,15 +693,13 @@ export function SitesManager() {
                     )}
 
                     {/* Open Link */}
-                    <a
-                      href={`${site.ssl_enabled ? 'https' : 'http'}://${site.domain}${site.port !== 80 && site.port !== 443 ? ':' + site.port : ''}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => shellOpen(`${site.ssl_enabled ? 'https' : 'http'}://${site.domain}${site.port !== 80 && site.port !== 443 ? ':' + site.port : ''}`)}
                       className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer"
                     >
                       <ExternalLink size={12} />
                       Open in browser
-                    </a>
+                    </button>
                   </>
                 )}
               </div>
