@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
+#[cfg(not(windows))]
+use std::process::Command;
 use tauri::{AppHandle, Manager};
 
 use super::hidden_command;

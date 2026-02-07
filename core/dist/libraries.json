@@ -1,0 +1,372 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicepkg/orbit-libraries/main/schema.json",
+  "updated": "2026-02-07T03:11:54.424Z",
+  "version": "1.1.0",
+  "services": {
+    "php": {
+      "name": "PHP",
+      "description": "PHP Hypertext Preprocessor",
+      "availableVersions": [
+        "8.5",
+        "8.4",
+        "8.3",
+        "8.2",
+        "8.1"
+      ],
+      "versions": {
+        "8.5": {
+          "latest": "8.5.1",
+          "windows": {
+            "url": "https://windows.php.net/downloads/releases/php-8.5.1-nts-Win32-vs17-x64.zip",
+            "filename": "php-8.5.1-nts-Win32-vs17-x64.zip"
+          }
+        },
+        "8.4": {
+          "latest": "8.4.16",
+          "windows": {
+            "url": "https://windows.php.net/downloads/releases/php-8.4.16-nts-Win32-vs17-x64.zip",
+            "filename": "php-8.4.16-nts-Win32-vs17-x64.zip"
+          }
+        },
+        "8.3": {
+          "latest": "8.3.29",
+          "windows": {
+            "url": "https://windows.php.net/downloads/releases/php-8.3.29-nts-Win32-vs16-x64.zip",
+            "filename": "php-8.3.29-nts-Win32-vs16-x64.zip"
+          }
+        },
+        "8.2": {
+          "latest": "8.2.30",
+          "windows": {
+            "url": "https://windows.php.net/downloads/releases/php-8.2.30-nts-Win32-vs16-x64.zip",
+            "filename": "php-8.2.30-nts-Win32-vs16-x64.zip"
+          }
+        },
+        "8.1": {
+          "latest": "8.1.34",
+          "windows": {
+            "url": "https://windows.php.net/downloads/releases/php-8.1.34-nts-Win32-vs16-x64.zip",
+            "filename": "php-8.1.34-nts-Win32-vs16-x64.zip"
+          }
+        }
+      }
+    },
+    "nginx": {
+      "name": "Nginx",
+      "description": "High-performance HTTP server",
+      "availableVersions": [
+        "1.29",
+        "1.28",
+        "1.26",
+        "1.24",
+        "1.22"
+      ],
+      "versions": {
+        "1.29": {
+          "latest": "1.29.5",
+          "windows": {
+            "url": "https://nginx.org/download/nginx-1.29.5.zip",
+            "filename": "nginx-1.29.5.zip"
+          }
+        },
+        "1.28": {
+          "latest": "1.28.2",
+          "windows": {
+            "url": "https://nginx.org/download/nginx-1.28.2.zip",
+            "filename": "nginx-1.28.2.zip"
+          }
+        },
+        "1.26": {
+          "latest": "1.26.3",
+          "windows": {
+            "url": "https://nginx.org/download/nginx-1.26.3.zip",
+            "filename": "nginx-1.26.3.zip"
+          }
+        },
+        "1.24": {
+          "latest": "1.24.0",
+          "windows": {
+            "url": "https://nginx.org/download/nginx-1.24.0.zip",
+            "filename": "nginx-1.24.0.zip"
+          }
+        },
+        "1.22": {
+          "latest": "1.22.1",
+          "windows": {
+            "url": "https://nginx.org/download/nginx-1.22.1.zip",
+            "filename": "nginx-1.22.1.zip"
+          }
+        }
+      }
+    },
+    "apache": {
+      "name": "Apache HTTP Server",
+      "description": "The most widely used web server",
+      "availableVersions": [
+        "2.4.66-VS18",
+        "2.4.66-VS17"
+      ],
+      "versions": {
+        "2.4.66-VS18": {
+          "latest": "2.4.66",
+          "windows": {
+            "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.66-260131-Win64-VS18.zip",
+            "filename": "httpd-2.4.66-260131-Win64-VS18.zip"
+          }
+        },
+        "2.4.66-VS17": {
+          "latest": "2.4.66",
+          "windows": {
+            "url": "https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.66-251206-Win64-VS17.zip",
+            "filename": "httpd-2.4.66-251206-Win64-VS17.zip"
+          }
+        }
+      }
+    },
+    "mariadb": {
+      "name": "MariaDB",
+      "description": "Community-developed MySQL fork",
+      "availableVersions": [
+        "12.1",
+        "11.8",
+        "11.4",
+        "10.11",
+        "10.6"
+      ],
+      "versions": {
+        "12.1": {
+          "latest": "12.1.2",
+          "windows": {
+            "url": "https://downloads.mariadb.org/f/mariadb-12.1.2/winx64-packages/mariadb-12.1.2-winx64.zip",
+            "filename": "mariadb-12.1.2-winx64.zip",
+            "sha256": "b3d11ae1edf0d00abeefb811f663df5a036ee237fc2df399f822a9b1f65537d8"
+          },
+          "linux": {
+            "url": "https://downloads.mariadb.org/f/mariadb-12.1.2/bintar-linux-systemd-x86_64/mariadb-12.1.2-linux-systemd-x86_64.tar.gz",
+            "filename": "mariadb-12.1.2-linux-systemd-x86_64.tar.gz",
+            "sha256": "225ac1e187b4f3a675dbe66061a5b17236fc46ee93a645fed9ae6a1dbbbdbea1"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mariadb.org/f/mariadb-12.1.2/macos-system-arm64/mariadb-12.1.2-macos13-arm64.tar.gz",
+            "filename": "mariadb-12.1.2-macos13-arm64.tar.gz"
+          }
+        },
+        "11.8": {
+          "latest": "11.8.6",
+          "windows": {
+            "url": "https://downloads.mariadb.org/f/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip",
+            "filename": "mariadb-11.8.6-winx64.zip",
+            "sha256": "98cb8429841fc558fbc48e8c979c3b66c88ac506d7505a589e8ac74a039b0b21"
+          },
+          "linux": {
+            "url": "https://downloads.mariadb.org/f/mariadb-11.8.6/bintar-linux-systemd-x86_64/mariadb-11.8.6-linux-systemd-x86_64.tar.gz",
+            "filename": "mariadb-11.8.6-linux-systemd-x86_64.tar.gz",
+            "sha256": "9367b26f63a7f4936acf914a987d15f37e2449ef568552b70d3c4ffa48896f8b"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mariadb.org/f/mariadb-11.8.6/macos-system-arm64/mariadb-11.8.6-macos13-arm64.tar.gz",
+            "filename": "mariadb-11.8.6-macos13-arm64.tar.gz"
+          }
+        },
+        "11.4": {
+          "latest": "11.4.10",
+          "windows": {
+            "url": "https://downloads.mariadb.org/f/mariadb-11.4.10/winx64-packages/mariadb-11.4.10-winx64.zip",
+            "filename": "mariadb-11.4.10-winx64.zip",
+            "sha256": "fb7c76f0804321ee373daa49145f2056d2d88f321b614130adeb05a1644ea003"
+          },
+          "linux": {
+            "url": "https://downloads.mariadb.org/f/mariadb-11.4.10/bintar-linux-systemd-x86_64/mariadb-11.4.10-linux-systemd-x86_64.tar.gz",
+            "filename": "mariadb-11.4.10-linux-systemd-x86_64.tar.gz",
+            "sha256": "9bb5b4292201eb64617ff5286be25a6e9b76dc2898a8fa27a994e27f80ac28ac"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mariadb.org/f/mariadb-11.4.10/macos-system-arm64/mariadb-11.4.10-macos13-arm64.tar.gz",
+            "filename": "mariadb-11.4.10-macos13-arm64.tar.gz"
+          }
+        },
+        "10.11": {
+          "latest": "10.11.16",
+          "windows": {
+            "url": "https://downloads.mariadb.org/f/mariadb-10.11.16/winx64-packages/mariadb-10.11.16-winx64.zip",
+            "filename": "mariadb-10.11.16-winx64.zip",
+            "sha256": "b1659bd9fe816624632c6b445ce4ad1ed6758a199e35f89e2448aef99828527b"
+          },
+          "linux": {
+            "url": "https://downloads.mariadb.org/f/mariadb-10.11.16/bintar-linux-systemd-x86_64/mariadb-10.11.16-linux-systemd-x86_64.tar.gz",
+            "filename": "mariadb-10.11.16-linux-systemd-x86_64.tar.gz",
+            "sha256": "91241b6c1d6d18f61ad5cd7edd953e6dd1b1845f5980eda1e68f5d7f3bb88b83"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mariadb.org/f/mariadb-10.11.16/macos-system-arm64/mariadb-10.11.16-macos13-arm64.tar.gz",
+            "filename": "mariadb-10.11.16-macos13-arm64.tar.gz"
+          }
+        },
+        "10.6": {
+          "latest": "10.6.25",
+          "windows": {
+            "url": "https://downloads.mariadb.org/f/mariadb-10.6.25/winx64-packages/mariadb-10.6.25-winx64.zip",
+            "filename": "mariadb-10.6.25-winx64.zip",
+            "sha256": "5975eeadf19c28f38945d0a65b2c2401d6bc3f97d72830a25a44239738704d11"
+          },
+          "linux": {
+            "url": "https://downloads.mariadb.org/f/mariadb-10.6.25/bintar-linux-systemd-x86_64/mariadb-10.6.25-linux-systemd-x86_64.tar.gz",
+            "filename": "mariadb-10.6.25-linux-systemd-x86_64.tar.gz",
+            "sha256": "182668cd6fca93fd18b0905b3e8a6430168d22272da9670c22fd8d7ccf2043d4"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mariadb.org/f/mariadb-10.6.25/macos-system-arm64/mariadb-10.6.25-macos13-arm64.tar.gz",
+            "filename": "mariadb-10.6.25-macos13-arm64.tar.gz"
+          }
+        }
+      }
+    },
+    "nodejs": {
+      "name": "Node.js",
+      "description": "JavaScript runtime built on V8",
+      "availableVersions": [
+        "25",
+        "24",
+        "22",
+        "20"
+      ],
+      "versions": {
+        "20": {
+          "latest": "20.20.0",
+          "windows": {
+            "url": "https://nodejs.org/dist/v20.20.0/node-v20.20.0-win-x64.zip",
+            "filename": "node-v20.20.0-win-x64.zip"
+          }
+        },
+        "22": {
+          "latest": "22.22.0",
+          "windows": {
+            "url": "https://nodejs.org/dist/v22.22.0/node-v22.22.0-win-x64.zip",
+            "filename": "node-v22.22.0-win-x64.zip"
+          }
+        },
+        "24": {
+          "latest": "24.13.0",
+          "windows": {
+            "url": "https://nodejs.org/dist/v24.13.0/node-v24.13.0-win-x64.zip",
+            "filename": "node-v24.13.0-win-x64.zip"
+          }
+        },
+        "25": {
+          "latest": "25.6.0",
+          "windows": {
+            "url": "https://nodejs.org/dist/v25.6.0/node-v25.6.0-win-x64.zip",
+            "filename": "node-v25.6.0-win-x64.zip"
+          }
+        }
+      }
+    },
+    "python": {
+      "name": "Python",
+      "description": "General-purpose programming language",
+      "availableVersions": [
+        "3.14",
+        "3.13",
+        "3.12",
+        "3.11"
+      ],
+      "versions": {
+        "3.14": {
+          "latest": "3.14.3",
+          "windows": {
+            "url": "https://www.python.org/ftp/python/3.14.3/python-3.14.3-embed-amd64.zip",
+            "filename": "python-3.14.3-embed-amd64.zip"
+          }
+        },
+        "3.13": {
+          "latest": "3.13.12",
+          "windows": {
+            "url": "https://www.python.org/ftp/python/3.13.12/python-3.13.12-embed-amd64.zip",
+            "filename": "python-3.13.12-embed-amd64.zip"
+          }
+        },
+        "3.12": {
+          "latest": "3.12.10",
+          "windows": {
+            "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+            "filename": "python-3.12.10-embed-amd64.zip"
+          }
+        },
+        "3.11": {
+          "latest": "3.11.9",
+          "windows": {
+            "url": "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip",
+            "filename": "python-3.11.9-embed-amd64.zip"
+          }
+        }
+      }
+    },
+    "bun": {
+      "name": "Bun",
+      "description": "Fast JavaScript runtime and toolkit",
+      "availableVersions": [
+        "1.3",
+        "1.2",
+        "1.1"
+      ],
+      "versions": {
+        "1.3": {
+          "latest": "1.3.8",
+          "windows": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.8/bun-windows-x64.zip",
+            "filename": "bun-windows-x64.zip"
+          }
+        },
+        "1.2": {
+          "latest": "1.2.23",
+          "windows": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.23/bun-windows-x64.zip",
+            "filename": "bun-windows-x64.zip"
+          }
+        },
+        "1.1": {
+          "latest": "1.1.45",
+          "windows": {
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.1.45/bun-windows-x64.zip",
+            "filename": "bun-windows-x64.zip"
+          }
+        }
+      }
+    },
+    "redis": {
+      "name": "Redis",
+      "description": "In-memory data structure store",
+      "latest": "8.4.0",
+      "windows": {
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.4.0/Redis-8.4.0-Windows-x64-cygwin-with-Service.zip",
+        "filename": "Redis-8.4.0-Windows-x64-cygwin-with-Service.zip"
+      }
+    },
+    "mailpit": {
+      "name": "Mailpit",
+      "description": "Email testing tool for developers",
+      "latest": "1.29.0",
+      "windows": {
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.0/mailpit-windows-amd64.zip",
+        "filename": "mailpit-windows-amd64.zip"
+      },
+      "macos_arm64": {
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.0/mailpit-darwin-arm64.tar.gz",
+        "filename": "mailpit-darwin-arm64.tar.gz"
+      },
+      "linux": {
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.0/mailpit-linux-amd64.tar.gz",
+        "filename": "mailpit-linux-amd64.tar.gz"
+      }
+    },
+    "composer": {
+      "name": "Composer",
+      "description": "PHP dependency manager",
+      "latest": "2.9.5",
+      "all_platforms": {
+        "url": "https://getcomposer.org/download/2.9.5/composer.phar",
+        "filename": "composer.phar"
+      }
+    }
+  }
+}
