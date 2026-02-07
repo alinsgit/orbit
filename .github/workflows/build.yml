@@ -35,7 +35,7 @@ jobs:
           bun-version: latest
 
       - name: Install Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
@@ -54,6 +54,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_DIR: core
         with:
+          projectPath: '.'
+          tauriScript: 'bun run tauri'
           args: ${{ matrix.args }}
 
       - name: Upload artifacts
