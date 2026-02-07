@@ -63,9 +63,9 @@ jobs:
         with:
           name: orbit-${{ matrix.name }}
           path: |
-            core/target/release/bundle/deb/*.deb
-            core/target/release/bundle/appimage/*.AppImage
-            core/target/release/bundle/dmg/*.dmg
-            core/target/release/bundle/macos/*.app
-            core/target/release/bundle/msi/*.msi
-            core/target/release/bundle/nsis/*.exe
+            core/target/**/bundle/deb/*.deb
+            core/target/**/bundle/appimage/*.AppImage
+            core/target/**/bundle/dmg/*.dmg
+            core/target/**/bundle/msi/*.msi
+            core/target/**/bundle/nsis/*.exe
+          if-no-files-found: warn
