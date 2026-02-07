@@ -1,10 +1,13 @@
-name: Build
+name: Build & Release
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -48,7 +51,7 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
-      - name: Build Tauri
+      - name: Build and Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,15 +60,8 @@ jobs:
           projectPath: '.'
           tauriScript: 'bun run tauri'
           args: ${{ matrix.args }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: orbit-${{ matrix.name }}
-          path: |
-            core/target/**/bundle/deb/*.deb
-            core/target/**/bundle/appimage/*.AppImage
-            core/target/**/bundle/dmg/*.dmg
-            core/target/**/bundle/msi/*.msi
-            core/target/**/bundle/nsis/*.exe
-          if-no-files-found: warn
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Orbit ${{ github.ref_name }}'
+          releaseBody: 'Download the installer for your platform below.'
+          releaseDraft: false
+          prerelease: false
