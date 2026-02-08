@@ -57,7 +57,6 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
   // Integrations State
   const [mailpitEnabled, setMailpitEnabled] = useState(false);
   const [redisSessionEnabled, setRedisSessionEnabled] = useState(false);
-  const [integrationsLoaded, setIntegrationsLoaded] = useState(false);
   const [integrationsSaving, setIntegrationsSaving] = useState<string | null>(null);
 
   // UI State
@@ -120,7 +119,6 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       setOpcacheConfig(opcache);
       setMailpitEnabled(mailpitStatus);
       setRedisSessionEnabled(redisStatus);
-      setIntegrationsLoaded(true);
     } catch (e) {
       console.error('Failed to load PHP config:', e);
       addToast({ type: 'error', message: 'Failed to load PHP configuration' });
