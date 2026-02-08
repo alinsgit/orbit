@@ -393,6 +393,62 @@ export const setPhpSetting = async (version: string, key: string, value: string)
   }
 };
 
+export const getPhpIniRaw = async (version: string): Promise<string> => {
+  try {
+    return await invoke('get_php_ini_raw', { version });
+  } catch (error) {
+    console.error('Failed to get php.ini:', error);
+    throw error;
+  }
+};
+
+export const savePhpIniRaw = async (version: string, content: string): Promise<string> => {
+  try {
+    return await invoke('save_php_ini_raw', { version, content });
+  } catch (error) {
+    console.error('Failed to save php.ini:', error);
+    throw error;
+  }
+};
+
+// PHP Mailpit Integration
+export const configurePhpMailpit = async (version: string, enabled: boolean, smtpPort: number = 1025): Promise<string> => {
+  try {
+    return await invoke('configure_php_mailpit', { version, enabled, smtpPort });
+  } catch (error) {
+    console.error('Failed to configure PHP Mailpit:', error);
+    throw error;
+  }
+};
+
+export const getPhpMailpitStatus = async (version: string): Promise<boolean> => {
+  try {
+    return await invoke('get_php_mailpit_status', { version });
+  } catch (error) {
+    console.error('Failed to get PHP Mailpit status:', error);
+    return false;
+  }
+};
+
+// PHP Redis Session Integration
+export const configurePhpRedisSession = async (version: string, enabled: boolean, redisPort: number = 6379): Promise<string> => {
+  try {
+    return await invoke('configure_php_redis_session', { version, enabled, redisPort });
+  } catch (error) {
+    console.error('Failed to configure PHP Redis session:', error);
+    throw error;
+  }
+};
+
+export const getPhpRedisSessionStatus = async (version: string): Promise<boolean> => {
+  try {
+    return await invoke('get_php_redis_session_status', { version });
+  } catch (error) {
+    console.error('Failed to get PHP Redis session status:', error);
+    return false;
+  }
+};
+
 // Log Management Types
 export interface LogFile {
   name: string;
@@ -1128,6 +1184,68 @@ export const getMailpitExePath = async (): Promise<string> => {
     return await invoke('get_mailpit_exe_path');
   } catch (error) {
     console.error('Failed to get Mailpit exe path:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// PECL Extension Manager
+// ============================================================================
+
+export interface PeclExtension {
+  name: string;
+  version: string;
+  description: string;
+  download_url: string | null;
+  installed: boolean;
+  enabled: boolean;
+  category: string;
+}
+
+/**
+ * Get list of available PECL extensions for a PHP version
+ */
+export const getAvailableExtensions = async (phpVersion: string): Promise<PeclExtension[]> => {
+  try {
+    return await invoke('get_available_extensions', { phpVersion });
+  } catch (error) {
+    console.error('Failed to get available extensions:', error);
+    throw error;
+  }
+};
+
+/**
+ * Install a PECL extension
+ */
+export const installPeclExtension = async (phpVersion: string, extensionName: string): Promise<string> => {
+  try {
+    return await invoke('install_pecl_extension', { phpVersion, extensionName });
+  } catch (error) {
+    console.error('Failed to install PECL extension:', error);
+    throw error;
+  }
+};
+
+/**
+ * Uninstall a PECL extension
+ */
+export const uninstallPeclExtension = async (phpVersion: string, extensionName: string): Promise<string> => {
+  try {
+    return await invoke('uninstall_pecl_extension', { phpVersion, extensionName });
+  } catch (error) {
+    console.error('Failed to uninstall PECL extension:', error);
+    throw error;
+  }
+};
+
+/**
+ * Search for PECL extensions
+ */
+export const searchPeclExtensions = async (query: string, phpVersion: string): Promise<PeclExtension[]> => {
+  try {
+    return await invoke('search_pecl_extensions', { query, phpVersion });
+  } catch (error) {
+    console.error('Failed to search PECL extensions:', error);
     throw error;
   }
 };

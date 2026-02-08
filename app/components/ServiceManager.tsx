@@ -214,6 +214,10 @@ export function ServiceManager() {
   };
 
   const handleUninstall = async (name: string, serviceType: string, path: string) => {
+    if (!confirm(`Are you sure you want to uninstall ${name}? This will remove all files.`)) {
+      return;
+    }
+
     setProcessing(name);
     try {
       await uninstallService(name, serviceType, path);
@@ -279,41 +283,37 @@ export function ServiceManager() {
           <div className="flex bg-surface-raised p-1 rounded-lg">
             <button
               onClick={() => setSubTab('overview')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                subTab === 'overview'
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'overview'
                   ? 'bg-surface-inset text-content shadow'
                   : 'text-content-secondary hover:text-content'
-              }`}
+                }`}
             >
               Overview
             </button>
             <button
               onClick={() => setSubTab('manage')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                subTab === 'manage'
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'manage'
                   ? 'bg-surface-inset text-content shadow'
                   : 'text-content-secondary hover:text-content'
-              }`}
+                }`}
             >
               Manage ({services.length})
             </button>
             <button
               onClick={() => setSubTab('install')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                subTab === 'install'
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'install'
                   ? 'bg-surface-inset text-content shadow'
                   : 'text-content-secondary hover:text-content'
-              }`}
+                }`}
             >
               Install
             </button>
             <button
               onClick={() => setSubTab('tools')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                subTab === 'tools'
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'tools'
                   ? 'bg-surface-inset text-content shadow'
                   : 'text-content-secondary hover:text-content'
-              }`}
+                }`}
             >
               Tools
             </button>
@@ -364,20 +364,18 @@ export function ServiceManager() {
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Status indicator */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
-                      service.status === 'running'
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${service.status === 'running'
                         ? 'bg-emerald-500/10 text-emerald-500'
                         : service.status === 'starting' || service.status === 'stopping'
                           ? 'bg-amber-500/10 text-amber-500'
                           : 'bg-surface-inset text-content-secondary'
-                    }`}>
-                      <div className={`w-2 h-2 rounded-full ${
-                        service.status === 'running'
+                      }`}>
+                      <div className={`w-2 h-2 rounded-full ${service.status === 'running'
                           ? 'bg-emerald-500'
                           : service.status === 'starting' || service.status === 'stopping'
                             ? 'bg-amber-500 animate-pulse'
                             : 'bg-content-muted'
-                      }`} />
+                        }`} />
                       {service.status.toUpperCase()}
                       {service.port && <span className="font-mono">:{service.port}</span>}
                     </div>
@@ -410,11 +408,10 @@ export function ServiceManager() {
                         <button
                           onClick={() => handleTogglePath(service.name, pathServiceType, !!isInPath)}
                           disabled={isProcessingPath}
-                          className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
-                            isInPath
+                          className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${isInPath
                               ? 'bg-emerald-500/10 text-emerald-500 hover:bg-red-500/10 hover:text-red-500'
                               : 'bg-surface-inset hover:bg-hover text-content-secondary hover:text-content'
-                          }`}
+                            }`}
                           title={isInPath ? 'Remove from PATH' : 'Add to PATH'}
                         >
                           {isProcessingPath ? (
@@ -448,11 +445,10 @@ export function ServiceManager() {
                     <button
                       onClick={() => handleToggleService(service.name, service.status)}
                       disabled={processing === service.name || service.status === 'starting' || service.status === 'stopping'}
-                      className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
-                        service.status === 'running'
+                      className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${service.status === 'running'
                           ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500'
                           : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
-                      }`}
+                        }`}
                       title={service.status === 'running' ? 'Stop' : 'Start'}
                     >
                       {processing === service.name ? (
@@ -568,8 +564,8 @@ function ServiceGroup({
   const sourceLabel = source === 'Cache' ? 'cached' : source === 'Fallback' ? 'fallback' : 'live';
   const sourceColor =
     source === 'Fallback' ? 'text-amber-500' :
-    source === 'Cache' ? 'text-blue-400' :
-    'text-emerald-500';
+      source === 'Cache' ? 'text-blue-400' :
+        'text-emerald-500';
 
   if (versions.length === 0) {
     return (
@@ -603,11 +599,10 @@ function ServiceGroup({
           return (
             <div
               key={v.version}
-              className={`bg-surface border p-3 rounded-lg flex justify-between items-center transition-colors ${
-                installed
+              className={`bg-surface border p-3 rounded-lg flex justify-between items-center transition-colors ${installed
                   ? 'border-emerald-500/30 bg-emerald-500/5'
                   : 'border-edge hover:border-edge'
-              }`}
+                }`}
             >
               <div>
                 <div className="font-medium flex items-center gap-2">
@@ -628,11 +623,10 @@ function ServiceGroup({
                 <button
                   onClick={() => onInstall(type, v)}
                   disabled={processing !== null}
-                  className={`p-2 rounded-md transition-colors ${
-                    isProcessing
+                  className={`p-2 rounded-md transition-colors ${isProcessing
                       ? 'bg-surface-raised text-content-secondary'
                       : 'bg-surface-raised hover:bg-emerald-600 hover:text-content text-content-secondary'
-                  }`}
+                    }`}
                 >
                   {isProcessing ? (
                     <Loader2 size={16} className="animate-spin" />

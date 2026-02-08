@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Power, RefreshCw, StopCircle, Download, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Power, RefreshCw, StopCircle, Download, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react'
 import { useApp, ServiceWithStatus } from '../lib/AppContext'
 import { checkSystemRequirements } from '../lib/api'
 import { getServiceIcon } from '../lib/serviceIcons'
@@ -20,12 +20,42 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
   } = useApp()
 
   const [vcRedistMissing, setVcRedistMissing] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [startingAll, setStartingAll] = useState(false)
+  const [stoppingAll, setStoppingAll] = useState(false)
 
   useEffect(() => {
     checkSystemRequirements().then(reqs => {
       setVcRedistMissing(!reqs.vc_redist_installed)
     })
   }, [])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refreshServices()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const handleStartAll = async () => {
+    setStartingAll(true)
+    try {
+      await startAllServices()
+    } finally {
+      setStartingAll(false)
+    }
+  }
+
+  const handleStopAll = async () => {
+    setStoppingAll(true)
+    try {
+      await stopAllServices()
+    } finally {
+      setStoppingAll(false)
+    }
+  }
 
   const handleToggleService = async (service: ServiceWithStatus) => {
     if (service.status === 'running') {
@@ -50,27 +80,30 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={refreshServices}
-            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50"
             title="Refresh"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           </button>
           {runningCount > 0 && (
             <button
-              onClick={stopAllServices}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+              onClick={handleStopAll}
+              disabled={stoppingAll || startingAll}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
             >
-              <StopCircle size={16} />
-              Stop All
+              {stoppingAll ? <Loader2 size={16} className="animate-spin" /> : <StopCircle size={16} />}
+              {stoppingAll ? 'Stopping...' : 'Stop All'}
             </button>
           )}
           <button
-            onClick={startAllServices}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20"
+            onClick={handleStartAll}
+            disabled={startingAll || stoppingAll}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20 disabled:opacity-50"
           >
-            <Power size={16} />
-            Start All
+            {startingAll ? <Loader2 size={16} className="animate-spin" /> : <Power size={16} />}
+            {startingAll ? 'Starting...' : 'Start All'}
           </button>
         </div>
       </header>

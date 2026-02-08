@@ -130,6 +130,12 @@ pub fn run() {
         commands::php_config::get_php_config,
         commands::php_config::set_php_extension,
         commands::php_config::set_php_setting,
+        commands::php_config::get_php_ini_raw,
+        commands::php_config::save_php_ini_raw,
+        commands::php_config::configure_php_mailpit,
+        commands::php_config::get_php_mailpit_status,
+        commands::php_config::configure_php_redis_session,
+        commands::php_config::get_php_redis_session_status,
         // PHP registry
         commands::php_registry::get_php_services,
         commands::php_registry::get_php_service,
@@ -194,7 +200,12 @@ pub fn run() {
         commands::mailpit::uninstall_mailpit,
         commands::mailpit::start_mailpit,
         commands::mailpit::stop_mailpit,
-        commands::mailpit::get_mailpit_exe_path
+        commands::mailpit::get_mailpit_exe_path,
+        // PECL Extension Manager
+        commands::pecl::get_available_extensions,
+        commands::pecl::install_pecl_extension,
+        commands::pecl::uninstall_pecl_extension,
+        commands::pecl::search_pecl_extensions
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

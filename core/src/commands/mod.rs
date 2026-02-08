@@ -17,3 +17,4 @@ pub mod composer;
 pub mod requirements;
 pub mod templates;
 pub mod performance;
+pub mod pecl;

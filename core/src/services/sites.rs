@@ -402,13 +402,26 @@ impl SiteManager {
         store.remove_site(domain);
         store.save(app)?;
 
+        // Determine php_port: if php_version changed, recalculate port from new version
+        let new_php_port = if let Some(ref new_version) = updates.php_version {
+            // If version changed or no version was set before, recalculate port
+            let version_changed = existing.php_version.as_ref() != Some(new_version);
+            if version_changed || updates.php_port.is_none() {
+                Some(Self::get_php_port(app, new_version))
+            } else {
+                updates.php_port.or(existing.php_port)
+            }
+        } else {
+            None
+        };
+
         // Create new site with updates
         let new_site = Site {
             domain: updates.domain,
             path: updates.path,
             port: updates.port,
             php_version: updates.php_version,
-            php_port: updates.php_port.or(existing.php_port),
+            php_port: new_php_port,
             ssl_enabled: updates.ssl_enabled,
             template: updates.template,
             web_server: updates.web_server,

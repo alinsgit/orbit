@@ -20,6 +20,7 @@ export function SettingsManager() {
   // SSL State
   const [sslStatus, setSslStatus] = useState<SslStatus | null>(null);
   const [sslLoading, setSslLoading] = useState(false);
+  const [sslRefreshing, setSslRefreshing] = useState(false);
 
   // About State
   const [appVersion, setAppVersion] = useState<string>('');
@@ -44,11 +45,14 @@ export function SettingsManager() {
   };
 
   const loadSslStatus = async () => {
+    setSslRefreshing(true);
     try {
       const status = await getSslStatus();
       setSslStatus(status);
     } catch (e) {
       console.error('Failed to load SSL status:', e);
+    } finally {
+      setSslRefreshing(false);
     }
   };
 
@@ -197,11 +201,10 @@ export function SettingsManager() {
                     <button
                       key={option.value}
                       onClick={() => setTheme(option.value)}
-                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                        isSelected
+                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${isSelected
                           ? 'border-emerald-500 bg-emerald-500/10'
                           : 'border-edge hover:border-edge'
-                      }`}
+                        }`}
                     >
                       <Icon size={24} className={isSelected ? 'text-emerald-500' : 'text-content-secondary'} />
                       <span className={`text-sm font-medium ${isSelected ? 'text-emerald-500' : ''}`}>
@@ -233,10 +236,11 @@ export function SettingsManager() {
             </div>
             <button
               onClick={loadSslStatus}
-              className="p-2 hover:bg-hover rounded-lg transition-colors"
+              disabled={sslRefreshing}
+              className="p-2 hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
               title="Refresh"
             >
-              <RefreshCw size={16} />
+              <RefreshCw size={16} className={sslRefreshing ? 'animate-spin' : ''} />
             </button>
           </div>
 
@@ -405,9 +409,9 @@ export function SettingsManager() {
             <div className="flex items-center gap-4 p-4 bg-surface-inset rounded-lg border border-edge-subtle">
               <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2"/>
-                  <circle cx="12" cy="12" r="4" fill="white"/>
-                  <circle cx="12" cy="4" r="2" fill="white"/>
+                  <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" />
+                  <circle cx="12" cy="12" r="4" fill="white" />
+                  <circle cx="12" cy="4" r="2" fill="white" />
                 </svg>
               </div>
               <div>
