@@ -7,7 +7,8 @@ import {
 import {
   getSites, createSite, deleteSite, updateSite, regenerateSiteConfig,
   generateSslCert, nginxTestConfig, nginxReload, nginxStatus,
-  addHostElevated, SiteWithStatus, Site, WebServer, reloadService
+  addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
+  getSslStatus
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -88,6 +89,16 @@ export function SitesManager() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [editingSite, setEditingSite] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Site | null>(null);
+
+  // SSL status for mkcert/CA check
+  const [sslReady, setSslReady] = useState(false);
+
+  // Check SSL status
+  useEffect(() => {
+    getSslStatus().then(status => {
+      setSslReady(status.mkcert_installed && status.ca_installed);
+    }).catch(console.error);
+  }, []);
 
   // Load sites and check nginx status
   const refreshSites = async () => {
@@ -262,16 +273,25 @@ export function SitesManager() {
 
     setProcessing(editingSite);
     try {
+      // Generate SSL certificate if SSL was just enabled
+      const existingSite = sites.find(s => s.domain === editingSite);
+      if (editForm.ssl_enabled && existingSite && !existingSite.ssl_enabled) {
+        await generateSslCert(editForm.domain);
+      }
+
       await updateSite(editingSite, editForm);
+
       // Reload appropriate web server
       if (editForm.web_server === 'apache') {
         await reloadService('apache');
       } else {
         await nginxReload();
       }
+
       await refreshSites();
       setEditingSite(null);
       setEditForm(null);
+      addToast({ type: 'success', message: `Site ${editForm.domain} updated successfully` });
     } catch (e: any) {
       console.error(e);
       addToast({ type: 'error', message: 'Failed to update site: ' + e });
@@ -346,11 +366,10 @@ export function SitesManager() {
 
       {/* Nginx Message */}
       {nginxMessage && (
-        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${
-          nginxMessage.type === 'success'
-            ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-            : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${nginxMessage.type === 'success'
+          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+          : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+          }`}>
           <div className="flex items-center gap-2">
             {nginxMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
             <span className="text-sm">{nginxMessage.text}</span>
@@ -431,11 +450,10 @@ export function SitesManager() {
                   <button
                     key={template}
                     onClick={() => setNewSite({ ...newSite, template })}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
-                      newSite.template === template
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-surface-raised hover:bg-hover text-content-secondary'
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${newSite.template === template
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-surface-raised hover:bg-hover text-content-secondary'
+                      }`}
                   >
                     {TEMPLATE_INFO[template].icon}
                     {TEMPLATE_INFO[template].label}
@@ -479,11 +497,10 @@ export function SitesManager() {
                     <button
                       key={ws}
                       onClick={() => setNewSite({ ...newSite, web_server: ws })}
-                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
-                        newSite.web_server === ws
-                          ? ws === 'nginx' ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
-                          : 'bg-surface-raised hover:bg-hover text-content-secondary'
-                      }`}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${newSite.web_server === ws
+                        ? ws === 'nginx' ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
+                        : 'bg-surface-raised hover:bg-hover text-content-secondary'
+                        }`}
                     >
                       <span>{WEB_SERVER_INFO[ws].icon}</span>
                       {WEB_SERVER_INFO[ws].label}
@@ -494,20 +511,27 @@ export function SitesManager() {
             </div>
 
             {/* SSL */}
-            <div className="flex items-end pb-1">
+            <div className="flex flex-col gap-1 pb-1">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="ssl_enabled"
                   checked={newSite.ssl_enabled}
+                  disabled={!sslReady}
                   onChange={(e) => setNewSite({ ...newSite, ssl_enabled: e.target.checked })}
-                  className="w-4 h-4 rounded border-edge bg-surface text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+                  className="w-4 h-4 rounded border-edge bg-surface text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
                 />
-                <label htmlFor="ssl_enabled" className="text-sm text-content-secondary flex items-center gap-2">
-                  <Shield size={14} className="text-emerald-500" />
+                <label htmlFor="ssl_enabled" className={`text-sm flex items-center gap-2 ${sslReady ? 'text-content-secondary' : 'text-content-muted'}`}>
+                  <Shield size={14} className={sslReady ? 'text-emerald-500' : 'text-content-muted'} />
                   Enable SSL (HTTPS)
                 </label>
               </div>
+              {!sslReady && (
+                <p className="text-xs text-amber-400 flex items-center gap-1">
+                  <AlertTriangle size={12} />
+                  Install mkcert and Root CA in Settings first
+                </p>
+              )}
             </div>
           </div>
 
@@ -558,49 +582,139 @@ export function SitesManager() {
             {sites.map((site) => (
               <div
                 key={site.domain}
-                className={`bg-surface-raised border rounded-xl p-4 transition-all duration-300 group ${
-                  site.config_valid
-                    ? 'border-edge-subtle hover:border-edge'
-                    : 'border-red-500/30 hover:border-red-500/50'
-                }`}
+                className={`bg-surface-raised border rounded-xl p-4 transition-all duration-300 group ${site.config_valid
+                  ? 'border-edge-subtle hover:border-edge'
+                  : 'border-red-500/30 hover:border-red-500/50'
+                  }`}
               >
                 {/* Edit Mode */}
                 {editingSite === site.domain && editForm ? (
                   <div className="space-y-3">
-                    <input
-                      type="text"
-                      value={editForm.path}
-                      onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
-                      className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm"
-                      placeholder="Path"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map((template) => (
-                        <button
-                          key={template}
-                          onClick={() => setEditForm({ ...editForm, template })}
-                          className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                            editForm.template === template
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-surface-inset text-content-secondary'
-                          }`}
-                        >
-                          {TEMPLATE_INFO[template].icon}
-                          {TEMPLATE_INFO[template].label}
-                        </button>
-                      ))}
+                    {/* Path */}
+                    <div>
+                      <label className="block text-xs text-content-muted mb-1">Project Path</label>
+                      <input
+                        type="text"
+                        value={editForm.path}
+                        onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
+                        className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm"
+                        placeholder="Path"
+                      />
                     </div>
-                    <div className="flex gap-2">
+
+                    {/* Template */}
+                    <div>
+                      <label className="block text-xs text-content-muted mb-1">Template</label>
+                      <div className="grid grid-cols-2 gap-1">
+                        {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map((template) => (
+                          <button
+                            key={template}
+                            onClick={() => setEditForm({ ...editForm, template })}
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors ${editForm.template === template
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-surface-inset text-content-secondary hover:bg-hover'
+                              }`}
+                          >
+                            {TEMPLATE_INFO[template].icon}
+                            {TEMPLATE_INFO[template].label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* PHP Version & Port */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* PHP Version */}
+                      <div>
+                        <label className="block text-xs text-content-muted mb-1">PHP Version</label>
+                        {editForm.template === 'static' ? (
+                          <p className="text-xs text-content-muted py-2">Not needed</p>
+                        ) : phpVersions.length === 0 ? (
+                          <p className="text-xs text-amber-500 py-1">No PHP installed</p>
+                        ) : (
+                          <select
+                            value={editForm.php_version || ''}
+                            onChange={(e) => setEditForm({ ...editForm, php_version: e.target.value || undefined })}
+                            className="w-full px-2 py-1.5 bg-surface border border-edge rounded-lg text-sm"
+                          >
+                            <option value="">Select PHP</option>
+                            {phpVersions.map((v) => (
+                              <option key={v} value={v}>PHP {v}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      {/* Port */}
+                      <div>
+                        <label className="block text-xs text-content-muted mb-1">Port</label>
+                        <input
+                          type="number"
+                          value={editForm.port}
+                          onChange={(e) => setEditForm({ ...editForm, port: parseInt(e.target.value) || 80 })}
+                          className="w-full px-2 py-1.5 bg-surface border border-edge rounded-lg text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Web Server & SSL */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Web Server */}
+                      <div>
+                        <label className="block text-xs text-content-muted mb-1">Web Server</label>
+                        <div className="flex gap-1">
+                          {availableWebServers.map((ws) => (
+                            <button
+                              key={ws}
+                              onClick={() => setEditForm({ ...editForm, web_server: ws })}
+                              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${editForm.web_server === ws
+                                ? ws === 'nginx' ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
+                                : 'bg-surface-inset text-content-secondary hover:bg-hover'
+                                }`}
+                            >
+                              {WEB_SERVER_INFO[ws].icon}
+                              {WEB_SERVER_INFO[ws].label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* SSL Toggle */}
+                      <div className="flex flex-col gap-1 pb-1">
+                        <label className={`flex items-center gap-2 ${sslReady || editForm.ssl_enabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                          <input
+                            type="checkbox"
+                            checked={editForm.ssl_enabled}
+                            disabled={!sslReady && !editForm.ssl_enabled}
+                            onChange={(e) => setEditForm({ ...editForm, ssl_enabled: e.target.checked })}
+                            className="w-4 h-4 rounded border-edge bg-surface text-emerald-500 disabled:opacity-50"
+                          />
+                          <span className={`text-xs flex items-center gap-1 ${sslReady || editForm.ssl_enabled ? 'text-content-secondary' : 'text-content-muted'}`}>
+                            <Shield size={12} className={editForm.ssl_enabled ? 'text-emerald-500' : 'text-amber-500'} />
+                            SSL (HTTPS)
+                          </span>
+                        </label>
+                        {!sslReady && !editForm.ssl_enabled && (
+                          <p className="text-xs text-amber-400 flex items-center gap-1">
+                            <AlertTriangle size={10} />
+                            Setup SSL in Settings
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => { setEditingSite(null); setEditForm(null); }}
-                        className="flex-1 px-3 py-1.5 bg-surface-inset rounded-lg text-sm"
+                        className="flex-1 px-3 py-1.5 bg-surface-inset hover:bg-hover rounded-lg text-sm transition-colors cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleUpdateSite}
                         disabled={processing === site.domain}
-                        className="flex-1 px-3 py-1.5 bg-emerald-600 rounded-lg text-sm disabled:opacity-50"
+                        className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm disabled:opacity-50 transition-colors cursor-pointer"
                       >
                         {processing === site.domain ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Save'}
                       </button>
@@ -611,9 +725,8 @@ export function SitesManager() {
                     {/* Header */}
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          site.config_valid ? 'bg-emerald-500/10' : 'bg-red-500/10'
-                        }`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${site.config_valid ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                          }`}>
                           {site.config_valid
                             ? <Globe size={16} className="text-emerald-500" />
                             : <XCircle size={16} className="text-red-500" />

@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { X, Loader2, ToggleLeft, ToggleRight, Save, Cpu, Server, Gauge, RefreshCw, ChevronDown, ChevronRight, FileCode, RotateCcw, Trash2, Plus } from 'lucide-react';
+import { X, Loader2, ToggleLeft, ToggleRight, Save, Cpu, Server, Gauge, RefreshCw, ChevronDown, ChevronRight, FileCode, RotateCcw, Trash2, Plus, Download, Search, Package, FileText, Mail, Database } from 'lucide-react';
 import {
   getPhpConfig, setPhpExtension, setPhpSetting, PhpConfig,
   getOpcacheConfig, setOpcacheConfig as updateOpcacheConfig, OpcacheConfig,
   getNginxGzipConfig, setNginxGzipConfig as updateNginxGzipConfig, NginxGzipConfig,
-  listTemplates, getTemplate, saveTemplate, resetTemplate, deleteTemplate, TemplateInfo
+  listTemplates, getTemplate, saveTemplate, resetTemplate, deleteTemplate, TemplateInfo,
+  getAvailableExtensions, installPeclExtension, uninstallPeclExtension, PeclExtension,
+  getPhpIniRaw, savePhpIniRaw,
+  configurePhpMailpit, getPhpMailpitStatus,
+  configurePhpRedisSession, getPhpRedisSessionStatus
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 
@@ -38,6 +42,24 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
   const [newTemplateName, setNewTemplateName] = useState('');
   const [showNewTemplateInput, setShowNewTemplateInput] = useState(false);
 
+  // PECL Extension State
+  const [peclExtensions, setPeclExtensions] = useState<PeclExtension[]>([]);
+  const [peclLoading, setPeclLoading] = useState(false);
+  const [peclInstalling, setPeclInstalling] = useState<string | null>(null);
+  const [peclSearchQuery, setPeclSearchQuery] = useState('');
+
+  // Raw php.ini Editor State
+  const [phpIniContent, setPhpIniContent] = useState<string>('');
+  const [phpIniLoading, setPhpIniLoading] = useState(false);
+  const [phpIniSaving, setPhpIniSaving] = useState(false);
+  const [phpIniLoaded, setPhpIniLoaded] = useState(false);
+
+  // Integrations State
+  const [mailpitEnabled, setMailpitEnabled] = useState(false);
+  const [redisSessionEnabled, setRedisSessionEnabled] = useState(false);
+  const [integrationsLoaded, setIntegrationsLoaded] = useState(false);
+  const [integrationsSaving, setIntegrationsSaving] = useState<string | null>(null);
+
   // UI State
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     extensions: true,
@@ -45,13 +67,36 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
     opcache: true,
     gzip: true,
     templates: true,
+    pecl: false, // PECL extensions collapsed by default
+    phpini: false, // php.ini editor collapsed by default
+    integrations: true, // Integrations section
   });
+
+  // Track if PECL extensions have been loaded
+  const [peclLoaded, setPeclLoaded] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       loadConfig();
+      setPeclLoaded(false); // Reset on each open
+      setPhpIniLoaded(false); // Reset php.ini loaded state
     }
   }, [isOpen, serviceName, serviceType]);
+
+  // Lazy load PECL extensions when section is expanded
+  useEffect(() => {
+    if (expandedSections.pecl && serviceType === 'php' && !peclLoaded && !peclLoading) {
+      loadPeclExtensions();
+      setPeclLoaded(true);
+    }
+  }, [expandedSections.pecl, serviceType, peclLoaded, peclLoading]);
+
+  // Lazy load php.ini content when section is expanded
+  useEffect(() => {
+    if (expandedSections.phpini && serviceType === 'php' && !phpIniLoaded && !phpIniLoading) {
+      loadPhpIniRaw();
+    }
+  }, [expandedSections.phpini, serviceType, phpIniLoaded, phpIniLoading]);
 
   const loadConfig = async () => {
     if (serviceType === 'php') {
@@ -64,17 +109,107 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
   const loadPhpConfig = async () => {
     setPhpLoading(true);
     try {
-      const [config, opcache] = await Promise.all([
+      // Load PHP config, opcache, and integrations
+      const [config, opcache, mailpitStatus, redisStatus] = await Promise.all([
         getPhpConfig(serviceVersion),
-        getOpcacheConfig(serviceVersion)
+        getOpcacheConfig(serviceVersion),
+        getPhpMailpitStatus(serviceVersion),
+        getPhpRedisSessionStatus(serviceVersion)
       ]);
       setPhpConfig(config);
       setOpcacheConfig(opcache);
+      setMailpitEnabled(mailpitStatus);
+      setRedisSessionEnabled(redisStatus);
+      setIntegrationsLoaded(true);
     } catch (e) {
       console.error('Failed to load PHP config:', e);
       addToast({ type: 'error', message: 'Failed to load PHP configuration' });
     } finally {
       setPhpLoading(false);
+    }
+  };
+
+  // Load PECL extensions separately (can be slow due to API calls)
+  const loadPeclExtensions = async () => {
+    setPeclLoading(true);
+    try {
+      const peclExts = await getAvailableExtensions(serviceVersion);
+      setPeclExtensions(peclExts);
+    } catch (e) {
+      console.error('Failed to load PECL extensions:', e);
+    } finally {
+      setPeclLoading(false);
+    }
+  };
+
+  // Load raw php.ini content
+  const loadPhpIniRaw = async () => {
+    setPhpIniLoading(true);
+    try {
+      const content = await getPhpIniRaw(serviceVersion);
+      setPhpIniContent(content);
+      setPhpIniLoaded(true);
+    } catch (e) {
+      console.error('Failed to load php.ini:', e);
+      addToast({ type: 'error', message: 'Failed to load php.ini' });
+    } finally {
+      setPhpIniLoading(false);
+    }
+  };
+
+  // Save raw php.ini content
+  const savePhpIni = async () => {
+    setPhpIniSaving(true);
+    try {
+      await savePhpIniRaw(serviceVersion, phpIniContent);
+      addToast({ type: 'success', message: 'php.ini saved successfully. Restart PHP for changes to take effect.' });
+    } catch (e) {
+      console.error('Failed to save php.ini:', e);
+      addToast({ type: 'error', message: `Failed to save php.ini: ${e}` });
+    } finally {
+      setPhpIniSaving(false);
+    }
+  };
+
+  // Toggle Mailpit integration
+  const toggleMailpitIntegration = async () => {
+    setIntegrationsSaving('mailpit');
+    try {
+      const newState = !mailpitEnabled;
+      await configurePhpMailpit(serviceVersion, newState, 1025);
+      setMailpitEnabled(newState);
+      addToast({
+        type: 'success',
+        message: newState
+          ? 'Mailpit integration enabled. Restart PHP for changes to take effect.'
+          : 'Mailpit integration disabled.'
+      });
+    } catch (e) {
+      console.error('Failed to toggle Mailpit:', e);
+      addToast({ type: 'error', message: `Failed to configure Mailpit: ${e}` });
+    } finally {
+      setIntegrationsSaving(null);
+    }
+  };
+
+  // Toggle Redis session integration
+  const toggleRedisSessionIntegration = async () => {
+    setIntegrationsSaving('redis');
+    try {
+      const newState = !redisSessionEnabled;
+      await configurePhpRedisSession(serviceVersion, newState, 6379);
+      setRedisSessionEnabled(newState);
+      addToast({
+        type: 'success',
+        message: newState
+          ? 'Redis session storage enabled. Restart PHP for changes to take effect.'
+          : 'Redis session storage disabled.'
+      });
+    } catch (e) {
+      console.error('Failed to toggle Redis session:', e);
+      addToast({ type: 'error', message: `Failed to configure Redis session: ${e}` });
+    } finally {
+      setIntegrationsSaving(null);
     }
   };
 
@@ -330,6 +465,42 @@ server {
     );
   };
 
+  // PECL Extension handlers
+  const handleInstallPecl = async (extName: string) => {
+    setPeclInstalling(extName);
+    try {
+      await installPeclExtension(serviceVersion, extName);
+      addToast({ type: 'success', message: `Extension ${extName} installed successfully. Enable it to use.` });
+      // Only refresh PECL list (fast) instead of full config
+      await loadPeclExtensions();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to install ${extName}: ${e}` });
+    } finally {
+      setPeclInstalling(null);
+    }
+  };
+
+  const handleUninstallPecl = async (extName: string) => {
+    if (!confirm(`Are you sure you want to uninstall ${extName}?`)) return;
+    setPeclInstalling(extName);
+    try {
+      await uninstallPeclExtension(serviceVersion, extName);
+      addToast({ type: 'success', message: `Extension ${extName} uninstalled successfully.` });
+      // Only refresh PECL list (fast)
+      await loadPeclExtensions();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to uninstall ${extName}: ${e}` });
+    } finally {
+      setPeclInstalling(null);
+    }
+  };
+
+  // Filter PECL extensions based on search
+  const filteredPeclExtensions = peclExtensions.filter(ext =>
+    ext.name.toLowerCase().includes(peclSearchQuery.toLowerCase()) ||
+    ext.description.toLowerCase().includes(peclSearchQuery.toLowerCase())
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -356,10 +527,11 @@ server {
           <div className="flex items-center gap-2">
             <button
               onClick={loadConfig}
-              className="p-2 hover:bg-hover rounded-lg transition-colors"
+              disabled={phpLoading || nginxLoading}
+              className="p-2 hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
               title="Refresh"
             >
-              <RefreshCw size={16} />
+              <RefreshCw size={16} className={(phpLoading || nginxLoading) ? 'animate-spin' : ''} />
             </button>
             <button
               onClick={onClose}
@@ -468,11 +640,10 @@ server {
                                   key={ext.name}
                                   onClick={() => handleToggleExtension(ext.name, ext.enabled)}
                                   disabled={saving === ext.name}
-                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors ${
-                                    ext.enabled
-                                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                      : 'bg-surface-raised border-edge text-content-secondary hover:border-edge-subtle'
-                                  }`}
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors ${ext.enabled
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                    : 'bg-surface-raised border-edge text-content-secondary hover:border-edge-subtle'
+                                    }`}
                                 >
                                   <span className="truncate">{ext.name}</span>
                                   {saving === ext.name ? (
@@ -546,6 +717,233 @@ server {
                       </div>
                     )}
                   </div>
+
+                  {/* PECL Extensions Section */}
+                  <div className="border border-edge-subtle rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleSection('pecl')}
+                      className="w-full px-4 py-3 flex items-center justify-between bg-surface-raised hover:bg-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Package size={16} className="text-purple-500" />
+                        <span className="font-medium">PECL Extensions</span>
+                        <span className="text-xs text-content-muted bg-surface-inset px-2 py-0.5 rounded">
+                          {peclExtensions.filter(e => e.installed).length}/{peclExtensions.length}
+                        </span>
+                      </div>
+                      {expandedSections.pecl ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+
+                    {expandedSections.pecl && (
+                      <div className="p-4 space-y-4">
+
+                        {/* Search */}
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
+                            <input
+                              type="text"
+                              value={peclSearchQuery}
+                              onChange={(e) => setPeclSearchQuery(e.target.value)}
+                              placeholder="Search extensions..."
+                              className="w-full pl-9 pr-3 py-2 bg-surface-raised border border-edge rounded-lg text-sm"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Extensions List */}
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {filteredPeclExtensions.map(ext => (
+                            <div
+                              key={ext.name}
+                              className={`p-3 rounded-lg border transition-colors ${ext.installed
+                                ? 'bg-purple-500/10 border-purple-500/30'
+                                : 'bg-surface-raised border-edge hover:border-edge-subtle'
+                                }`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-sm">{ext.name}</span>
+                                    <span className="text-[10px] text-content-muted">v{ext.version}</span>
+                                    {ext.installed && (
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${ext.enabled
+                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                        : 'bg-yellow-500/20 text-yellow-400'
+                                        }`}>
+                                        {ext.enabled ? 'Enabled' : 'Installed'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-content-muted mt-1 line-clamp-2">{ext.description}</p>
+                                </div>
+                                <div className="flex gap-1 ml-2">
+                                  {ext.installed ? (
+                                    <button
+                                      onClick={() => handleUninstallPecl(ext.name)}
+                                      disabled={peclInstalling === ext.name}
+                                      className="p-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg transition-colors"
+                                      title="Uninstall"
+                                    >
+                                      {peclInstalling === ext.name ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                      ) : (
+                                        <Trash2 size={14} />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleInstallPecl(ext.name)}
+                                      disabled={peclInstalling === ext.name || !ext.download_url}
+                                      className="p-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                                      title={ext.download_url ? "Install" : "Not available for this PHP version"}
+                                    >
+                                      {peclInstalling === ext.name ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                      ) : (
+                                        <Download size={14} />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {filteredPeclExtensions.length === 0 && (
+                            <p className="text-center py-4 text-content-muted text-sm">
+                              No extensions found
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-content-muted">
+                          Install additional PHP extensions from PECL. Restart PHP after installation.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* php.ini Raw Editor Section */}
+                  <div className="border border-edge-subtle rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleSection('phpini')}
+                      className="w-full px-4 py-3 flex items-center justify-between bg-surface-raised hover:bg-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-amber-500" />
+                        <span className="font-medium">php.ini Editor</span>
+                      </div>
+                      {expandedSections.phpini ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+
+                    {expandedSections.phpini && (
+                      <div className="p-4 space-y-4">
+                        {phpIniLoading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="animate-spin text-amber-500" size={24} />
+                            <span className="ml-2 text-content-muted">Loading php.ini...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <textarea
+                              value={phpIniContent}
+                              onChange={(e) => setPhpIniContent(e.target.value)}
+                              className="w-full h-80 bg-surface-inset border border-edge-subtle rounded-lg p-3 font-mono text-xs text-content-primary resize-y focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                              spellCheck={false}
+                            />
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-content-muted">
+                                Edit php.ini directly. Backup created automatically. Restart PHP for changes to take effect.
+                              </p>
+                              <button
+                                onClick={savePhpIni}
+                                disabled={phpIniSaving}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {phpIniSaving ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <Save size={14} />
+                                )}
+                                Save php.ini
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Integrations Section */}
+                  <div className="border border-edge-subtle rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleSection('integrations')}
+                      className="w-full px-4 py-3 flex items-center justify-between bg-surface-raised hover:bg-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Server size={16} className="text-cyan-500" />
+                        <span className="font-medium">Integrations</span>
+                      </div>
+                      {expandedSections.integrations ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+
+                    {expandedSections.integrations && (
+                      <div className="p-4 space-y-4">
+                        {/* Mailpit Integration */}
+                        <div className="flex items-center justify-between p-3 bg-surface-inset rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Mail size={18} className="text-pink-500" />
+                            <div>
+                              <div className="font-medium text-sm">Mailpit Integration</div>
+                              <div className="text-xs text-content-muted">Route PHP mail() to Mailpit for testing</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={toggleMailpitIntegration}
+                            disabled={integrationsSaving === 'mailpit'}
+                            className="flex items-center"
+                          >
+                            {integrationsSaving === 'mailpit' ? (
+                              <Loader2 size={20} className="animate-spin text-pink-500" />
+                            ) : mailpitEnabled ? (
+                              <ToggleRight size={28} className="text-pink-500" />
+                            ) : (
+                              <ToggleLeft size={28} className="text-content-muted" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Redis Session Integration */}
+                        <div className="flex items-center justify-between p-3 bg-surface-inset rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Database size={18} className="text-red-500" />
+                            <div>
+                              <div className="font-medium text-sm">Redis Session Storage</div>
+                              <div className="text-xs text-content-muted">Store PHP sessions in Redis (requires Redis extension)</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={toggleRedisSessionIntegration}
+                            disabled={integrationsSaving === 'redis'}
+                            className="flex items-center"
+                          >
+                            {integrationsSaving === 'redis' ? (
+                              <Loader2 size={20} className="animate-spin text-red-500" />
+                            ) : redisSessionEnabled ? (
+                              <ToggleRight size={28} className="text-red-500" />
+                            ) : (
+                              <ToggleLeft size={28} className="text-content-muted" />
+                            )}
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-content-muted">
+                          Restart PHP after enabling/disabling integrations for changes to take effect.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div className="text-center py-8 text-content-muted">
@@ -573,7 +971,7 @@ server {
                       >
                         <div className="flex items-center gap-2">
                           <svg className="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                           </svg>
                           <span className="font-medium">Gzip Compression</span>
                           <span className={`text-xs px-2 py-0.5 rounded ${nginxGzipConfig.enabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-surface-inset text-content-secondary'}`}>
@@ -694,11 +1092,10 @@ server {
                               <button
                                 key={template.name}
                                 onClick={() => loadTemplateContent(template.name)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors ${
-                                  selectedTemplate === template.name
-                                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                    : 'bg-surface-raised border-edge text-content-secondary hover:border-edge-subtle'
-                                }`}
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors ${selectedTemplate === template.name
+                                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                  : 'bg-surface-raised border-edge text-content-secondary hover:border-edge-subtle'
+                                  }`}
                               >
                                 <span className="truncate">{template.name}</span>
                                 {template.is_custom && (

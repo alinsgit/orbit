@@ -262,3 +262,255 @@ fn update_ini_value(content: &str, key: &str, value: &str) -> String {
 
     result.join("\n")
 }
+
+/// Get raw php.ini content for editing
+#[command]
+pub fn get_php_ini_raw(app: AppHandle, version: String) -> Result<String, String> {
+    validate_php_version(&version).map_err(|e| e.to_string())?;
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("php.ini");
+
+    if !ini_path.exists() {
+        return Err(format!("php.ini not found for PHP {}", version));
+    }
+
+    fs::read_to_string(&ini_path).map_err(|e| format!("Failed to read php.ini: {}", e))
+}
+
+/// Save raw php.ini content
+#[command]
+pub fn save_php_ini_raw(app: AppHandle, version: String, content: String) -> Result<String, String> {
+    validate_php_version(&version).map_err(|e| e.to_string())?;
+
+    // Basic validation - content shouldn't be empty
+    if content.trim().is_empty() {
+        return Err("php.ini content cannot be empty".to_string());
+    }
+
+    // Limit content size (max 1MB)
+    if content.len() > 1024 * 1024 {
+        return Err("php.ini content too large (max 1MB)".to_string());
+    }
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("php.ini");
+
+    // Create backup
+    if ini_path.exists() {
+        let backup_path = ini_path.with_extension("ini.bak");
+        fs::copy(&ini_path, &backup_path).ok();
+    }
+
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {}", e))?;
+
+    Ok("php.ini saved successfully".to_string())
+}
+
+/// Configure PHP to use Mailpit for sending emails
+#[command]
+pub fn configure_php_mailpit(app: AppHandle, version: String, enabled: bool, smtp_port: u16) -> Result<String, String> {
+    validate_php_version(&version).map_err(|e| e.to_string())?;
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("php.ini");
+
+    if !ini_path.exists() {
+        return Err(format!("php.ini not found for PHP {}", version));
+    }
+
+    let mut content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    // Remove existing SMTP settings if present
+    let lines: Vec<&str> = content.lines().collect();
+    let mut new_lines: Vec<String> = Vec::new();
+    let mut skip_section = false;
+    
+    for line in lines {
+        let trimmed = line.trim();
+        // Skip our managed section
+        if trimmed == "; === Orbit Mailpit Settings ===" {
+            skip_section = true;
+            continue;
+        }
+        if trimmed == "; === End Orbit Mailpit Settings ===" {
+            skip_section = false;
+            continue;
+        }
+        if skip_section {
+            continue;
+        }
+        new_lines.push(line.to_string());
+    }
+    
+    content = new_lines.join("\n");
+
+    if enabled {
+        // Add Mailpit SMTP settings
+        let mailpit_config = format!(
+            "\n\n; === Orbit Mailpit Settings ===\nSMTP = 127.0.0.1\nsmtp_port = {}\nsendmail_from = orbit@localhost\n; === End Orbit Mailpit Settings ===\n",
+            smtp_port
+        );
+        content.push_str(&mailpit_config);
+    }
+
+    // Create backup
+    let backup_path = ini_path.with_extension("ini.bak");
+    fs::copy(&ini_path, &backup_path).ok();
+
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {}", e))?;
+
+    if enabled {
+        Ok(format!("PHP configured to use Mailpit (SMTP port {})", smtp_port))
+    } else {
+        Ok("Mailpit integration disabled".to_string())
+    }
+}
+
+/// Get PHP Mailpit configuration status
+#[command]
+pub fn get_php_mailpit_status(app: AppHandle, version: String) -> Result<bool, String> {
+    validate_php_version(&version).map_err(|e| e.to_string())?;
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("php.ini");
+
+    if !ini_path.exists() {
+        return Ok(false);
+    }
+
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    Ok(content.contains("; === Orbit Mailpit Settings ==="))
+}
+
+/// Configure PHP to use Redis for sessions
+#[command]
+pub fn configure_php_redis_session(app: AppHandle, version: String, enabled: bool, redis_port: u16) -> Result<String, String> {
+    validate_php_version(&version).map_err(|e| e.to_string())?;
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("php.ini");
+
+    if !ini_path.exists() {
+        return Err(format!("php.ini not found for PHP {}", version));
+    }
+
+    // Check if redis extension is available
+    let ext_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("ext");
+    
+    let redis_dll = ext_dir.join("php_redis.dll");
+    if enabled && !redis_dll.exists() {
+        return Err("Redis PHP extension is not installed. Please install it first from PECL extensions.".to_string());
+    }
+
+    let mut content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    // Remove existing Redis session settings if present
+    let lines: Vec<&str> = content.lines().collect();
+    let mut new_lines: Vec<String> = Vec::new();
+    let mut skip_section = false;
+    
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed == "; === Orbit Redis Session Settings ===" {
+            skip_section = true;
+            continue;
+        }
+        if trimmed == "; === End Orbit Redis Session Settings ===" {
+            skip_section = false;
+            continue;
+        }
+        if skip_section {
+            continue;
+        }
+        new_lines.push(line.to_string());
+    }
+    
+    content = new_lines.join("\n");
+
+    if enabled {
+        // Add Redis session settings
+        let redis_config = format!(
+            "\n\n; === Orbit Redis Session Settings ===\nsession.save_handler = redis\nsession.save_path = \"tcp://127.0.0.1:{}\"\n; === End Orbit Redis Session Settings ===\n",
+            redis_port
+        );
+        content.push_str(&redis_config);
+    }
+
+    // Create backup
+    let backup_path = ini_path.with_extension("ini.bak");
+    fs::copy(&ini_path, &backup_path).ok();
+
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {}", e))?;
+
+    if enabled {
+        Ok(format!("PHP sessions configured to use Redis (port {})", redis_port))
+    } else {
+        Ok("Redis session integration disabled".to_string())
+    }
+}
+
+/// Get PHP Redis session configuration status
+#[command]
+pub fn get_php_redis_session_status(app: AppHandle, version: String) -> Result<bool, String> {
+    validate_php_version(&version).map_err(|e| e.to_string())?;
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("php")
+        .join(&version)
+        .join("php.ini");
+
+    if !ini_path.exists() {
+        return Ok(false);
+    }
+
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    Ok(content.contains("; === Orbit Redis Session Settings ==="))
+}
