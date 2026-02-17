@@ -44,16 +44,30 @@ impl MariaDBManager {
         Ok(())
     }
 
+    /// Ensure MariaDB configuration is up-to-date (public wrapper)
+    pub fn ensure_config(mariadb_root: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String> {
+        Self::create_config(mariadb_root, data_dir)
+    }
+
     /// Create MariaDB configuration file
-    fn create_config(_mariadb_root: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String> {
+    fn create_config(mariadb_root: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String> {
         let conf_path = data_dir.join("my.ini");
 
         // Use forward slashes for MySQL/MariaDB paths on Windows
         let data_path_str = data_dir.display().to_string().replace('\\', "/");
+        let basedir_str = mariadb_root.display().to_string().replace('\\', "/");
+
+        // Find plugin directory — it may be in a version subfolder from extraction
+        let plugin_dir = Self::find_plugin_dir(mariadb_root);
+        let plugin_dir_str = plugin_dir
+            .map(|p| p.display().to_string().replace('\\', "/"))
+            .unwrap_or_else(|| format!("{}/lib/plugin", basedir_str));
 
         let conf_content = format!(
             r#"[mysqld]
+basedir={}
 datadir={}
+plugin_dir={}
 port=3306
 bind-address=127.0.0.1
 skip-networking=0
@@ -69,7 +83,7 @@ host=127.0.0.1
 
 [mariadb]
 "#,
-            data_path_str
+            basedir_str, data_path_str, plugin_dir_str
         );
 
         // Create parent directory if needed
@@ -88,6 +102,30 @@ host=127.0.0.1
             .map_err(|e| format!("Failed to write my.ini: {}", e))?;
 
         Ok(conf_path)
+    }
+
+    /// Find the plugin directory — it may be inside a version subfolder
+    fn find_plugin_dir(mariadb_root: &PathBuf) -> Option<PathBuf> {
+        // Direct paths
+        let direct = mariadb_root.join("lib").join("plugin");
+        if direct.exists() {
+            return Some(direct);
+        }
+
+        // Check inside version subfolders (e.g. mariadb-12.2.2-winx64/lib/plugin)
+        if let Ok(entries) = fs::read_dir(mariadb_root) {
+            for entry in entries.flatten() {
+                let ename = entry.file_name().to_string_lossy().to_string();
+                if ename.starts_with("mariadb-") && entry.path().is_dir() {
+                    let sub_plugin = entry.path().join("lib").join("plugin");
+                    if sub_plugin.exists() {
+                        return Some(sub_plugin);
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     /// Find mariadbd.exe or mysqld.exe
