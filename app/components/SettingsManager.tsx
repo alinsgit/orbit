@@ -202,8 +202,8 @@ export function SettingsManager() {
                       key={option.value}
                       onClick={() => setTheme(option.value)}
                       className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${isSelected
-                          ? 'border-emerald-500 bg-emerald-500/10'
-                          : 'border-edge hover:border-edge'
+                        ? 'border-emerald-500 bg-emerald-500/10'
+                        : 'border-edge hover:border-edge'
                         }`}
                     >
                       <Icon size={24} className={isSelected ? 'text-emerald-500' : 'text-content-secondary'} />
@@ -431,7 +431,7 @@ export function SettingsManager() {
             {/* Links */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => open('https://github.com/nicepkg/orbit')}
+                onClick={() => open('https://github.com/alinsgit/orbit')}
                 className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left"
               >
                 <Github size={18} className="text-content-secondary" />
@@ -443,7 +443,7 @@ export function SettingsManager() {
               </button>
 
               <button
-                onClick={() => open('https://github.com/nicepkg/orbit/issues')}
+                onClick={() => open('https://github.com/alinsgit/orbit/issues')}
                 className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left"
               >
                 <Heart size={18} className="text-red-400" />

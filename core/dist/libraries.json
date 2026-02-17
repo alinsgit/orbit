@@ -1,6 +1,6 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicepkg/orbit-libraries/main/schema.json",
-  "updated": "2026-02-07T03:11:54.424Z",
+  "$schema": "https://raw.githubusercontent.com/alinsgit/orbit-libraries/main/schema.json",
+  "updated": "2026-02-17T01:28:15.898Z",
   "version": "1.1.0",
   "services": {
     "php": {
@@ -127,95 +127,95 @@
       "name": "MariaDB",
       "description": "Community-developed MySQL fork",
       "availableVersions": [
-        "12.1",
+        "12.2",
         "11.8",
         "11.4",
         "10.11",
         "10.6"
       ],
       "versions": {
-        "12.1": {
-          "latest": "12.1.2",
+        "12.2": {
+          "latest": "12.2.2",
           "windows": {
-            "url": "https://downloads.mariadb.org/f/mariadb-12.1.2/winx64-packages/mariadb-12.1.2-winx64.zip",
-            "filename": "mariadb-12.1.2-winx64.zip",
-            "sha256": "b3d11ae1edf0d00abeefb811f663df5a036ee237fc2df399f822a9b1f65537d8"
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip",
+            "filename": "mariadb-12.2.2-winx64.zip",
+            "sha256": "b34bb91f0dd4bd184f420288a12aace2b5fcb20734f2b880075c36150d4641c6"
           },
           "linux": {
-            "url": "https://downloads.mariadb.org/f/mariadb-12.1.2/bintar-linux-systemd-x86_64/mariadb-12.1.2-linux-systemd-x86_64.tar.gz",
-            "filename": "mariadb-12.1.2-linux-systemd-x86_64.tar.gz",
-            "sha256": "225ac1e187b4f3a675dbe66061a5b17236fc46ee93a645fed9ae6a1dbbbdbea1"
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz",
+            "filename": "mariadb-12.2.2-linux-systemd-x86_64.tar.gz",
+            "sha256": "2f1d4740e618b6990f28209b889f257e17ef2c66900e6bd7ce21a5718668a230"
           },
           "macos_arm64": {
-            "url": "https://downloads.mariadb.org/f/mariadb-12.1.2/macos-system-arm64/mariadb-12.1.2-macos13-arm64.tar.gz",
-            "filename": "mariadb-12.1.2-macos13-arm64.tar.gz"
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-12.2.2/macos-system-arm64/mariadb-12.2.2-macos13-arm64.tar.gz",
+            "filename": "mariadb-12.2.2-macos13-arm64.tar.gz"
           }
         },
         "11.8": {
           "latest": "11.8.6",
           "windows": {
-            "url": "https://downloads.mariadb.org/f/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip",
             "filename": "mariadb-11.8.6-winx64.zip",
             "sha256": "98cb8429841fc558fbc48e8c979c3b66c88ac506d7505a589e8ac74a039b0b21"
           },
           "linux": {
-            "url": "https://downloads.mariadb.org/f/mariadb-11.8.6/bintar-linux-systemd-x86_64/mariadb-11.8.6-linux-systemd-x86_64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-11.8.6/bintar-linux-systemd-x86_64/mariadb-11.8.6-linux-systemd-x86_64.tar.gz",
             "filename": "mariadb-11.8.6-linux-systemd-x86_64.tar.gz",
             "sha256": "9367b26f63a7f4936acf914a987d15f37e2449ef568552b70d3c4ffa48896f8b"
           },
           "macos_arm64": {
-            "url": "https://downloads.mariadb.org/f/mariadb-11.8.6/macos-system-arm64/mariadb-11.8.6-macos13-arm64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-11.8.6/macos-system-arm64/mariadb-11.8.6-macos13-arm64.tar.gz",
             "filename": "mariadb-11.8.6-macos13-arm64.tar.gz"
           }
         },
         "11.4": {
           "latest": "11.4.10",
           "windows": {
-            "url": "https://downloads.mariadb.org/f/mariadb-11.4.10/winx64-packages/mariadb-11.4.10-winx64.zip",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-11.4.10/winx64-packages/mariadb-11.4.10-winx64.zip",
             "filename": "mariadb-11.4.10-winx64.zip",
             "sha256": "fb7c76f0804321ee373daa49145f2056d2d88f321b614130adeb05a1644ea003"
           },
           "linux": {
-            "url": "https://downloads.mariadb.org/f/mariadb-11.4.10/bintar-linux-systemd-x86_64/mariadb-11.4.10-linux-systemd-x86_64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-11.4.10/bintar-linux-systemd-x86_64/mariadb-11.4.10-linux-systemd-x86_64.tar.gz",
             "filename": "mariadb-11.4.10-linux-systemd-x86_64.tar.gz",
             "sha256": "9bb5b4292201eb64617ff5286be25a6e9b76dc2898a8fa27a994e27f80ac28ac"
           },
           "macos_arm64": {
-            "url": "https://downloads.mariadb.org/f/mariadb-11.4.10/macos-system-arm64/mariadb-11.4.10-macos13-arm64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-11.4.10/macos-system-arm64/mariadb-11.4.10-macos13-arm64.tar.gz",
             "filename": "mariadb-11.4.10-macos13-arm64.tar.gz"
           }
         },
         "10.11": {
           "latest": "10.11.16",
           "windows": {
-            "url": "https://downloads.mariadb.org/f/mariadb-10.11.16/winx64-packages/mariadb-10.11.16-winx64.zip",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-10.11.16/winx64-packages/mariadb-10.11.16-winx64.zip",
             "filename": "mariadb-10.11.16-winx64.zip",
             "sha256": "b1659bd9fe816624632c6b445ce4ad1ed6758a199e35f89e2448aef99828527b"
           },
           "linux": {
-            "url": "https://downloads.mariadb.org/f/mariadb-10.11.16/bintar-linux-systemd-x86_64/mariadb-10.11.16-linux-systemd-x86_64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-10.11.16/bintar-linux-systemd-x86_64/mariadb-10.11.16-linux-systemd-x86_64.tar.gz",
             "filename": "mariadb-10.11.16-linux-systemd-x86_64.tar.gz",
             "sha256": "91241b6c1d6d18f61ad5cd7edd953e6dd1b1845f5980eda1e68f5d7f3bb88b83"
           },
           "macos_arm64": {
-            "url": "https://downloads.mariadb.org/f/mariadb-10.11.16/macos-system-arm64/mariadb-10.11.16-macos13-arm64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-10.11.16/macos-system-arm64/mariadb-10.11.16-macos13-arm64.tar.gz",
             "filename": "mariadb-10.11.16-macos13-arm64.tar.gz"
           }
         },
         "10.6": {
           "latest": "10.6.25",
           "windows": {
-            "url": "https://downloads.mariadb.org/f/mariadb-10.6.25/winx64-packages/mariadb-10.6.25-winx64.zip",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-10.6.25/winx64-packages/mariadb-10.6.25-winx64.zip",
             "filename": "mariadb-10.6.25-winx64.zip",
             "sha256": "5975eeadf19c28f38945d0a65b2c2401d6bc3f97d72830a25a44239738704d11"
           },
           "linux": {
-            "url": "https://downloads.mariadb.org/f/mariadb-10.6.25/bintar-linux-systemd-x86_64/mariadb-10.6.25-linux-systemd-x86_64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-10.6.25/bintar-linux-systemd-x86_64/mariadb-10.6.25-linux-systemd-x86_64.tar.gz",
             "filename": "mariadb-10.6.25-linux-systemd-x86_64.tar.gz",
             "sha256": "182668cd6fca93fd18b0905b3e8a6430168d22272da9670c22fd8d7ccf2043d4"
           },
           "macos_arm64": {
-            "url": "https://downloads.mariadb.org/f/mariadb-10.6.25/macos-system-arm64/mariadb-10.6.25-macos13-arm64.tar.gz",
+            "url": "https://mirror.kumi.systems/mariadb/mariadb-10.6.25/macos-system-arm64/mariadb-10.6.25-macos13-arm64.tar.gz",
             "filename": "mariadb-10.6.25-macos13-arm64.tar.gz"
           }
         }
@@ -246,17 +246,17 @@
           }
         },
         "24": {
-          "latest": "24.13.0",
+          "latest": "24.13.1",
           "windows": {
-            "url": "https://nodejs.org/dist/v24.13.0/node-v24.13.0-win-x64.zip",
-            "filename": "node-v24.13.0-win-x64.zip"
+            "url": "https://nodejs.org/dist/v24.13.1/node-v24.13.1-win-x64.zip",
+            "filename": "node-v24.13.1-win-x64.zip"
           }
         },
         "25": {
-          "latest": "25.6.0",
+          "latest": "25.6.1",
           "windows": {
-            "url": "https://nodejs.org/dist/v25.6.0/node-v25.6.0-win-x64.zip",
-            "filename": "node-v25.6.0-win-x64.zip"
+            "url": "https://nodejs.org/dist/v25.6.1/node-v25.6.1-win-x64.zip",
+            "filename": "node-v25.6.1-win-x64.zip"
           }
         }
       }
@@ -311,9 +311,9 @@
       ],
       "versions": {
         "1.3": {
-          "latest": "1.3.8",
+          "latest": "1.3.9",
           "windows": {
-            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.8/bun-windows-x64.zip",
+            "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.9/bun-windows-x64.zip",
             "filename": "bun-windows-x64.zip"
           }
         },
@@ -336,26 +336,26 @@
     "redis": {
       "name": "Redis",
       "description": "In-memory data structure store",
-      "latest": "8.4.0",
+      "latest": "8.6.0",
       "windows": {
-        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.4.0/Redis-8.4.0-Windows-x64-cygwin-with-Service.zip",
-        "filename": "Redis-8.4.0-Windows-x64-cygwin-with-Service.zip"
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.6.0/Redis-8.6.0-Windows-x64-cygwin-with-Service.zip",
+        "filename": "Redis-8.6.0-Windows-x64-cygwin-with-Service.zip"
       }
     },
     "mailpit": {
       "name": "Mailpit",
       "description": "Email testing tool for developers",
-      "latest": "1.29.0",
+      "latest": "1.29.1",
       "windows": {
-        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.0/mailpit-windows-amd64.zip",
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.1/mailpit-windows-amd64.zip",
         "filename": "mailpit-windows-amd64.zip"
       },
       "macos_arm64": {
-        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.0/mailpit-darwin-arm64.tar.gz",
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.1/mailpit-darwin-arm64.tar.gz",
         "filename": "mailpit-darwin-arm64.tar.gz"
       },
       "linux": {
-        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.0/mailpit-linux-amd64.tar.gz",
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.1/mailpit-linux-amd64.tar.gz",
         "filename": "mailpit-linux-amd64.tar.gz"
       }
     },
