@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbit — Modern Local Development Environment</title>
+    <meta name="description"
+        content="Manage Nginx, PHP, MariaDB, Redis and more from a single, beautiful interface. The modern alternative to XAMPP and Laragon.">
+    <meta name="keywords"
+        content="local development, XAMPP alternative, Laragon alternative, PHP, Nginx, MariaDB, development environment">
+    <meta property="og:title" content="Orbit — Modern Local Dev Environment">
+    <meta property="og:description" content="Manage Nginx, PHP, MariaDB, Redis and more from a single interface.">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Ambient background -->
+    <div class="ambient-bg">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+        <div class="glow glow-3"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="container nav-inner">
+            <a href="#" class="nav-logo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="url(#g1)" stroke-width="2" />
+                    <circle cx="12" cy="12" r="4" fill="url(#g1)" />
+                    <circle cx="12" cy="4" r="2" fill="#10b981" />
+                    <defs>
+                        <linearGradient id="g1" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#34d399" />
+                            <stop offset="1" stop-color="#059669" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>Orbit</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#services">Services</a>
+                <a href="#download">Download</a>
+                <a href="https://github.com/alinsgit/orbit" target="_blank" class="nav-gh">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <span class="badge-dot"></span>
+                <span>v0.1.3 — Now Available</span>
+            </div>
+            <h1 class="hero-title">
+                Your local dev stack,<br>
+                <span class="gradient-text">beautifully managed.</span>
+            </h1>
+            <p class="hero-subtitle">
+                Nginx, PHP, MariaDB, Redis — install, configure and manage everything from a single, modern interface.
+                No more terminal juggling.
+            </p>
+            <div class="hero-actions">
+                <a href="#download" class="btn btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download for Free
+                </a>
+                <a href="https://github.com/alinsgit/orbit" target="_blank" class="btn btn-ghost">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                    View on GitHub
+                </a>
+            </div>
+
+            <!-- App Mockup -->
+            <div class="app-preview">
+                <div class="mockup-window">
+                    <div class="mockup-titlebar">
+                        <div class="mockup-dots"><span></span><span></span><span></span></div>
+                        <div class="mockup-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="#34d399" stroke-width="2" />
+                                <circle cx="12" cy="12" r="4" fill="#34d399" />
+                                <circle cx="12" cy="4" r="2" fill="#10b981" />
+                            </svg>
+                            Orbit <span class="mockup-label">Dev Environment</span>
+                        </div>
+                        <div class="mockup-controls"><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="mockup-body">
+                        <div class="mockup-sidebar">
+                            <div class="sb-icon active" title="Services"><svg width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="8" rx="2" />
+                                    <rect x="2" y="14" width="20" height="8" rx="2" />
+                                    <circle cx="6" cy="6" r="1" fill="currentColor" />
+                                    <circle cx="6" cy="18" r="1" fill="currentColor" />
+                                </svg></div>
+                            <div class="sb-icon" title="Sites"><svg width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="2" y1="12" x2="22" y2="12" />
+                                    <path
+                                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                </svg></div>
+                            <div class="sb-icon" title="Logs"><svg width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg></div>
+                            <div class="sb-icon" title="Database"><svg width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                                </svg></div>
+                        </div>
+                        <div class="mockup-content">
+                            <div class="mc-header">
+                                <h3>Services</h3>
+                                <span class="mc-status">4 running</span>
+                            </div>
+                            <div class="mc-grid">
+                                <div class="service-card running">
+                                    <div class="sc-dot green"></div>
+                                    <div class="sc-info"><span class="sc-name">Nginx</span><span
+                                            class="sc-ver">1.28.2</span></div>
+                                    <div class="sc-badge">:80</div>
+                                </div>
+                                <div class="service-card running">
+                                    <div class="sc-dot green"></div>
+                                    <div class="sc-info"><span class="sc-name">PHP</span><span
+                                            class="sc-ver">8.4.16</span></div>
+                                    <div class="sc-badge">NTS</div>
+                                </div>
+                                <div class="service-card running">
+                                    <div class="sc-dot green"></div>
+                                    <div class="sc-info"><span class="sc-name">MariaDB</span><span
+                                            class="sc-ver">11.4.10</span></div>
+                                    <div class="sc-badge">:3306</div>
+                                </div>
+                                <div class="service-card running">
+                                    <div class="sc-dot green"></div>
+                                    <div class="sc-info"><span class="sc-name">Redis</span><span
+                                            class="sc-ver">8.4.0</span></div>
+                                    <div class="sc-badge">:6379</div>
+                                </div>
+                                <div class="service-card stopped">
+                                    <div class="sc-dot gray"></div>
+                                    <div class="sc-info"><span class="sc-name">Mailpit</span><span
+                                            class="sc-ver">1.29.1</span></div>
+                                    <div class="sc-badge off">Off</div>
+                                </div>
+                                <div class="service-card stopped">
+                                    <div class="sc-dot gray"></div>
+                                    <div class="sc-info"><span class="sc-name">Apache</span><span
+                                            class="sc-ver">2.4.66</span></div>
+                                    <div class="sc-badge off">Off</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// features</span>
+                <h2>Everything you need,<br><span class="gradient-text">nothing you don't.</span></h2>
+                <p>Built for developers who want a clean, fast, modern dev environment without the bloat.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="fc-icon" style="--accent: #10b981">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="2" y="2" width="20" height="8" rx="2" />
+                            <rect x="2" y="14" width="20" height="8" rx="2" />
+                            <circle cx="6" cy="6" r="1" fill="currentColor" />
+                            <circle cx="6" cy="18" r="1" fill="currentColor" />
+                        </svg>
+                    </div>
+                    <h3>One-Click Services</h3>
+                    <p>Install, start, stop and configure services instantly. No terminal commands needed.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon" style="--accent: #3b82f6">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="2" y1="12" x2="22" y2="12" />
+                            <path
+                                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                    </div>
+                    <h3>Site Management</h3>
+                    <p>Create local sites with custom domains, SSL certificates and automatic Nginx configuration.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon" style="--accent: #a855f7">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path
+                                d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                        </svg>
+                    </div>
+                    <h3>Multi-Version PHP</h3>
+                    <p>Run PHP 8.1 through 8.5 side by side. Switch versions per-site with one click.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon" style="--accent: #f59e0b">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <ellipse cx="12" cy="5" rx="9" ry="3" />
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                        </svg>
+                    </div>
+                    <h3>Database Tools</h3>
+                    <p>Built-in database viewer with query editor. Or launch Adminer and phpMyAdmin instantly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon" style="--accent: #ef4444">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                    </div>
+                    <h3>Log Viewer</h3>
+                    <p>Real-time log monitoring with syntax highlighting. Filter by service, level, and keyword.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon" style="--accent: #06b6d4">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                    </div>
+                    <h3>Local SSL</h3>
+                    <p>Automatic HTTPS with mkcert. Real certificates trusted by your browser — no warnings.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services -->
+    <section class="services-section" id="services">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// supported_services</span>
+                <h2>Your entire stack,<br><span class="gradient-text">ready to go.</span></h2>
+            </div>
+            <div class="services-row">
+                <div class="svc-chip"><span class="svc-icon">▲</span> Nginx</div>
+                <div class="svc-chip"><span class="svc-icon">◆</span> Apache</div>
+                <div class="svc-chip"><span class="svc-icon">⬡</span> PHP</div>
+                <div class="svc-chip"><span class="svc-icon">⊛</span> MariaDB</div>
+                <div class="svc-chip"><span class="svc-icon">◈</span> Redis</div>
+                <div class="svc-chip"><span class="svc-icon">⬢</span> Node.js</div>
+                <div class="svc-chip"><span class="svc-icon">◉</span> Python</div>
+                <div class="svc-chip"><span class="svc-icon">⬡</span> Bun</div>
+                <div class="svc-chip"><span class="svc-icon">♫</span> Composer</div>
+                <div class="svc-chip"><span class="svc-icon">✉</span> Mailpit</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Terminal-style section -->
+    <section class="terminal-section">
+        <div class="container">
+            <div class="terminal-window">
+                <div class="term-bar">
+                    <div class="term-dots"><span></span><span></span><span></span></div>
+                    <span class="term-title">terminal</span>
+                </div>
+                <div class="term-body">
+                    <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">orbit install nginx
+                            php mariadb</span></div>
+                    <div class="term-line output"><span class="term-ok">✓</span> Nginx 1.28.2 installed</div>
+                    <div class="term-line output"><span class="term-ok">✓</span> PHP 8.4.16 installed</div>
+                    <div class="term-line output"><span class="term-ok">✓</span> MariaDB 11.4.10 installed</div>
+                    <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">orbit start
+                            --all</span></div>
+                    <div class="term-line output"><span class="term-ok">✓</span> All services running on localhost</div>
+                    <div class="term-line"><span class="term-prompt">$</span> <span class="term-cursor">_</span></div>
+                </div>
+            </div>
+            <p class="terminal-caption">Or just click the button. We don't judge.</p>
+        </div>
+    </section>
+
+    <!-- Download -->
+    <section class="download-section" id="download">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// get_started</span>
+                <h2>Download Orbit</h2>
+                <p>Free and open-source. Available for Windows, macOS and Linux.</p>
+            </div>
+            <div class="download-grid" id="download-grid">
+                <a class="dl-card" id="dl-windows" href="https://github.com/alinsgit/orbit/releases/latest"
+                    target="_blank">
+                    <div class="dl-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+                        </svg>
+                    </div>
+                    <h3>Windows</h3>
+                    <span class="dl-sub">Windows 10+ (x64)</span>
+                    <span class="dl-badge">.msi installer</span>
+                </a>
+                <a class="dl-card" id="dl-macos" href="https://github.com/alinsgit/orbit/releases/latest"
+                    target="_blank">
+                    <div class="dl-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                        </svg>
+                    </div>
+                    <h3>macOS</h3>
+                    <span class="dl-sub">Apple Silicon & Intel</span>
+                    <span class="dl-badge">.dmg</span>
+                </a>
+                <a class="dl-card" id="dl-linux" href="https://github.com/alinsgit/orbit/releases/latest"
+                    target="_blank">
+                    <div class="dl-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M12.504 0c-.155 0-.311.003-.466.008C7.67.12 4.323 3.2 4.003 7.392c-.12 1.55.167 3 .69 4.2-.01.07-.024.14-.036.21-.2 1.12-.49 2.76 0 4.51.49 1.76 1.73 3.14 2.4 3.86.67.71 1.5 1.21 2.31 1.55.83.34 1.7.52 2.55.52.4 0 .78-.04 1.14-.12.69-.15 1.33-.43 1.9-.82.57.39 1.21.67 1.9.82.36.08.74.12 1.14.12.85 0 1.72-.18 2.55-.52.81-.34 1.64-.84 2.31-1.55.67-.72 1.91-2.1 2.4-3.86.49-1.75.2-3.39 0-4.51-.012-.07-.026-.14-.036-.21.523-1.2.81-2.65.69-4.2C22.677 3.2 19.33.12 14.962.008 14.807.003 14.652 0 14.496 0h-1.992z" />
+                        </svg>
+                    </div>
+                    <h3>Linux</h3>
+                    <span class="dl-sub">Ubuntu, Debian (x64)</span>
+                    <span class="dl-badge">.deb / .AppImage</span>
+                </a>
+            </div>
+            <p class="dl-note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Open source under MIT License.
+                <a href="https://github.com/alinsgit/orbit/releases" target="_blank">All releases →</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-inner">
+            <div class="footer-left">
+                <a href="#" class="nav-logo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="#34d399" stroke-width="2" />
+                        <circle cx="12" cy="12" r="4" fill="#34d399" />
+                        <circle cx="12" cy="4" r="2" fill="#10b981" />
+                    </svg>
+                    <span>Orbit</span>
+                </a>
+                <p>Modern local development environment.</p>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/alinsgit/orbit" target="_blank">GitHub</a>
+                <a href="https://github.com/alinsgit/orbit/issues" target="_blank">Issues</a>
+                <a href="https://github.com/alinsgit/orbit/releases" target="_blank">Releases</a>
+            </div>
+            <div class="footer-copy">
+                <p>© 2025 Orbit. Released under MIT License.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
