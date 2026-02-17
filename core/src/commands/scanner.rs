@@ -44,10 +44,12 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
     // 2. Check MariaDB
     let mariadb_path = bin_path.join("mariadb");
     if mariadb_path.exists() {
-        // Try multiple possible locations for mysqld.exe
+        // Try multiple possible locations — prefer mariadbd.exe (newer naming)
         let possible_paths = [
-            mariadb_path.join("bin").join("mysqld.exe"),  // Standard structure
-            mariadb_path.join("mysqld.exe"),              // Flat structure (after strip_root)
+            mariadb_path.join("mariadbd.exe"),             // Newer naming, flat structure
+            mariadb_path.join("bin").join("mariadbd.exe"), // Newer naming, standard structure
+            mariadb_path.join("mysqld.exe"),               // Legacy naming, flat structure
+            mariadb_path.join("bin").join("mysqld.exe"),   // Legacy naming, standard structure
         ];
 
         for exe_path in possible_paths {

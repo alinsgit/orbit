@@ -99,6 +99,9 @@ pub fn start_service(
                 MariaDBManager::initialize(&mariadb_root, &data_dir, "root")?;
             }
 
+            // Always regenerate config to ensure basedir/plugin_dir are correct
+            MariaDBManager::ensure_config(&mariadb_root, &data_dir)?;
+
             let config_path = data_dir.join("my.ini");
 
             // --defaults-file MUST be the first argument for MariaDB

@@ -55,7 +55,7 @@ fn get_service_port(service_name: &str) -> Option<u16> {
 /// Get process image names for taskkill when stopping orphaned processes
 fn get_process_names(service_name: &str) -> Vec<&'static str> {
     if service_name.contains("mariadb") || service_name.contains("mysql") {
-        vec!["mysqld.exe", "mariadbd.exe"]
+        vec!["mariadbd.exe", "mysqld.exe"]
     } else if service_name.contains("nginx") {
         vec!["nginx.exe"]
     } else if service_name.contains("apache") || service_name.contains("httpd") {
@@ -159,25 +159,39 @@ impl ServiceManager {
             Ok(mut child) => {
                 let pid = child.id();
 
-                // Wait briefly and verify the process didn't crash immediately
-                std::thread::sleep(std::time::Duration::from_millis(1500));
+                // Runtimes (Bun, NodeJs, Python) are not background daemons.
+                // They exit immediately when launched without a script argument.
+                // Don't treat immediate exit as a crash for these types.
+                let is_runtime = matches!(
+                    service_type,
+                    ServiceType::Bun | ServiceType::NodeJs | ServiceType::Python
+                );
 
-                match child.try_wait() {
-                    Ok(Some(exit_status)) => {
-                        // Process already exited - it crashed
-                        Err(format!(
-                            "Service {} exited immediately (exit code: {})",
-                            name, exit_status
-                        ))
-                    }
-                    Ok(None) => {
-                        // Still running - success
-                        let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-                        processes.insert(name, child);
-                        Ok(pid)
-                    }
-                    Err(e) => {
-                        Err(format!("Failed to check service status: {}", e))
+                if is_runtime {
+                    // For runtimes, just register the process without crash-checking
+                    let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
+                    processes.insert(name, child);
+                    Ok(pid)
+                } else {
+                    // Wait briefly and verify the process didn't crash immediately
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+
+                    match child.try_wait() {
+                        Ok(Some(exit_status)) => {
+                            // Process already exited - it crashed
+                            Err(format!(
+                                "Service {} exited immediately (exit code: {})",
+                                name, exit_status
+                            ))
+                        }
+                        Ok(None) => {
+                            // Still running - success
+                            let mut processes =
+                                self.processes.lock().map_err(|e| e.to_string())?;
+                            processes.insert(name, child);
+                            Ok(pid)
+                        }
+                        Err(e) => Err(format!("Failed to check service status: {}", e)),
                     }
                 }
             }
