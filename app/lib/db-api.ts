@@ -214,6 +214,63 @@ export async function getUserPrivileges(username: string, host: string): Promise
   return result.map(row => Object.values(row)[0]);
 }
 
+// Get database charset and collation
+export async function getDatabaseCharset(name: string): Promise<{ charset: string; collation: string }> {
+  if (!db) throw new Error('Not connected');
+
+  const result = await db.select<Record<string, string>[]>(
+    `SELECT DEFAULT_CHARACTER_SET_NAME as charset, DEFAULT_COLLATION_NAME as collation 
+     FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${name}'`
+  );
+
+  if (!result[0]) throw new Error('Database not found');
+  return {
+    charset: result[0].charset || 'utf8mb4',
+    collation: result[0].collation || 'utf8mb4_unicode_ci',
+  };
+}
+
+// Alter database charset and collation
+export async function alterDatabaseCharset(
+  name: string,
+  charset: string,
+  collation: string
+): Promise<void> {
+  if (!db) throw new Error('Not connected');
+
+  const systemDbs = ['mysql', 'information_schema', 'performance_schema', 'sys'];
+  if (systemDbs.includes(name.toLowerCase())) {
+    throw new Error('Cannot alter system database');
+  }
+
+  await db.execute(`ALTER DATABASE \`${name}\` CHARACTER SET ${charset} COLLATE ${collation}`);
+}
+
+// Get users who have privileges on a specific database
+export async function getDatabaseUsers(database: string): Promise<UserInfo[]> {
+  if (!db) throw new Error('Not connected');
+
+  const users = await listUsers();
+  const dbUsers: UserInfo[] = [];
+
+  for (const user of users) {
+    try {
+      const grants = await getUserPrivileges(user.user, user.host);
+      const hasAccess = grants.some(g => {
+        const upper = g.toUpperCase();
+        return upper.includes(`\`${database}\``) || upper.includes('ON *.*');
+      });
+      if (hasAccess) {
+        dbUsers.push(user);
+      }
+    } catch {
+      // Skip users we can't query
+    }
+  }
+
+  return dbUsers;
+}
+
 // Helper: Format bytes
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';

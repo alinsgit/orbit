@@ -14,7 +14,13 @@ import {
   LogOut,
   Eye,
   EyeOff,
+  Download,
+  Upload,
+  RotateCcw,
+  Save,
+  Pencil,
 } from 'lucide-react';
+import { save, open } from '@tauri-apps/plugin-dialog';
 import {
   dbConnect,
   dbDisconnect,
@@ -28,18 +34,43 @@ import {
   dropUser,
   changePassword,
   grantPrivileges,
+  revokePrivileges,
+  getDatabaseCharset,
+  alterDatabaseCharset,
+  getDatabaseUsers,
   type DatabaseInfo,
   type UserInfo,
   type ServerInfo,
   type DbConnectionConfig,
 } from '../../lib/db-api';
+import {
+  exportDatabase,
+  exportAllDatabases,
+  importSql,
+  rebuildDatabase,
+} from '../../lib/api';
 
 type Tab = 'databases' | 'users';
 
 interface DialogState {
-  type: 'createDb' | 'createUser' | 'changePassword' | 'grantPrivileges' | null;
+  type: 'createDb' | 'createUser' | 'changePassword' | 'grantPrivileges' | 'editDb' | null;
   data?: UserInfo;
+  dbName?: string;
 }
+
+interface EditDbState {
+  charset: string;
+  collation: string;
+  authorizedUsers: string[]; // "user@host" keys
+  originalUsers: string[];
+}
+
+const CHARSET_COLLATIONS: Record<string, string[]> = {
+  utf8mb4: ['utf8mb4_unicode_ci', 'utf8mb4_general_ci', 'utf8mb4_bin', 'utf8mb4_turkish_ci'],
+  utf8: ['utf8_unicode_ci', 'utf8_general_ci', 'utf8_bin', 'utf8_turkish_ci'],
+  latin1: ['latin1_swedish_ci', 'latin1_general_ci', 'latin1_bin'],
+  latin5: ['latin5_turkish_ci', 'latin5_bin'],
+};
 
 export default function NativeDatabaseManager() {
   const [connected, setConnected] = useState(false);
@@ -61,10 +92,13 @@ export default function NativeDatabaseManager() {
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Dialogs
   const [dialog, setDialog] = useState<DialogState>({ type: null });
   const [dialogLoading, setDialogLoading] = useState(false);
+  const [editDb, setEditDb] = useState<EditDbState | null>(null);
 
   // Dialog form states
   const [newDbName, setNewDbName] = useState('');
@@ -222,6 +256,137 @@ export default function NativeDatabaseManager() {
     return `${mins}m`;
   };
 
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 4000);
+  };
+
+  const handleExportDatabase = async (dbName: string) => {
+    try {
+      const path = await save({
+        defaultPath: `${dbName}_backup.sql`,
+        filters: [{ name: 'SQL Files', extensions: ['sql'] }],
+      });
+      if (!path) return;
+      setBackupLoading(`export-${dbName}`);
+      const result = await exportDatabase(dbName, path);
+      showSuccess(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setBackupLoading(null);
+    }
+  };
+
+  const handleExportAll = async () => {
+    try {
+      const now = new Date().toISOString().slice(0, 10);
+      const path = await save({
+        defaultPath: `all_databases_${now}.sql`,
+        filters: [{ name: 'SQL Files', extensions: ['sql'] }],
+      });
+      if (!path) return;
+      setBackupLoading('export-all');
+      const result = await exportAllDatabases(path);
+      showSuccess(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export all failed');
+    } finally {
+      setBackupLoading(null);
+    }
+  };
+
+  const handleImportSql = async (dbName: string) => {
+    try {
+      const path = await open({
+        multiple: false,
+        filters: [{ name: 'SQL Files', extensions: ['sql'] }],
+      });
+      if (!path) return;
+      setBackupLoading(`import-${dbName}`);
+      const result = await importSql(dbName, path as string);
+      showSuccess(result);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setBackupLoading(null);
+    }
+  };
+
+  const handleRebuildDatabase = async (dbName: string) => {
+    if (!confirm(`This will DROP and recreate '${dbName}'. All existing data will be lost. Continue?`)) return;
+    try {
+      const path = await open({
+        multiple: false,
+        filters: [{ name: 'SQL Files', extensions: ['sql'] }],
+      });
+      if (!path) return;
+      setBackupLoading(`rebuild-${dbName}`);
+      const result = await rebuildDatabase(dbName, path as string);
+      showSuccess(result);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rebuild failed');
+    } finally {
+      setBackupLoading(null);
+    }
+  };
+
+  const handleOpenEditDb = async (dbName: string) => {
+    try {
+      setDialogLoading(true);
+      setDialog({ type: 'editDb', dbName });
+      const [charsetInfo, dbUsers] = await Promise.all([
+        getDatabaseCharset(dbName),
+        getDatabaseUsers(dbName),
+      ]);
+      const userKeys = dbUsers.map(u => `${u.user}@${u.host}`);
+      setEditDb({
+        charset: charsetInfo.charset,
+        collation: charsetInfo.collation,
+        authorizedUsers: userKeys,
+        originalUsers: [...userKeys],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load database info');
+      setDialog({ type: null });
+    } finally {
+      setDialogLoading(false);
+    }
+  };
+
+  const handleSaveEditDb = async () => {
+    if (!dialog.dbName || !editDb) return;
+    try {
+      setDialogLoading(true);
+      // 1. Update charset/collation
+      const currentCharset = await getDatabaseCharset(dialog.dbName);
+      if (currentCharset.charset !== editDb.charset || currentCharset.collation !== editDb.collation) {
+        await alterDatabaseCharset(dialog.dbName, editDb.charset, editDb.collation);
+      }
+      // 2. Sync user privileges
+      const added = editDb.authorizedUsers.filter(u => !editDb.originalUsers.includes(u));
+      const removed = editDb.originalUsers.filter(u => !editDb.authorizedUsers.includes(u));
+      for (const key of added) {
+        const [user, host] = key.split('@');
+        await grantPrivileges(user, host, dialog.dbName);
+      }
+      for (const key of removed) {
+        const [user, host] = key.split('@');
+        await revokePrivileges(user, host, dialog.dbName);
+      }
+      showSuccess(`Database '${dialog.dbName}' updated`);
+      setDialog({ type: null });
+      setEditDb(null);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update database');
+    } finally {
+      setDialogLoading(false);
+    }
+  };
+
   // Not connected - show login form
   if (!connected) {
     return (
@@ -368,6 +533,16 @@ export default function NativeDatabaseManager() {
         </div>
       )}
 
+      {successMsg && (
+        <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2 text-emerald-400">
+          <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          <span className="text-sm">{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} className="ml-auto text-emerald-400 hover:text-emerald-300">
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Server Info */}
       {serverInfo && (
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -426,13 +601,28 @@ export default function NativeDatabaseManager() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-medium text-content-secondary">Databases</h3>
-            <button
-              onClick={() => setDialog({ type: 'createDb' })}
-              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Create Database
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportAll}
+                disabled={backupLoading === 'export-all'}
+                className="flex items-center gap-2 px-3 py-1.5 bg-surface-raised hover:bg-hover disabled:opacity-50 rounded-lg text-sm transition-colors"
+                title="Export all databases"
+              >
+                {backupLoading === 'export-all' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Export All
+              </button>
+              <button
+                onClick={() => setDialog({ type: 'createDb' })}
+                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create Database
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -451,15 +641,64 @@ export default function NativeDatabaseManager() {
                     </p>
                   </div>
                 </div>
-                {!['mysql', 'information_schema', 'performance_schema', 'sys'].includes(db.name.toLowerCase()) && (
+                <div className="flex items-center gap-1">
+                  {!['mysql', 'information_schema', 'performance_schema', 'sys'].includes(db.name.toLowerCase()) && (
+                    <button
+                      onClick={() => handleOpenEditDb(db.name)}
+                      className="p-2 text-content-muted hover:bg-hover rounded-lg transition-colors"
+                      title="Edit database"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleDropDatabase(db.name)}
-                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                    title="Delete database"
+                    onClick={() => handleExportDatabase(db.name)}
+                    disabled={backupLoading === `export-${db.name}`}
+                    className="p-2 text-content-muted hover:bg-hover disabled:opacity-50 rounded-lg transition-colors"
+                    title="Export database"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {backupLoading === `export-${db.name}` ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
                   </button>
-                )}
+                  {!['mysql', 'information_schema', 'performance_schema', 'sys'].includes(db.name.toLowerCase()) && (
+                    <>
+                      <button
+                        onClick={() => handleImportSql(db.name)}
+                        disabled={backupLoading === `import-${db.name}`}
+                        className="p-2 text-content-muted hover:bg-hover disabled:opacity-50 rounded-lg transition-colors"
+                        title="Import SQL file"
+                      >
+                        {backupLoading === `import-${db.name}` ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleRebuildDatabase(db.name)}
+                        disabled={backupLoading === `rebuild-${db.name}`}
+                        className="p-2 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 rounded-lg transition-colors"
+                        title="Rebuild database (drop + create + import)"
+                      >
+                        {backupLoading === `rebuild-${db.name}` ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-4 h-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleDropDatabase(db.name)}
+                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Delete database"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -699,6 +938,108 @@ export default function NativeDatabaseManager() {
               </button>
             </div>
           </div>
+        </Dialog>
+      )}
+
+      {/* Edit Database Dialog */}
+      {dialog.type === 'editDb' && dialog.dbName && (
+        <Dialog title={`Edit: ${dialog.dbName}`} onClose={() => { setDialog({ type: null }); setEditDb(null); }}>
+          {!editDb ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="w-5 h-5 animate-spin text-content-muted" />
+              <span className="ml-2 text-sm text-content-muted">Loading...</span>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Charset */}
+              <div>
+                <label className="block text-sm text-content-muted mb-1">Character Set</label>
+                <select
+                  value={editDb.charset}
+                  onChange={e => {
+                    const newCharset = e.target.value;
+                    const collations = CHARSET_COLLATIONS[newCharset] || [];
+                    setEditDb({ ...editDb, charset: newCharset, collation: collations[0] || '' });
+                  }}
+                  className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
+                >
+                  {Object.keys(CHARSET_COLLATIONS).map(cs => (
+                    <option key={cs} value={cs}>{cs}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Collation */}
+              <div>
+                <label className="block text-sm text-content-muted mb-1">Collation</label>
+                <select
+                  value={editDb.collation}
+                  onChange={e => setEditDb({ ...editDb, collation: e.target.value })}
+                  className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
+                >
+                  {(CHARSET_COLLATIONS[editDb.charset] || []).map(col => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Authorized Users - Multiselect */}
+              <div>
+                <label className="block text-sm text-content-muted mb-2">Authorized Users</label>
+                <div className="max-h-40 overflow-y-auto space-y-1 bg-surface-inset border border-edge rounded-lg p-2">
+                  {users.length === 0 ? (
+                    <p className="text-xs text-content-muted p-2">No users found</p>
+                  ) : (
+                    users.map(u => {
+                      const key = `${u.user}@${u.host}`;
+                      const isChecked = editDb.authorizedUsers.includes(key);
+                      const isRoot = u.user.toLowerCase() === 'root';
+                      return (
+                        <label
+                          key={key}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-hover transition-colors ${
+                            isChecked ? 'bg-emerald-500/10' : ''
+                          } ${isRoot ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isRoot}
+                            onChange={() => {
+                              if (isRoot) return;
+                              const updated = isChecked
+                                ? editDb.authorizedUsers.filter(k => k !== key)
+                                : [...editDb.authorizedUsers, key];
+                              setEditDb({ ...editDb, authorizedUsers: updated });
+                            }}
+                            className="accent-emerald-500 w-4 h-4"
+                          />
+                          <span className="text-sm text-content">{u.user}</span>
+                          <span className="text-xs text-content-muted">@{u.host}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => { setDialog({ type: null }); setEditDb(null); }}
+                  className="px-4 py-2 bg-surface-raised hover:bg-hover rounded-lg text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEditDb}
+                  disabled={dialogLoading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+                >
+                  {dialogLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          )}
         </Dialog>
       )}
     </div>

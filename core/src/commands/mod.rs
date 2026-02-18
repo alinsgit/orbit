@@ -18,3 +18,4 @@ pub mod requirements;
 pub mod templates;
 pub mod performance;
 pub mod pecl;
+pub mod backup;
