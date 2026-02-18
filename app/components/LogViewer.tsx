@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FileText, RefreshCw, Trash2, ChevronDown,
   AlertCircle, AlertTriangle, Info, Filter, Search,
-  ChevronLeft, ChevronRight, Eye, XCircle, Layers
+  ChevronLeft, ChevronRight, Eye, XCircle, Layers,
+  Copy, Check
 } from 'lucide-react';
 import { getLogFiles, readLogFile, clearLogFile, clearAllLogs, LogFile, LogEntry } from '../lib/api';
 import { useApp } from '../lib/AppContext';
@@ -37,13 +38,13 @@ const LOG_LEVEL_CONFIG: Record<string, { color: string; bgColor: string; icon: R
 
 // Service badge config
 const SERVICE_BADGE: Record<string, { label: string; color: string; iconColor: string }> = {
-  error:   { label: 'nginx',   color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
-  access:  { label: 'access',  color: 'bg-blue-500/20 text-blue-400',     iconColor: 'text-blue-400' },
-  php:     { label: 'php',     color: 'bg-purple-500/20 text-purple-400', iconColor: 'text-purple-400' },
-  mariadb: { label: 'mariadb', color: 'bg-sky-500/20 text-sky-400',       iconColor: 'text-sky-400' },
-  mailpit: { label: 'mailpit', color: 'bg-pink-500/20 text-pink-400',     iconColor: 'text-pink-400' },
-  redis:   { label: 'redis',   color: 'bg-red-500/20 text-red-400',       iconColor: 'text-red-400' },
-  other:   { label: 'other',   color: 'bg-surface-inset text-content-secondary', iconColor: 'text-content-secondary' },
+  error:   { label: 'nginx-error', color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
+  access:  { label: 'access',      color: 'bg-blue-500/20 text-blue-400',     iconColor: 'text-blue-400' },
+  php:     { label: 'php',         color: 'bg-purple-500/20 text-purple-400', iconColor: 'text-purple-400' },
+  mariadb: { label: 'mariadb',     color: 'bg-sky-500/20 text-sky-400',       iconColor: 'text-sky-400' },
+  mailpit: { label: 'mailpit',     color: 'bg-pink-500/20 text-pink-400',     iconColor: 'text-pink-400' },
+  redis:   { label: 'redis',       color: 'bg-red-500/20 text-red-400',       iconColor: 'text-red-400' },
+  other:   { label: 'other',       color: 'bg-surface-inset text-content-secondary', iconColor: 'text-content-secondary' },
 };
 
 // Map log_type to service group (for filtering)
@@ -70,14 +71,17 @@ export function LogViewer() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Filtering
+  // Filtering (sent to backend for server-side filtering)
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [serviceFilter, setServiceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
 
   // Pagination
   const [linesPerPage] = useState(100);
   const [offset, setOffset] = useState(0);
+  const [totalLines, setTotalLines] = useState(0);
+  const [filteredLines, setFilteredLines] = useState(0);
 
   // Auto-refresh
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -85,24 +89,40 @@ export function LogViewer() {
 
   // Log detail modal
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Search debounce timer
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce search input
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setSearchQuery(value);
+      setOffset(0);
+    }, 300);
+  };
 
   // Load log files
-  const loadLogFiles = async () => {
+  const loadLogFiles = useCallback(async () => {
     try {
       const files = await getLogFiles();
       setLogFiles(files);
-      // Auto-select first error log if available
-      if (!selectedLog && files.length > 0) {
-        const errorLog = files.find(f => f.log_type === 'error') || files[0];
-        setSelectedLog(errorLog);
-      }
+      setSelectedLog(prev => {
+        if (!prev && files.length > 0) {
+          return files.find(f => f.log_type === 'error') || files[0];
+        }
+        return prev;
+      });
     } catch (e) {
       console.error('Failed to load log files:', e);
+      addToast({ type: 'error', message: 'Failed to load log files' });
     }
-  };
+  }, [addToast]);
 
-  // Load log entries
-  const loadLogEntries = async (refresh = false) => {
+  // Load log entries with server-side filtering
+  const loadLogEntries = useCallback(async (refresh = false) => {
     if (!selectedLog) return;
 
     if (refresh) {
@@ -112,35 +132,47 @@ export function LogViewer() {
     }
 
     try {
-      const entries = await readLogFile(selectedLog.path, linesPerPage, offset);
-      setLogEntries(entries);
+      const result = await readLogFile(
+        selectedLog.path,
+        linesPerPage,
+        offset,
+        levelFilter,
+        searchQuery,
+      );
+      setLogEntries(result.entries);
+      setTotalLines(result.total_lines);
+      setFilteredLines(result.filtered_lines);
     } catch (e) {
       console.error('Failed to load log entries:', e);
+      addToast({ type: 'error', message: 'Failed to load log entries' });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [selectedLog, linesPerPage, offset, levelFilter, searchQuery, addToast]);
 
   // Initial load
   useEffect(() => {
     loadLogFiles();
-  }, []);
+  }, [loadLogFiles]);
 
-  // Load entries when log changes
-  useEffect(() => {
-    if (selectedLog) {
-      setOffset(0);
-      loadLogEntries();
-    }
-  }, [selectedLog]);
-
-  // Load entries when offset changes
+  // Load entries when log, offset, or filters change
   useEffect(() => {
     if (selectedLog) {
       loadLogEntries();
     }
-  }, [offset]);
+  }, [loadLogEntries, selectedLog]);
+
+  // Reset offset when selected log or level filter changes
+  const handleSelectLog = (file: LogFile) => {
+    setSelectedLog(file);
+    setOffset(0);
+  };
+
+  const handleLevelFilterChange = (value: string) => {
+    setLevelFilter(value);
+    setOffset(0);
+  };
 
   // Auto-refresh
   useEffect(() => {
@@ -152,33 +184,59 @@ export function LogViewer() {
     return () => {
       if (autoRefreshRef.current) {
         clearInterval(autoRefreshRef.current);
+        autoRefreshRef.current = null;
       }
     };
-  }, [autoRefresh, selectedLog]);
+  }, [autoRefresh, loadLogEntries, selectedLog]);
 
-  // Clear selected log
+  // Toggle live mode — reset to latest entries
+  const handleToggleLive = () => {
+    const newValue = !autoRefresh;
+    setAutoRefresh(newValue);
+    if (newValue) {
+      setOffset(0);
+    }
+  };
+
+  // Clear selected log (with confirmation)
   const handleClearLog = async () => {
     if (!selectedLog) return;
+    if (!confirm(`Clear "${selectedLog.name}"? This action cannot be undone.`)) return;
     try {
       await clearLogFile(selectedLog.path);
+      addToast({ type: 'success', message: `${selectedLog.name} cleared` });
       loadLogEntries();
       loadLogFiles();
     } catch (e) {
       console.error('Failed to clear log:', e);
+      addToast({ type: 'error', message: `Failed to clear log: ${e}` });
     }
   };
 
-  // Clear all logs
+  // Clear all logs (with confirmation)
   const handleClearAllLogs = async () => {
+    if (!confirm('Clear ALL log files? This action cannot be undone.')) return;
     try {
-      await clearAllLogs();
+      const cleared = await clearAllLogs();
+      addToast({ type: 'success', message: `${cleared} log files cleared` });
       loadLogFiles();
       if (selectedLog) {
         loadLogEntries();
       }
     } catch (e) {
       console.error('Failed to clear all logs:', e);
-      addToast({ type: 'error', message: 'Failed to clear logs: ' + e });
+      addToast({ type: 'error', message: `Failed to clear logs: ${e}` });
+    }
+  };
+
+  // Copy log entry to clipboard
+  const handleCopyEntry = async (raw: string) => {
+    try {
+      await navigator.clipboard.writeText(raw);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      addToast({ type: 'error', message: 'Failed to copy to clipboard' });
     }
   };
 
@@ -190,12 +248,10 @@ export function LogViewer() {
     ? logFiles
     : logFiles.filter(f => getServiceGroup(f.log_type) === serviceFilter);
 
-  // Filter entries by level and search
-  const filteredEntries = logEntries.filter(entry => {
-    if (levelFilter !== 'all' && entry.level !== levelFilter) return false;
-    if (searchQuery && !entry.raw.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
+  // Pagination info
+  const displayTotal = filteredLines;
+  const totalPages = Math.max(1, Math.ceil(displayTotal / linesPerPage));
+  const currentPage = Math.floor(offset / linesPerPage) + 1;
 
   const getBadge = (logType: string) => SERVICE_BADGE[logType] || SERVICE_BADGE.other;
 
@@ -244,8 +300,8 @@ export function LogViewer() {
                     key={file.path}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setSelectedLog(file)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedLog(file); }}
+                    onClick={() => handleSelectLog(file)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSelectLog(file); }}
                     className={`w-full text-left p-3 rounded-lg transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-600/20 border border-emerald-500/50'
@@ -289,8 +345,8 @@ export function LogViewer() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
                   <input
                     type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     placeholder="Search logs..."
                     className="w-full pl-10 pr-4 py-2 bg-surface-raised border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
                   />
@@ -301,7 +357,7 @@ export function LogViewer() {
                   <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
                   <select
                     value={levelFilter}
-                    onChange={(e) => setLevelFilter(e.target.value)}
+                    onChange={(e) => handleLevelFilterChange(e.target.value)}
                     className="pl-9 pr-8 py-2 bg-surface-raised border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
                   >
                     <option value="all">All Levels</option>
@@ -317,7 +373,7 @@ export function LogViewer() {
 
                 {/* Live */}
                 <button
-                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  onClick={handleToggleLive}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                     autoRefresh
                       ? 'bg-emerald-600 text-white'
@@ -356,13 +412,13 @@ export function LogViewer() {
                   <div className="flex-1 flex items-center justify-center">
                     <RefreshCw size={24} className="animate-spin text-content-muted" />
                   </div>
-                ) : filteredEntries.length === 0 ? (
+                ) : logEntries.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center text-content-muted">
                     No log entries found
                   </div>
                 ) : (
                   <div className="flex-1 overflow-y-auto font-mono text-xs">
-                    {filteredEntries.map((entry, index) => {
+                    {logEntries.map((entry, index) => {
                       const config = LOG_LEVEL_CONFIG[entry.level] || LOG_LEVEL_CONFIG.info;
                       return (
                         <div
@@ -392,7 +448,10 @@ export function LogViewer() {
                 {/* Pagination */}
                 <div className="flex items-center justify-between px-4 py-3 border-t border-edge bg-surface/80">
                   <span className="text-xs text-content-muted">
-                    Showing {filteredEntries.length} of {logEntries.length} entries
+                    {filteredLines === totalLines
+                      ? `${totalLines.toLocaleString()} entries`
+                      : `${filteredLines.toLocaleString()} of ${totalLines.toLocaleString()} entries`
+                    }
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -403,11 +462,11 @@ export function LogViewer() {
                       <ChevronLeft size={14} />
                     </button>
                     <span className="text-xs text-content-secondary px-2">
-                      Page {Math.floor(offset / linesPerPage) + 1}
+                      Page {currentPage} of {totalPages}
                     </span>
                     <button
                       onClick={() => setOffset(offset + linesPerPage)}
-                      disabled={logEntries.length < linesPerPage}
+                      disabled={currentPage >= totalPages}
                       className="p-1.5 bg-surface-raised hover:bg-hover rounded disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <ChevronRight size={14} />
@@ -431,7 +490,7 @@ export function LogViewer() {
       {selectedEntry && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-8"
-          onClick={() => setSelectedEntry(null)}
+          onClick={() => { setSelectedEntry(null); setCopied(false); }}
         >
           <div
             className="bg-surface border border-edge rounded-xl max-w-4xl w-full max-h-[80vh] flex flex-col"
@@ -449,15 +508,28 @@ export function LogViewer() {
                   </span>
                 )}
               </h3>
-              <button
-                onClick={() => setSelectedEntry(null)}
-                className="p-1 hover:bg-surface-raised rounded cursor-pointer"
-              >
-                <XCircle size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCopyEntry(selectedEntry.raw)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-raised hover:bg-hover rounded-lg text-xs text-content-secondary hover:text-content transition-colors cursor-pointer"
+                  title="Copy to clipboard"
+                >
+                  {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+                <button
+                  onClick={() => { setSelectedEntry(null); setCopied(false); }}
+                  className="p-1 hover:bg-surface-raised rounded cursor-pointer"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              <pre className="font-mono text-sm text-content-secondary whitespace-pre-wrap break-all">
+              <pre
+                className="font-mono text-sm text-content-secondary whitespace-pre-wrap break-all"
+                style={{ userSelect: 'text' }}
+              >
                 {selectedEntry.raw}
               </pre>
             </div>

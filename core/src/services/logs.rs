@@ -1,4 +1,6 @@
-use std::fs;
+use std::collections::VecDeque;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +19,13 @@ pub struct LogEntry {
     pub level: String, // "info", "warning", "error"
     pub message: String,
     pub raw: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogReadResult {
+    pub entries: Vec<LogEntry>,
+    pub total_lines: usize,
+    pub filtered_lines: usize,
 }
 
 pub struct LogManager;
@@ -180,39 +189,103 @@ impl LogManager {
         Ok(logs)
     }
 
-    /// Read log file with parsing
-    pub fn read_log(path: &str, lines: usize, offset: usize) -> Result<Vec<LogEntry>, String> {
+    /// Check if a log line matches the given filters
+    fn matches_filters(line: &str, level_filter: Option<&str>, search_query: Option<&str>) -> bool {
+        if let Some(level) = level_filter {
+            if level != "all" {
+                let detected = Self::detect_log_level(line);
+                if detected != level {
+                    return false;
+                }
+            }
+        }
+        if let Some(query) = search_query {
+            if !query.is_empty() && !line.to_lowercase().contains(&query.to_lowercase()) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Read log file with parsing, server-side filtering, and pagination.
+    /// Uses a ring buffer to avoid loading entire large files into memory.
+    pub fn read_log(
+        path: &str,
+        lines: usize,
+        offset: usize,
+        level_filter: Option<&str>,
+        search_query: Option<&str>,
+    ) -> Result<LogReadResult, String> {
         let path = PathBuf::from(path);
         if !path.exists() {
-            return Ok(vec![LogEntry {
-                timestamp: None,
-                level: "info".to_string(),
-                message: "Log file not found".to_string(),
-                raw: "Log file not found".to_string(),
-            }]);
+            return Ok(LogReadResult {
+                entries: vec![LogEntry {
+                    timestamp: None,
+                    level: "info".to_string(),
+                    message: "Log file not found".to_string(),
+                    raw: "Log file not found".to_string(),
+                }],
+                total_lines: 0,
+                filtered_lines: 0,
+            });
         }
 
-        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let all_lines: Vec<&str> = content.lines().collect();
+        let file = File::open(&path).map_err(|e| e.to_string())?;
+        let reader = BufReader::new(file);
 
-        // Get lines from end, with offset
-        let total = all_lines.len();
-        let start = if total > offset + lines {
-            total - offset - lines
-        } else {
-            0
-        };
-        let end = if total > offset { total - offset } else { 0 };
+        let has_filters = level_filter.map_or(false, |l| l != "all")
+            || search_query.map_or(false, |q| !q.is_empty());
 
-        let entries: Vec<LogEntry> = all_lines[start..end]
-            .iter()
+        let needed = offset + lines;
+        let mut ring: VecDeque<String> = VecDeque::with_capacity(needed + 1);
+        let mut total_lines: usize = 0;
+        let mut filtered_lines: usize = 0;
+
+        for line_result in reader.lines() {
+            let line = match line_result {
+                Ok(l) => l,
+                Err(_) => continue,
+            };
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            total_lines += 1;
+
+            if has_filters && !Self::matches_filters(&line, level_filter, search_query) {
+                continue;
+            }
+
+            filtered_lines += 1;
+            ring.push_back(line);
+            if ring.len() > needed {
+                ring.pop_front();
+            }
+        }
+
+        // If no filters active, filtered_lines equals total_lines
+        if !has_filters {
+            filtered_lines = total_lines;
+        }
+
+        // ring contains the last `needed` (or fewer) matching lines
+        let ring_len = ring.len();
+        let take_end = if ring_len > offset { ring_len - offset } else { 0 };
+        let take_start = if take_end > lines { take_end - lines } else { 0 };
+
+        let entries: Vec<LogEntry> = ring
+            .range(take_start..take_end)
             .rev()
             .map(|line| Self::parse_log_line(line))
             .collect();
 
-        Ok(entries)
+        Ok(LogReadResult {
+            entries,
+            total_lines,
+            filtered_lines,
+        })
     }
-
 
     /// Detect log level from line content using format-specific patterns
     fn detect_log_level(line: &str) -> &'static str {

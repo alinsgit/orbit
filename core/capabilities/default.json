@@ -30,6 +30,8 @@
     "sql:allow-load",
     "sql:allow-select",
     "sql:allow-execute",
-    "sql:allow-close"
+    "sql:allow-close",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

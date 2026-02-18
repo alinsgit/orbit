@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Settings, Loader2, Sun, Moon, Monitor, Palette, FileDown, FileUp, Trash2, Eraser, Shield, Download, CheckCircle, Lock, RefreshCw, Info, ExternalLink, Github, Heart } from 'lucide-react';
+import { Settings, Loader2, Sun, Moon, Monitor, Palette, FileDown, FileUp, Trash2, Eraser, Shield, Download, CheckCircle, Lock, RefreshCw, Info, ExternalLink, Github, Heart, ArrowUpCircle, Sparkles, RotateCcw } from 'lucide-react';
 import { exportSites, importSites, SiteExport, clearAllCaches, getSslStatus, installMkcert, installSslCa, SslStatus } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { useTheme, Theme } from '../lib/ThemeContext';
 import { getVersion, getTauriVersion } from '@tauri-apps/api/app';
 import { open } from '@tauri-apps/plugin-shell';
+import { check, type Update } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 
 export function SettingsManager() {
   const { addToast } = useApp();
@@ -26,9 +28,17 @@ export function SettingsManager() {
   const [appVersion, setAppVersion] = useState<string>('');
   const [tauriVersion, setTauriVersion] = useState<string>('');
 
+  // Update Checker State
+  const [updateAvailable, setUpdateAvailable] = useState<Update | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateStatus, setUpdateStatus] = useState<string>('');
+
   useEffect(() => {
     loadSslStatus();
     loadVersionInfo();
+    handleCheckForUpdates();
   }, []);
 
   const loadVersionInfo = async () => {
@@ -41,6 +51,60 @@ export function SettingsManager() {
       setTauriVersion(tauri);
     } catch (e) {
       console.error('Failed to load version info:', e);
+    }
+  };
+
+  const handleCheckForUpdates = async () => {
+    setCheckingUpdate(true);
+    try {
+      const update = await check();
+      if (update) {
+        setUpdateAvailable(update);
+      } else {
+        setUpdateAvailable(null);
+        addToast({ type: 'success', message: 'You are on the latest version!' });
+      }
+    } catch (e) {
+      console.error('Failed to check for updates:', e);
+      addToast({ type: 'error', message: `Update check failed: ${e}` });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!updateAvailable) return;
+    setUpdating(true);
+    setUpdateProgress(0);
+    setUpdateStatus('Downloading...');
+    try {
+      let totalSize = 0;
+      let downloaded = 0;
+      await updateAvailable.downloadAndInstall((event) => {
+        switch (event.event) {
+          case 'Started':
+            totalSize = event.data.contentLength ?? 0;
+            setUpdateStatus('Downloading update...');
+            break;
+          case 'Progress':
+            downloaded += event.data.chunkLength;
+            if (totalSize > 0) {
+              setUpdateProgress(Math.round((downloaded / totalSize) * 100));
+            }
+            break;
+          case 'Finished':
+            setUpdateStatus('Installing...');
+            setUpdateProgress(100);
+            break;
+        }
+      });
+      setUpdateStatus('Restarting...');
+      await relaunch();
+    } catch (e: any) {
+      console.error('Failed to install update:', e);
+      addToast({ type: 'error', message: `Update failed: ${e}` });
+      setUpdating(false);
+      setUpdateStatus('');
     }
   };
 
@@ -390,6 +454,58 @@ export function SettingsManager() {
           </div>
         </section>
 
+        {/* Update Checker */}
+        {updateAvailable && (
+          <section className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 rounded-xl overflow-hidden">
+            <div className="p-4 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <Sparkles size={24} className="text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-emerald-400">Update Available</h3>
+                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
+                    v{updateAvailable.version}
+                  </span>
+                </div>
+                <p className="text-sm text-content-secondary">
+                  A new version of Orbit is available. You're currently on v{appVersion}.
+                </p>
+                {updateAvailable.body && (
+                  <p className="text-xs text-content-muted mt-1 truncate">{updateAvailable.body.split('\n')[0]}</p>
+                )}
+                {updating && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-content-muted mb-1">
+                      <span>{updateStatus}</span>
+                      <span>{updateProgress}%</span>
+                    </div>
+                    <div className="w-full bg-surface-inset rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${updateProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              {!updating ? (
+                <button
+                  onClick={handleInstallUpdate}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors flex-shrink-0 cursor-pointer"
+                >
+                  <ArrowUpCircle size={16} />
+                  Install & Restart
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2.5 text-sm text-content-muted flex-shrink-0">
+                  <RotateCcw size={16} className="animate-spin" />
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* About */}
         <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
           <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
@@ -402,6 +518,15 @@ export function SettingsManager() {
                 <p className="text-sm text-content-secondary">Version and license information</p>
               </div>
             </div>
+            <button
+              onClick={handleCheckForUpdates}
+              disabled={checkingUpdate}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-surface-inset hover:bg-hover border border-edge rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+              title="Check for updates"
+            >
+              {checkingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+            </button>
           </div>
 
           <div className="p-4 space-y-4">
@@ -424,6 +549,11 @@ export function SettingsManager() {
                   <span className="text-xs text-content-muted">
                     Tauri {tauriVersion || '2.x'}
                   </span>
+                  {!checkingUpdate && !updateAvailable && (
+                    <span className="text-xs text-emerald-400 flex items-center gap-1">
+                      <CheckCircle size={12} /> Up to date
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -432,7 +562,7 @@ export function SettingsManager() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => open('https://github.com/alinsgit/orbit')}
-                className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left"
+                className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left cursor-pointer"
               >
                 <Github size={18} className="text-content-secondary" />
                 <div>
@@ -444,7 +574,7 @@ export function SettingsManager() {
 
               <button
                 onClick={() => open('https://github.com/alinsgit/orbit/issues')}
-                className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left"
+                className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left cursor-pointer"
               >
                 <Heart size={18} className="text-red-400" />
                 <div>

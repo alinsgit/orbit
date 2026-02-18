@@ -1,4 +1,4 @@
-use crate::services::logs::{LogEntry, LogFile, LogManager};
+use crate::services::logs::{LogFile, LogManager, LogReadResult};
 use crate::services::validation::validate_log_path;
 use tauri::{command, AppHandle, Manager};
 
@@ -23,13 +23,26 @@ fn get_allowed_log_base(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 #[command]
-pub fn read_log_file(app: AppHandle, path: String, lines: usize, offset: usize) -> Result<Vec<LogEntry>, String> {
+pub fn read_log_file(
+    app: AppHandle,
+    path: String,
+    lines: usize,
+    offset: usize,
+    level_filter: Option<String>,
+    search_query: Option<String>,
+) -> Result<LogReadResult, String> {
     // Validate path is within allowed directory
     let allowed_base = get_allowed_log_base(&app)?;
     let validated_path = validate_log_path(&path, &allowed_base)
         .map_err(|e| e.to_string())?;
 
-    LogManager::read_log(&validated_path.to_string_lossy(), lines, offset)
+    LogManager::read_log(
+        &validated_path.to_string_lossy(),
+        lines,
+        offset,
+        level_filter.as_deref(),
+        search_query.as_deref(),
+    )
 }
 
 #[command]

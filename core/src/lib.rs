@@ -14,6 +14,8 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_store::Builder::default().build())
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_sql::Builder::default().build())
     .manage(service_manager) // Register state
     .setup(|app| {
@@ -211,6 +213,9 @@ pub fn run() {
         commands::backup::export_all_databases,
         commands::backup::import_sql,
         commands::backup::rebuild_database,
+        // Updater
+        commands::updater::check_for_updates,
+        commands::updater::get_current_version,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {
