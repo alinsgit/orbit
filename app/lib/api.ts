@@ -465,6 +465,12 @@ export interface LogEntry {
   raw: string;
 }
 
+export interface LogReadResult {
+  entries: LogEntry[];
+  total_lines: number;
+  filtered_lines: number;
+}
+
 // Log Management API
 export const getLogFiles = async (): Promise<LogFile[]> => {
   try {
@@ -475,9 +481,21 @@ export const getLogFiles = async (): Promise<LogFile[]> => {
   }
 };
 
-export const readLogFile = async (path: string, lines: number, offset: number): Promise<LogEntry[]> => {
+export const readLogFile = async (
+  path: string,
+  lines: number,
+  offset: number,
+  levelFilter?: string,
+  searchQuery?: string,
+): Promise<LogReadResult> => {
   try {
-    return await invoke('read_log_file', { path, lines, offset });
+    return await invoke('read_log_file', {
+      path,
+      lines,
+      offset,
+      levelFilter: levelFilter || null,
+      searchQuery: searchQuery || null,
+    });
   } catch (error) {
     console.error('Failed to read log file:', error);
     throw error;
@@ -1286,6 +1304,34 @@ export const rebuildDatabase = async (database: string, sqlPath: string): Promis
     return await invoke('rebuild_database', { database, sqlPath });
   } catch (error) {
     console.error('Failed to rebuild database:', error);
+    throw error;
+  }
+};
+
+// Update Checker
+export interface UpdateInfo {
+  update_available: boolean;
+  current_version: string;
+  latest_version: string;
+  release_notes: string;
+  download_url: string;
+  published_at: string;
+}
+
+export const checkForUpdates = async (): Promise<UpdateInfo> => {
+  try {
+    return await invoke('check_for_updates');
+  } catch (error) {
+    console.error('Failed to check for updates:', error);
+    throw error;
+  }
+};
+
+export const getCurrentVersion = async (): Promise<string> => {
+  try {
+    return await invoke('get_current_version');
+  } catch (error) {
+    console.error('Failed to get current version:', error);
     throw error;
   }
 };

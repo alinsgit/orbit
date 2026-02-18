@@ -1,7 +1,7 @@
 {
   "name": "orbit-local-server",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Modern local development environment - Manage Nginx, PHP, MariaDB and more",
   "author": "Orbit Dev Team",
   "license": "MIT",
@@ -21,9 +21,11 @@
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.4",
     "@tauri-apps/plugin-sql": "^2.3.2",
     "@tauri-apps/plugin-store": "^2.4.2",
+    "@tauri-apps/plugin-updater": "2.9.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
     "react": "^19.2.4",
