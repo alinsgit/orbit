@@ -205,7 +205,12 @@ pub fn run() {
         commands::pecl::get_available_extensions,
         commands::pecl::install_pecl_extension,
         commands::pecl::uninstall_pecl_extension,
-        commands::pecl::search_pecl_extensions
+        commands::pecl::search_pecl_extensions,
+        // Database Backup/Import
+        commands::backup::export_database,
+        commands::backup::export_all_databases,
+        commands::backup::import_sql,
+        commands::backup::rebuild_database,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

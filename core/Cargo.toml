@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.1.4"
+version = "0.1.5"
 description = "Modern local development environment - Manage Nginx, PHP, MariaDB and more"
 authors = ["Orbit Dev Team"]
 license = "MIT"
@@ -8,12 +8,18 @@ repository = "https://github.com/alinsgit/orbit"
 homepage = "https://orbitdev.app"
 edition = "2021"
 rust-version = "1.77.2"
+default-run = "orbit"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "orbit-cli"
+path = "src/cli.rs"
+required-features = ["cli"]
 
 [build-dependencies]
 tauri-build = { version = "2.5.3", features = [] }
@@ -36,7 +42,11 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 tauri-plugin-sql = { version = "2", features = ["mysql"] }
 once_cell = "1.19"
+clap = { version = "4", features = ["derive"], optional = true }
+colored = { version = "2", optional = true }
+
+[features]
+cli = ["clap", "colored"]
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"
-

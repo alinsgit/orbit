@@ -1249,3 +1249,43 @@ export const searchPeclExtensions = async (query: string, phpVersion: string): P
     throw error;
   }
 };
+
+// ==========================================
+// Database Backup/Import API
+// ==========================================
+
+export const exportDatabase = async (database: string, outputPath: string): Promise<string> => {
+  try {
+    return await invoke('export_database', { database, outputPath });
+  } catch (error) {
+    console.error('Failed to export database:', error);
+    throw error;
+  }
+};
+
+export const exportAllDatabases = async (outputPath: string): Promise<string> => {
+  try {
+    return await invoke('export_all_databases', { outputPath });
+  } catch (error) {
+    console.error('Failed to export all databases:', error);
+    throw error;
+  }
+};
+
+export const importSql = async (database: string, sqlPath: string): Promise<string> => {
+  try {
+    return await invoke('import_sql', { database, sqlPath });
+  } catch (error) {
+    console.error('Failed to import SQL:', error);
+    throw error;
+  }
+};
+
+export const rebuildDatabase = async (database: string, sqlPath: string): Promise<string> => {
+  try {
+    return await invoke('rebuild_database', { database, sqlPath });
+  } catch (error) {
+    console.error('Failed to rebuild database:', error);
+    throw error;
+  }
+};

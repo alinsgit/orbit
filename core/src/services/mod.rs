@@ -1,5 +1,6 @@
 pub mod apache;
 pub mod cache;
+pub mod paths;
 pub mod composer;
 pub mod config;
 pub mod database;
@@ -17,6 +18,7 @@ pub mod site_store;
 pub mod sites;
 pub mod ssl;
 pub mod templates;
+pub mod backup;
 pub mod validation;
 pub mod versions;
 
