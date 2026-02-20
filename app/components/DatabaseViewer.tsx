@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings, ExternalLink, ArrowLeft, Loader2 } from 'lucide-react';
 import {
   getDatabaseToolsStatus,
   installAdminer,
@@ -21,8 +21,10 @@ import NativeDatabaseManager from './database/NativeDatabaseManager';
 
 type MainTab = 'manage' | 'tools';
 type DatabaseTool = 'adminer' | 'phpmyadmin';
+type EngineTab = 'mariadb' | 'postgresql' | 'mongodb';
 
 export default function DatabaseViewer() {
+  const [engineTab, setEngineTab] = useState<EngineTab>('mariadb');
   const [mainTab, setMainTab] = useState<MainTab>('manage');
   const [status, setStatus] = useState<DatabaseToolsStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,10 +32,12 @@ export default function DatabaseViewer() {
   const [uninstalling, setUninstalling] = useState<DatabaseTool | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mariadbRunning, setMariadbRunning] = useState(false);
+  const [postgresRunning, setPostgresRunning] = useState(false);
   const [phpRunning, setPhpRunning] = useState(false);
   const [nginxRunning, setNginxRunning] = useState(false);
   const [services, setServices] = useState<InstalledService[]>([]);
   const [activeTool, setActiveTool] = useState<DatabaseTool | null>(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
 
   useEffect(() => {
     loadStatus();
@@ -76,6 +80,7 @@ export default function DatabaseViewer() {
       }
 
       const mariadbService = installedServices.find(s => s.service_type === 'mariadb');
+      const postgresService = installedServices.find(s => s.service_type === 'postgresql');
       const phpService = installedServices.find(s => s.service_type.startsWith('php'));
       const nginxService = installedServices.find(s => s.service_type === 'nginx');
 
@@ -85,6 +90,15 @@ export default function DatabaseViewer() {
           setMariadbRunning(mariadbStatus === 'running');
         } catch {
           setMariadbRunning(false);
+        }
+      }
+
+      if (postgresService) {
+        try {
+          const postgresStatus = await getServiceStatus(postgresService.name);
+          setPostgresRunning(postgresStatus === 'running');
+        } catch {
+          setPostgresRunning(false);
         }
       }
 
@@ -226,11 +240,15 @@ export default function DatabaseViewer() {
       setError(null);
 
       const mariadbService = services.find(s => s.service_type === 'mariadb');
+      const postgresService = services.find(s => s.service_type === 'postgresql');
       const phpService = services.find(s => s.service_type.startsWith('php'));
       const nginxService = services.find(s => s.service_type === 'nginx');
 
-      if (mariadbService && !mariadbRunning) {
+      if (engineTab === 'mariadb' && mariadbService && !mariadbRunning) {
         await startService(mariadbService.name, mariadbService.path);
+      }
+      if (engineTab === 'postgresql' && postgresService && !postgresRunning) {
+        await startService(postgresService.name, postgresService.path);
       }
       if (phpService && !phpRunning) {
         await startService(phpService.name, phpService.path);
@@ -249,10 +267,12 @@ export default function DatabaseViewer() {
   const handleOpenTool = (tool: DatabaseTool) => {
     if (!allServicesRunning || !status) return;
     setActiveTool(tool);
+    setIframeLoaded(false);
   };
 
-  const allServicesRunning = mariadbRunning && phpRunning && nginxRunning;
-  const hasRequiredServices = services.some(s => s.service_type === 'mariadb') &&
+  const isTargetEngineRunning = engineTab === 'mariadb' ? mariadbRunning : postgresRunning;
+  const allServicesRunning = isTargetEngineRunning && phpRunning && nginxRunning;
+  const hasRequiredServices = services.some(s => s.service_type === engineTab) &&
     services.some(s => s.service_type.startsWith('php')) &&
     services.some(s => s.service_type === 'nginx');
 
@@ -261,8 +281,8 @@ export default function DatabaseViewer() {
     const url = activeTool === 'adminer' ? status.adminer.adminer_url : status.phpmyadmin.url;
     const toolLabel = activeTool === 'adminer' ? 'Adminer' : 'phpMyAdmin';
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-edge bg-surface-inset shrink-0">
+      <div className="h-full flex flex-col relative">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-edge bg-surface-inset shrink-0 z-20">
           <button
             onClick={() => setActiveTool(null)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-content-secondary hover:text-content bg-surface-raised hover:bg-surface rounded-lg transition-colors"
@@ -284,11 +304,21 @@ export default function DatabaseViewer() {
             Open in browser
           </a>
         </div>
-        <iframe
-          src={url}
-          className="flex-1 w-full border-0"
-          title={toolLabel}
-        />
+        
+        <div className="relative flex-1 w-full bg-surface-alt">
+          {!iframeLoaded && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-surface-alt animate-in fade-in duration-200">
+              <Loader2 size={32} className="animate-spin text-emerald-500 mb-4" />
+              <div className="text-sm font-medium text-content-secondary animate-pulse">Loading {toolLabel}...</div>
+            </div>
+          )}
+          <iframe
+            src={url}
+            onLoad={() => setIframeLoaded(true)}
+            className={`w-full h-full border-0 absolute inset-0 transition-opacity duration-300 ${iframeLoaded ? 'opacity-100' : 'opacity-0'}`}
+            title={toolLabel}
+          />
+        </div>
       </div>
     );
   }
@@ -297,49 +327,92 @@ export default function DatabaseViewer() {
     <div className="h-full flex flex-col">
       {/* Header with main tabs */}
       <div className="p-4 border-b border-edge bg-surface-inset">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-4 mb-2">
           <div className="flex items-center gap-3">
             <Database className="w-8 h-8 text-orange-500" />
             <div>
               <h2 className="text-xl font-semibold text-content">Database</h2>
-              <p className="text-sm text-content-secondary">Manage your MariaDB databases</p>
+              <p className="text-sm text-content-secondary">
+                {engineTab === 'mariadb' && 'Manage your MariaDB databases'}
+                {engineTab === 'postgresql' && 'PostgreSQL Overview'}
+                {engineTab === 'mongodb' && 'MongoDB Overview'}
+              </p>
             </div>
+          </div>
+          
+          <div className="flex gap-2 p-1 bg-surface-raised rounded-lg w-fit">
+            <button
+              onClick={() => setEngineTab('mariadb')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                engineTab === 'mariadb' ? 'bg-surface-inset text-content shadow' : 'text-content-secondary hover:text-content'
+              }`}
+            >
+              MariaDB
+            </button>
+            <button
+              onClick={() => setEngineTab('postgresql')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                engineTab === 'postgresql' ? 'bg-surface-inset text-content shadow' : 'text-content-secondary hover:text-content'
+              }`}
+            >
+              PostgreSQL
+            </button>
+            <button
+              onClick={() => setEngineTab('mongodb')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                engineTab === 'mongodb' ? 'bg-surface-inset text-content shadow' : 'text-content-secondary hover:text-content'
+              }`}
+            >
+              MongoDB
+            </button>
           </div>
         </div>
 
-        {/* Main Tabs */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setMainTab('manage')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              mainTab === 'manage'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-surface-raised text-content-secondary hover:text-content'
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            Quick Manage
-          </button>
-          <button
-            onClick={() => setMainTab('tools')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              mainTab === 'tools'
-                ? 'bg-orange-600 text-white'
-                : 'bg-surface-raised text-content-secondary hover:text-content'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            Web Tools
-          </button>
-        </div>
+        {/* SQL Engines Sub Tabs */}
+        {(engineTab === 'mariadb' || engineTab === 'postgresql') && (
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setMainTab('manage')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                mainTab === 'manage'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-surface-raised text-content-secondary hover:text-content'
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              Quick Manage
+            </button>
+            <button
+              onClick={() => setMainTab('tools')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                mainTab === 'tools'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-surface-raised text-content-secondary hover:text-content'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              Web Tools
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {mainTab === 'manage' ? (
-          <NativeDatabaseManager />
-        ) : (
-          <div className="p-6 h-full overflow-y-auto space-y-6">
+        {(engineTab === 'mariadb' || engineTab === 'postgresql') && (
+          <>
+            {mainTab === 'manage' ? (
+              <NativeDatabaseManager dbEngine={engineTab} />
+            ) : (
+              <div className="p-6 h-full overflow-y-auto space-y-6 relative">
+              
+                {/* Overlay for loadStatus */}
+                {loading && (
+                  <div className="absolute inset-0 z-20 flex bg-surface-alt/60 backdrop-blur-[2px] items-center justify-center animate-in fade-in duration-200">
+                     <Loader2 size={32} className="animate-spin text-emerald-500" />
+                  </div>
+                )}
+                
             {/* Refresh button */}
             <div className="flex justify-end">
               <button
@@ -362,16 +435,21 @@ export default function DatabaseViewer() {
             <div className="bg-surface-raised rounded-xl p-4 space-y-3">
               <h3 className="text-sm font-medium text-content-secondary mb-3">Required Services</h3>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className={`p-3 rounded-lg ${mariadbRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
-                  <div className="flex items-center gap-2">
-                    <Server className={`w-4 h-4 ${mariadbRunning ? 'text-green-500' : 'text-content-muted'}`} />
-                    <span className="text-sm font-medium">MariaDB</span>
-                  </div>
-                  <p className={`text-xs mt-1 ${mariadbRunning ? 'text-green-400' : 'text-content-muted'}`}>
-                    {mariadbRunning ? 'Running' : 'Stopped'}
-                  </p>
-                </div>
+              {(() => {
+                const engineRunning = engineTab === 'mariadb' ? mariadbRunning : postgresRunning;
+                const engineName = engineTab === 'mariadb' ? 'MariaDB' : 'PostgreSQL';
+
+                return (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className={`p-3 rounded-lg ${engineRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
+                      <div className="flex items-center gap-2">
+                        <Server className={`w-4 h-4 ${engineRunning ? 'text-green-500' : 'text-content-muted'}`} />
+                        <span className="text-sm font-medium">{engineName}</span>
+                      </div>
+                      <p className={`text-xs mt-1 ${engineRunning ? 'text-green-400' : 'text-content-muted'}`}>
+                        {engineRunning ? 'Running' : 'Stopped'}
+                      </p>
+                    </div>
 
                 <div className={`p-3 rounded-lg ${phpRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
                   <div className="flex items-center gap-2">
@@ -383,16 +461,18 @@ export default function DatabaseViewer() {
                   </p>
                 </div>
 
-                <div className={`p-3 rounded-lg ${nginxRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
-                  <div className="flex items-center gap-2">
-                    <Server className={`w-4 h-4 ${nginxRunning ? 'text-green-500' : 'text-content-muted'}`} />
-                    <span className="text-sm font-medium">Nginx</span>
+                  <div className={`p-3 rounded-lg ${nginxRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
+                    <div className="flex items-center gap-2">
+                      <Server className={`w-4 h-4 ${nginxRunning ? 'text-green-500' : 'text-content-muted'}`} />
+                      <span className="text-sm font-medium">Nginx</span>
+                    </div>
+                    <p className={`text-xs mt-1 ${nginxRunning ? 'text-green-400' : 'text-content-muted'}`}>
+                      {nginxRunning ? 'Running' : 'Stopped'}
+                    </p>
                   </div>
-                  <p className={`text-xs mt-1 ${nginxRunning ? 'text-green-400' : 'text-content-muted'}`}>
-                    {nginxRunning ? 'Running' : 'Stopped'}
-                  </p>
                 </div>
-              </div>
+                );
+              })()}
 
               {hasRequiredServices && !allServicesRunning && (
                 <button
@@ -406,7 +486,7 @@ export default function DatabaseViewer() {
 
               {!hasRequiredServices && (
                 <p className="text-sm text-amber-400 mt-3">
-                  Please install MariaDB, PHP, and Nginx from the Services tab first.
+                  Please install the selected Database Engine, PHP, and Nginx from the Services tab first.
                 </p>
               )}
             </div>
@@ -467,55 +547,57 @@ export default function DatabaseViewer() {
               </div>
 
               {/* PhpMyAdmin */}
-              <div className="bg-surface-raised rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
+              {engineTab === 'mariadb' && (
+                <div className="bg-surface-raised rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-medium text-content">PhpMyAdmin</h4>
+                        {status?.phpmyadmin.installed && (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        )}
+                      </div>
+                      <p className="text-xs text-content-muted mt-1">
+                        Full-featured database administration tool (Port 8081)
+                      </p>
+                    </div>
+
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium text-content">PhpMyAdmin</h4>
-                      {status?.phpmyadmin.installed && (
-                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      {status?.phpmyadmin.installed ? (
+                        <>
+                          <button
+                            onClick={() => handleOpenTool('phpmyadmin')}
+                            disabled={!allServicesRunning}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                              allServicesRunning
+                                ? 'bg-blue-600 hover:bg-blue-700'
+                                : 'bg-surface-inset cursor-not-allowed opacity-50'
+                            }`}
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={handleUninstallPhpMyAdmin}
+                            disabled={uninstalling === 'phpmyadmin'}
+                            className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                            title="Uninstall PhpMyAdmin"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={handleInstallPhpMyAdmin}
+                          disabled={installing === 'phpmyadmin' || !hasRequiredServices}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium"
+                        >
+                          {installing === 'phpmyadmin' ? 'Installing...' : 'Install'}
+                        </button>
                       )}
                     </div>
-                    <p className="text-xs text-content-muted mt-1">
-                      Full-featured database administration tool (Port 8081)
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {status?.phpmyadmin.installed ? (
-                      <>
-                        <button
-                          onClick={() => handleOpenTool('phpmyadmin')}
-                          disabled={!allServicesRunning}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                            allServicesRunning
-                              ? 'bg-blue-600 hover:bg-blue-700'
-                              : 'bg-surface-inset cursor-not-allowed opacity-50'
-                          }`}
-                        >
-                          Open
-                        </button>
-                        <button
-                          onClick={handleUninstallPhpMyAdmin}
-                          disabled={uninstalling === 'phpmyadmin'}
-                          className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
-                          title="Uninstall PhpMyAdmin"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={handleInstallPhpMyAdmin}
-                        disabled={installing === 'phpmyadmin' || !hasRequiredServices}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium"
-                      >
-                        {installing === 'phpmyadmin' ? 'Installing...' : 'Install'}
-                      </button>
-                    )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Connection Info */}
@@ -529,17 +611,58 @@ export default function DatabaseViewer() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-content-muted">Port:</span>
-                    <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">3306</code>
+                    <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">{engineTab === 'postgresql' ? '5432' : '3306'}</code>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-content-muted">Default User:</span>
-                    <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">root</code>
+                    <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">{engineTab === 'postgresql' ? 'postgres' : 'root'}</code>
                   </div>
                 </div>
               </div>
             )}
+            
           </div>
         )}
+      </>
+    )}
+
+
+
+        {engineTab === 'mongodb' && (
+          <div className="p-6 h-full overflow-y-auto space-y-6">
+            
+            <div className="bg-surface-raised rounded-xl p-4 space-y-3">
+              <h3 className="text-sm font-medium text-content-secondary mb-3">MongoDB Engine</h3>
+              <p className="text-sm text-content-muted">
+                MongoDB is natively managed through standard TCP socket connections over the background mongod daemon. Visual Quick Manage is currently available for MariaDB; use external tools (like MongoDB Compass) to manage your NoSQL schemas natively.
+              </p>
+            </div>
+
+            <div className="bg-surface-raised rounded-xl p-4">
+              <h3 className="text-sm font-medium text-content-secondary mb-3">Connection Information</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-content-muted">Connection String (URI):</span>
+                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">mongodb://127.0.0.1:27017</code>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-content-muted">Host:</span>
+                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">127.0.0.1</code>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-content-muted">Port:</span>
+                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">27017</code>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-content-muted">Default Auth:</span>
+                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">Disabled</code>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </div>
     </div>
   );

@@ -67,6 +67,14 @@ pub fn start_service(
         ServiceType::Bun
     } else if name.contains("redis") {
         ServiceType::Redis
+    } else if name.contains("postgres") {
+        ServiceType::PostgreSQL
+    } else if name.contains("mongo") {
+        ServiceType::MongoDB
+    } else if name.contains("go") {
+        ServiceType::Go
+    } else if name.contains("deno") {
+        ServiceType::Deno
     } else {
         ServiceType::MariaDB
     };
@@ -116,6 +124,40 @@ pub fn start_service(
 
             args
         }
+        ServiceType::PostgreSQL => {
+            use crate::services::postgresql::PostgreSQLManager;
+
+            let app_bin = app
+                .path()
+                .app_local_data_dir()
+                .map_err(|e| e.to_string())?
+                .join("bin");
+
+            let postgres_root = app_bin.join("postgres");
+            let data_dir = app_bin.join("data").join("postgres");
+
+            if !data_dir.join("PG_VERSION").exists() {
+                log::info!("PostgreSQL not initialized, auto-initializing...");
+                PostgreSQLManager::initialize(&postgres_root, &data_dir, "postgres")?;
+            }
+
+            vec!["-D".to_string(), data_dir.display().to_string()]
+        }
+        ServiceType::MongoDB => {
+            use crate::services::mongodb::MongoDBManager;
+
+            let app_bin = app
+                .path()
+                .app_local_data_dir()
+                .map_err(|e| e.to_string())?
+                .join("bin");
+
+            let data_dir = app_bin.join("data").join("mongodb");
+
+            MongoDBManager::initialize(&data_dir)?;
+
+            vec!["--dbpath".to_string(), data_dir.display().to_string(), "--port".to_string(), "27017".to_string()]
+        }
         ServiceType::Apache => {
             // Apache httpd doesn't need special args on Windows
             vec![]
@@ -131,7 +173,7 @@ pub fn start_service(
             }
             args
         }
-        ServiceType::NodeJs | ServiceType::Python | ServiceType::Bun => {
+        ServiceType::NodeJs | ServiceType::Python | ServiceType::Bun | ServiceType::Go | ServiceType::Deno => {
             // These are typically not background services
             vec![]
         }

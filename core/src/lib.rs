@@ -18,6 +18,7 @@ pub fn run() {
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_sql::Builder::default().build())
     .manage(service_manager) // Register state
+    .manage(services::terminal::TerminalState::default()) // Register terminal state
     .setup(|app| {
         // System Tray Setup
         let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -128,6 +129,11 @@ pub fn run() {
         commands::path::add_service_to_path,
         commands::path::remove_service_from_path,
         commands::path::check_service_path_status,
+        commands::path::get_user_path,
+        commands::path::save_user_path,
+        // Hosts editor
+        commands::hosts::get_hosts_file,
+        commands::hosts::save_hosts_file,
         // PHP config
         commands::php_config::get_php_config,
         commands::php_config::set_php_extension,
@@ -195,6 +201,12 @@ pub fn run() {
         commands::performance::set_opcache_config,
         commands::performance::get_nginx_gzip_config,
         commands::performance::set_nginx_gzip_config,
+        commands::performance::get_nginx_conf_raw,
+        commands::performance::save_nginx_conf_raw,
+        commands::performance::get_mariadb_conf_raw,
+        commands::performance::save_mariadb_conf_raw,
+        commands::performance::get_apache_conf_raw,
+        commands::performance::save_apache_conf_raw,
         commands::performance::clear_all_caches,
         // Mailpit (Mail server)
         commands::mailpit::get_mailpit_status,
@@ -216,6 +228,16 @@ pub fn run() {
         // Updater
         commands::updater::check_for_updates,
         commands::updater::get_current_version,
+        // Terminal
+        services::terminal::spawn_terminal,
+        services::terminal::write_terminal,
+        services::terminal::resize_terminal,
+        // Tunnel
+        commands::tunnel::start_tunnel,
+        commands::tunnel::stop_tunnel,
+        commands::tunnel::get_tunnel_url,
+        // Wizards
+        commands::wizards::scaffold_project,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

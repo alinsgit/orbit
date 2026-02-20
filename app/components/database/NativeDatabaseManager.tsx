@@ -72,7 +72,11 @@ const CHARSET_COLLATIONS: Record<string, string[]> = {
   latin5: ['latin5_turkish_ci', 'latin5_bin'],
 };
 
-export default function NativeDatabaseManager() {
+interface NativeDatabaseManagerProps {
+  dbEngine?: 'mariadb' | 'postgresql' | 'mongodb';
+}
+
+export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDatabaseManagerProps) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,11 +84,21 @@ export default function NativeDatabaseManager() {
 
   // Connection form
   const [config, setConfig] = useState<DbConnectionConfig>({
+    engine: dbEngine,
     host: '127.0.0.1',
-    port: 3306,
-    user: 'root',
+    port: dbEngine === 'postgresql' ? 5432 : 3306,
+    user: dbEngine === 'postgresql' ? 'postgres' : 'root',
     password: '',
   });
+
+  useEffect(() => {
+    setConfig(c => ({
+      ...c,
+      engine: dbEngine,
+      port: dbEngine === 'postgresql' ? 5432 : 3306,
+      user: dbEngine === 'postgresql' ? 'postgres' : 'root',
+    }));
+  }, [dbEngine]);
   const [showPassword, setShowPassword] = useState(false);
 
   // Data
@@ -98,6 +112,7 @@ export default function NativeDatabaseManager() {
   // Dialogs
   const [dialog, setDialog] = useState<DialogState>({ type: null });
   const [dialogLoading, setDialogLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [editDb, setEditDb] = useState<EditDbState | null>(null);
 
   // Dialog form states
@@ -180,14 +195,15 @@ export default function NativeDatabaseManager() {
   };
 
   const handleDropDatabase = async (name: string) => {
+    if (!confirm(`Are you sure you want to delete the database '${name}'? This action cannot be undone.`)) return;
     try {
-      setLoading(true);
+      setActionLoading(`dropDb-${name}`);
       await dropDatabase(name);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to drop database');
     } finally {
-      setLoading(false);
+      setActionLoading(null);
     }
   };
 
@@ -208,14 +224,15 @@ export default function NativeDatabaseManager() {
   };
 
   const handleDropUser = async (user: UserInfo) => {
+    if (!confirm(`Are you sure you want to delete the user '${user.user}'?`)) return;
     try {
-      setLoading(true);
+      setActionLoading(`dropUser-${user.user}@${user.host}`);
       await dropUser(user.user, user.host);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to drop user');
     } finally {
-      setLoading(false);
+      setActionLoading(null);
     }
   };
 
@@ -601,35 +618,55 @@ export default function NativeDatabaseManager() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-medium text-content-secondary">Databases</h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportAll}
-                disabled={backupLoading === 'export-all'}
-                className="flex items-center gap-2 px-3 py-1.5 bg-surface-raised hover:bg-hover disabled:opacity-50 rounded-lg text-sm transition-colors"
-                title="Export all databases"
-              >
-                {backupLoading === 'export-all' ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
+              <div className="flex gap-2">
+                {dbEngine === 'mariadb' && (
+                  <>
+                    <button
+                      onClick={handleExportAll}
+                      disabled={backupLoading !== null || !databases.length}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-surface-raised hover:bg-surface text-content-secondary hover:text-content rounded-lg transition-colors border border-edge disabled:opacity-50"
+                      title="Export all databases to a single SQL file"
+                    >
+                      {backupLoading === 'export-all' ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      Export All
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedDatabase(''); // Clear selection so they must pick
+                        handleImportDatabase();
+                      }}
+                      disabled={backupLoading !== null}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-surface-raised hover:bg-surface text-content-secondary hover:text-content rounded-lg transition-colors border border-edge disabled:opacity-50"
+                      title="Import an SQL file into a database"
+                    >
+                      {backupLoading === 'import' ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      Import
+                    </button>
+                  </>
                 )}
-                Export All
-              </button>
-              <button
-                onClick={() => setDialog({ type: 'createDb' })}
-                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Create Database
-              </button>
-            </div>
+                <button
+                  onClick={() => setDialog({ type: 'createDb' })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Database
+                </button>
+              </div>
           </div>
 
           <div className="space-y-2">
             {databases.map(db => (
               <div
                 key={db.name}
-                className="flex items-center justify-between p-3 bg-surface-raised rounded-lg hover:bg-hover transition-colors"
+                className="group flex items-center justify-between p-3 bg-surface-raised rounded-lg hover:bg-hover transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <HardDrive className="w-5 h-5 text-content-muted" />
@@ -642,61 +679,59 @@ export default function NativeDatabaseManager() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  {!['mysql', 'information_schema', 'performance_schema', 'sys'].includes(db.name.toLowerCase()) && (
-                    <button
-                      onClick={() => handleOpenEditDb(db.name)}
-                      className="p-2 text-content-muted hover:bg-hover rounded-lg transition-colors"
-                      title="Edit database"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleExportDatabase(db.name)}
-                    disabled={backupLoading === `export-${db.name}`}
-                    className="p-2 text-content-muted hover:bg-hover disabled:opacity-50 rounded-lg transition-colors"
-                    title="Export database"
-                  >
-                    {backupLoading === `export-${db.name}` ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
-                  </button>
-                  {!['mysql', 'information_schema', 'performance_schema', 'sys'].includes(db.name.toLowerCase()) && (
-                    <>
+                  {!['mysql', 'information_schema', 'performance_schema', 'sys', 'postgres'].includes(db.name.toLowerCase()) && (
+                    <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                      {dbEngine === 'mariadb' && (
+                        <button
+                          onClick={() => handleExportDatabase(db.name)}
+                          disabled={backupLoading === `export-${db.name}`}
+                          className="p-1.5 text-content-muted hover:text-content hover:bg-surface-raised rounded-md transition-colors"
+                          title="Export Database"
+                        >
+                          {backupLoading === `export-${db.name}` ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                      
                       <button
-                        onClick={() => handleImportSql(db.name)}
-                        disabled={backupLoading === `import-${db.name}`}
-                        className="p-2 text-content-muted hover:bg-hover disabled:opacity-50 rounded-lg transition-colors"
-                        title="Import SQL file"
+                        onClick={() => handleOpenEditDb(db.name)}
+                        className="p-1.5 text-content-muted hover:text-content hover:bg-surface-raised rounded-md transition-colors"
+                        title="Database Settings (Charset/Collation/Users)"
                       >
-                        {backupLoading === `import-${db.name}` ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Upload className="w-4 h-4" />
-                        )}
+                        <Pencil className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleRebuildDatabase(db.name)}
-                        disabled={backupLoading === `rebuild-${db.name}`}
-                        className="p-2 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 rounded-lg transition-colors"
-                        title="Rebuild database (drop + create + import)"
-                      >
-                        {backupLoading === `rebuild-${db.name}` ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RotateCcw className="w-4 h-4" />
-                        )}
-                      </button>
+
+                      {dbEngine === 'mariadb' && (
+                        <button
+                          onClick={() => handleImportSql(db.name)}
+                          disabled={backupLoading === `import-${db.name}`}
+                          className="p-1.5 text-content-muted hover:text-content hover:bg-surface-raised rounded-md transition-colors"
+                          title="Import SQL file into this database"
+                        >
+                          {backupLoading === `import-${db.name}` ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Upload className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                      
                       <button
                         onClick={() => handleDropDatabase(db.name)}
-                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        disabled={actionLoading === `dropDb-${db.name}`}
+                        className="p-2 text-red-400 hover:bg-red-500/10 disabled:opacity-50 rounded-lg transition-colors"
                         title="Delete database"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {actionLoading === `dropDb-${db.name}` ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </button>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -750,10 +785,15 @@ export default function NativeDatabaseManager() {
                   {user.user.toLowerCase() !== 'root' && (
                     <button
                       onClick={() => handleDropUser(user)}
-                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                      disabled={actionLoading === `dropUser-${user.user}@${user.host}`}
+                      className="p-2 text-red-400 hover:bg-red-500/10 disabled:opacity-50 rounded-lg transition-colors"
                       title="Delete user"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {actionLoading === `dropUser-${user.user}@${user.host}` ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </button>
                   )}
                 </div>
@@ -800,9 +840,16 @@ export default function NativeDatabaseManager() {
               <button
                 onClick={handleCreateDatabase}
                 disabled={!newDbName || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
               >
-                {dialogLoading ? 'Creating...' : 'Create'}
+                {dialogLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create'
+                )}
               </button>
             </div>
           </div>
@@ -856,9 +903,16 @@ export default function NativeDatabaseManager() {
               <button
                 onClick={handleCreateUser}
                 disabled={!newUsername || !newUserPassword || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
               >
-                {dialogLoading ? 'Creating...' : 'Create'}
+                {dialogLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create'
+                )}
               </button>
             </div>
           </div>
@@ -890,9 +944,16 @@ export default function NativeDatabaseManager() {
               <button
                 onClick={handleChangePassword}
                 disabled={!newPassword || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
               >
-                {dialogLoading ? 'Changing...' : 'Change Password'}
+                {dialogLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Changing...
+                  </>
+                ) : (
+                  'Change Password'
+                )}
               </button>
             </div>
           </div>
@@ -932,9 +993,16 @@ export default function NativeDatabaseManager() {
               <button
                 onClick={handleGrantPrivileges}
                 disabled={!selectedDatabase || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
               >
-                {dialogLoading ? 'Granting...' : 'Grant Privileges'}
+                {dialogLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Granting...
+                  </>
+                ) : (
+                  'Grant Privileges'
+                )}
               </button>
             </div>
           </div>
@@ -1033,9 +1101,16 @@ export default function NativeDatabaseManager() {
                 <button
                   onClick={handleSaveEditDb}
                   disabled={dialogLoading}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
                 >
-                  {dialogLoading ? 'Saving...' : 'Save'}
+                  {dialogLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
                 </button>
               </div>
             </div>

@@ -42,6 +42,8 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
         "nodejs" => bin_path.join("nodejs"),
         "python" => bin_path.join("python"),
         "bun" => bin_path.join("bun"),
+        "go" => bin_path.join("go").join("bin"),
+        "deno" => bin_path.join("deno"),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -105,6 +107,8 @@ pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<
         "nodejs" => bin_path.join("nodejs").to_string_lossy().to_string(),
         "python" => bin_path.join("python").to_string_lossy().to_string(),
         "bun" => bin_path.join("bun").to_string_lossy().to_string(),
+        "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
+        "deno" => bin_path.join("deno").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -182,6 +186,8 @@ pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result
         "nodejs" => bin_path.join("nodejs").to_string_lossy().to_string(),
         "python" => bin_path.join("python").to_string_lossy().to_string(),
         "bun" => bin_path.join("bun").to_string_lossy().to_string(),
+        "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
+        "deno" => bin_path.join("deno").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -271,6 +277,18 @@ pub fn add_to_path(app: AppHandle) -> Result<String, String> {
     let bun_path = bin_path.join("bun");
     if bun_path.exists() {
         paths_to_add.push(bun_path.to_string_lossy().to_string());
+    }
+
+    // 7. Go
+    let go_path = bin_path.join("go").join("bin");
+    if go_path.exists() {
+        paths_to_add.push(go_path.to_string_lossy().to_string());
+    }
+
+    // 8. Deno
+    let deno_path = bin_path.join("deno");
+    if deno_path.exists() {
+        paths_to_add.push(deno_path.to_string_lossy().to_string());
     }
 
     if paths_to_add.is_empty() {
@@ -414,3 +432,62 @@ pub struct ServicePathStatus {
     pub service_path: String,
     pub service_type: String,
 }
+
+/// Retrieve the raw User PATH as a list of directories
+#[command]
+pub fn get_user_path() -> Result<Vec<String>, String> {
+    let output = hidden_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "[Environment]::GetEnvironmentVariable('Path', 'User')",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to get PATH: {}", e))?;
+
+    let path_str = String::from_utf8_lossy(&output.stdout).to_string();
+    
+    // Split by ';' on Windows, filter out empty strings
+    let paths: Vec<String> = path_str
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(paths)
+}
+
+/// Overwrite the User PATH with a new list of directories
+#[command]
+pub fn save_user_path(paths: Vec<String>) -> Result<String, String> {
+    // Filter out invalid or purely empty paths to prevent accidental corruption
+    let clean_paths: Vec<String> = paths
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let new_path_str = clean_paths.join(";");
+
+    let ps_script = format!(
+        r#"
+        $newPath = '{}'
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+        Write-Output "User PATH updated successfully."
+        "#,
+        new_path_str.replace("'", "''")
+    );
+
+    let output = hidden_command("powershell")
+        .args(["-NoProfile", "-Command", &ps_script])
+        .output()
+        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+
+    if output.status.success() {
+        Ok("PATH saved successfully.".into())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to update PATH: {}", stderr))
+    }
+}
+

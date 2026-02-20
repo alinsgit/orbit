@@ -94,7 +94,7 @@ export interface Site {
   php_version?: string;
   php_port?: number;
   ssl_enabled?: boolean;
-  template?: 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static';
+  template?: 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue';
   web_server?: WebServer;
 }
 
@@ -407,6 +407,63 @@ export const savePhpIniRaw = async (version: string, content: string): Promise<s
     return await invoke('save_php_ini_raw', { version, content });
   } catch (error) {
     console.error('Failed to save php.ini:', error);
+    throw error;
+  }
+};
+
+// Nginx Config API
+export const getNginxConfRaw = async (): Promise<string> => {
+  try {
+    return await invoke('get_nginx_conf_raw');
+  } catch (error) {
+    console.error('Failed to get nginx.conf:', error);
+    throw error;
+  }
+};
+
+export const saveNginxConfRaw = async (content: string): Promise<string> => {
+  try {
+    return await invoke('save_nginx_conf_raw', { content });
+  } catch (error) {
+    console.error('Failed to save nginx.conf:', error);
+    throw error;
+  }
+};
+
+// MariaDB Config API
+export const getMariadbConfRaw = async (): Promise<string> => {
+  try {
+    return await invoke('get_mariadb_conf_raw');
+  } catch (error) {
+    console.error('Failed to get my.ini:', error);
+    throw error;
+  }
+};
+
+export const saveMariadbConfRaw = async (content: string): Promise<string> => {
+  try {
+    return await invoke('save_mariadb_conf_raw', { content });
+  } catch (error) {
+    console.error('Failed to save my.ini:', error);
+    throw error;
+  }
+};
+
+// Apache Config API
+export const getApacheConfRaw = async (): Promise<string> => {
+  try {
+    return await invoke('get_apache_conf_raw');
+  } catch (error) {
+    console.error('Failed to get httpd.conf:', error);
+    throw error;
+  }
+};
+
+export const saveApacheConfRaw = async (content: string): Promise<string> => {
+  try {
+    return await invoke('save_apache_conf_raw', { content });
+  } catch (error) {
+    console.error('Failed to save httpd.conf:', error);
     throw error;
   }
 };
@@ -1332,6 +1389,150 @@ export const getCurrentVersion = async (): Promise<string> => {
     return await invoke('get_current_version');
   } catch (error) {
     console.error('Failed to get current version:', error);
+    throw error;
+  }
+};
+
+// --- Terminal ---
+
+export const spawnTerminal = async (id: string, cols: number, rows: number, cwd?: string): Promise<void> => {
+  try {
+    await invoke('spawn_terminal', { id, cols, rows, cwd });
+  } catch (error) {
+    console.error('Failed to spawn terminal:', error);
+    throw error;
+  }
+};
+
+export const writeTerminal = async (id: string, data: string): Promise<void> => {
+  try {
+    await invoke('write_terminal', { id, data });
+  } catch (error) {
+    console.error('Failed to write to terminal:', error);
+    throw error;
+  }
+};
+
+export const resizeTerminal = async (id: string, cols: number, rows: number): Promise<void> => {
+  try {
+    await invoke('resize_terminal', { id, cols, rows });
+  } catch (error) {
+    console.error('Failed to resize terminal:', error);
+    throw error;
+  }
+};
+
+// --- Workspace Settings ---
+
+import { load } from '@tauri-apps/plugin-store';
+
+export const getWorkspacePath = async (): Promise<string | null> => {
+  try {
+    const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '' } });
+    const path = await store.get<string>('workspacePath');
+    return path || null;
+  } catch (error) {
+    console.error('Failed to get workspace path from store:', error);
+    return null;
+  }
+};
+
+// --- Project Wizards ---
+
+export const scaffoldProject = async (
+  projectType: string,
+  projectName: string,
+  workspacePath: string
+): Promise<string> => {
+  try {
+    return await invoke('scaffold_project', {
+      projectType,
+      projectName,
+      workspacePath,
+    });
+  } catch (error) {
+    console.error(`Failed to scaffold ${projectType} project:`, error);
+    throw error;
+  }
+};
+
+// --- Tunneling ---
+
+export interface TunnelResponse {
+  success: boolean;
+  message: string;
+  url: string | null;
+}
+
+export const startTunnel = async (
+  domain: string,
+  port: number,
+  authToken: string
+): Promise<TunnelResponse> => {
+  try {
+    return await invoke('start_tunnel', {
+      domain,
+      port,
+      authToken,
+    });
+  } catch (error) {
+    console.error('Failed to start tunnel:', error);
+    throw error;
+  }
+};
+
+export const stopTunnel = async (): Promise<TunnelResponse> => {
+  try {
+    return await invoke('stop_tunnel');
+  } catch (error) {
+    console.error('Failed to stop tunnel:', error);
+    throw error;
+  }
+};
+
+export const getTunnelUrl = async (): Promise<string> => {
+  try {
+    return await invoke('get_tunnel_url');
+  } catch (error) {
+    console.error('Failed to get tunnel url:', error);
+    throw error;
+  }
+};
+
+// --- Host & PATH Management ---
+
+export const getHostsFile = async (): Promise<string> => {
+  try {
+    return await invoke('get_hosts_file');
+  } catch (error) {
+    console.error('Failed to get hosts file:', error);
+    throw error;
+  }
+};
+
+export const saveHostsFile = async (newContent: string): Promise<string> => {
+  try {
+    return await invoke('save_hosts_file', { newContent });
+  } catch (error) {
+    console.error('Failed to save hosts file:', error);
+    throw error;
+  }
+};
+
+export const getUserPath = async (): Promise<string[]> => {
+  try {
+    return await invoke('get_user_path');
+  } catch (error) {
+    console.error('Failed to get user path:', error);
+    throw error;
+  }
+};
+
+export const saveUserPath = async (paths: string[]): Promise<string> => {
+  try {
+    return await invoke('save_user_path', { paths });
+  } catch (error) {
+    console.error('Failed to save user path:', error);
     throw error;
   }
 };

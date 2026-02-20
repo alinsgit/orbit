@@ -367,6 +367,64 @@
         "url": "https://getcomposer.org/download/2.9.5/composer.phar",
         "filename": "composer.phar"
       }
+    },
+    "go": {
+      "name": "Go",
+      "description": "Statically typed, compiled programming language",
+      "availableVersions": [
+        "1.22"
+      ],
+      "versions": {
+        "1.22": {
+          "latest": "1.22.1",
+          "windows": {
+            "url": "https://dl.google.com/go/go1.22.1.windows-amd64.zip",
+            "filename": "go1.22.1.windows-amd64.zip"
+          }
+        }
+      }
+    },
+    "deno": {
+      "name": "Deno",
+      "description": "Next-generation JavaScript runtime",
+      "latest": "2.1.0",
+      "windows": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-x86_64-pc-windows-msvc.zip",
+        "filename": "deno-x86_64-pc-windows-msvc.zip"
+      },
+      "macos_arm64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-aarch64-apple-darwin.zip",
+        "filename": "deno-aarch64-apple-darwin.zip"
+      },
+      "macos_x64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-x86_64-apple-darwin.zip",
+        "filename": "deno-x86_64-apple-darwin.zip"
+      },
+      "linux": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-x86_64-unknown-linux-gnu.zip",
+        "filename": "deno-x86_64-unknown-linux-gnu.zip"
+      }
+    },
+    "rust": {
+      "name": "Rust (rustup)",
+      "description": "Systems programming language toolchain",
+      "latest": "latest",
+      "windows": {
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe",
+        "filename": "rustup-init.exe"
+      },
+      "macos_arm64": {
+        "url": "https://static.rust-lang.org/rustup/dist/aarch64-apple-darwin/rustup-init",
+        "filename": "rustup-init"
+      },
+      "macos_x64": {
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init",
+        "filename": "rustup-init"
+      },
+      "linux": {
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init",
+        "filename": "rustup-init"
+      }
     }
   }
 }

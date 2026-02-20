@@ -25,9 +25,14 @@ export function ServiceManager() {
     { key: 'apache', title: 'Apache HTTP Server', icon: '🪶', group: 'server' },
     { key: 'php', title: 'PHP Interpreter', icon: '🐘', group: 'server' },
     { key: 'mariadb', title: 'MariaDB Database', icon: '🗄️', group: 'server' },
+    { key: 'postgresql', title: 'PostgreSQL Database', icon: '🐘', group: 'server' },
+    { key: 'mongodb', title: 'MongoDB Database', icon: '🍃', group: 'server' },
     { key: 'nodejs', title: 'Node.js Runtime', icon: '💚', group: 'devtools' },
     { key: 'python', title: 'Python', icon: '🐍', group: 'devtools' },
     { key: 'bun', title: 'Bun Runtime', icon: '🥟', group: 'devtools' },
+    { key: 'go', title: 'Go (Golang)', icon: '🟦', group: 'devtools' },
+    { key: 'deno', title: 'Deno Runtime', icon: '🦕', group: 'devtools' },
+    { key: 'rust', title: 'Rust Toolchain', icon: '🦀', group: 'devtools' },
   ] as const;
 
   const [available, setAvailable] = useState<Record<string, ServiceVersion[]>>({});
@@ -49,7 +54,7 @@ export function ServiceManager() {
 
   // Services that have configuration
   const hasConfiguration = (serviceType: string) => {
-    return serviceType === 'php' || serviceType === 'nginx';
+    return ['php', 'nginx', 'mariadb', 'apache'].includes(serviceType);
   };
 
   const openConfigDrawer = (name: string, type: string, version: string) => {
@@ -73,8 +78,8 @@ export function ServiceManager() {
       const iParts = installed.split('.');
       const aParts = available.split('.');
 
-      // Multi-version: match major.minor (php 8.4.x, mariadb 11.4.x, python 3.13.x, nginx 1.28.x)
-      if (['php', 'mariadb', 'python', 'nginx'].includes(type)) {
+      // Multi-version: match major.minor (php 8.4.x, mariadb 11.4.x, python 3.13.x, nginx 1.28.x, go 1.22.x)
+      if (['php', 'mariadb', 'postgresql', 'mongodb', 'python', 'nginx', 'go'].includes(type)) {
         return iParts[0] === aParts[0] && iParts[1] === aParts[1];
       }
 

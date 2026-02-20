@@ -7,6 +7,9 @@ import {
   listTemplates, getTemplate, saveTemplate, resetTemplate, deleteTemplate, TemplateInfo,
   getAvailableExtensions, installPeclExtension, uninstallPeclExtension, PeclExtension,
   getPhpIniRaw, savePhpIniRaw,
+  getNginxConfRaw, saveNginxConfRaw,
+  getMariadbConfRaw, saveMariadbConfRaw,
+  getApacheConfRaw, saveApacheConfRaw,
   configurePhpMailpit, getPhpMailpitStatus,
   configurePhpRedisSession, getPhpRedisSessionStatus
 } from '../lib/api';
@@ -54,6 +57,12 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
   const [phpIniSaving, setPhpIniSaving] = useState(false);
   const [phpIniLoaded, setPhpIniLoaded] = useState(false);
 
+  // Generic Raw Config State (for Nginx, MariaDB, Apache)
+  const [rawConfigContent, setRawConfigContent] = useState<string>('');
+  const [rawConfigLoading, setRawConfigLoading] = useState(false);
+  const [rawConfigSaving, setRawConfigSaving] = useState(false);
+  const [rawConfigLoaded, setRawConfigLoaded] = useState(false);
+
   // Integrations State
   const [mailpitEnabled, setMailpitEnabled] = useState(false);
   const [redisSessionEnabled, setRedisSessionEnabled] = useState(false);
@@ -68,6 +77,7 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
     templates: true,
     pecl: false, // PECL extensions collapsed by default
     phpini: false, // php.ini editor collapsed by default
+    rawconfig: false, // Raw config editor for other services
     integrations: true, // Integrations section
   });
 
@@ -79,6 +89,7 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       loadConfig();
       setPeclLoaded(false); // Reset on each open
       setPhpIniLoaded(false); // Reset php.ini loaded state
+      setRawConfigLoaded(false); // Reset raw config loaded state
     }
   }, [isOpen, serviceName, serviceType]);
 
@@ -96,6 +107,13 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       loadPhpIniRaw();
     }
   }, [expandedSections.phpini, serviceType, phpIniLoaded, phpIniLoading]);
+
+  // Lazy load raw config content when section is expanded (for MariaDB, Nginx, Apache)
+  useEffect(() => {
+    if (expandedSections.rawconfig && ['nginx', 'mariadb', 'apache'].includes(serviceType) && !rawConfigLoaded && !rawConfigLoading) {
+      loadRawConfig();
+    }
+  }, [expandedSections.rawconfig, serviceType, rawConfigLoaded, rawConfigLoading]);
 
   const loadConfig = async () => {
     if (serviceType === 'php') {
@@ -166,6 +184,42 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       addToast({ type: 'error', message: `Failed to save php.ini: ${e}` });
     } finally {
       setPhpIniSaving(false);
+    }
+  };
+
+  // Load generic raw config content
+  const loadRawConfig = async () => {
+    setRawConfigLoading(true);
+    try {
+      let content = '';
+      if (serviceType === 'nginx') content = await getNginxConfRaw();
+      else if (serviceType === 'mariadb') content = await getMariadbConfRaw();
+      else if (serviceType === 'apache') content = await getApacheConfRaw();
+      
+      setRawConfigContent(content);
+      setRawConfigLoaded(true);
+    } catch (e) {
+      console.error(`Failed to load ${serviceType} config:`, e);
+      addToast({ type: 'error', message: `Failed to load ${serviceType} configuration file` });
+    } finally {
+      setRawConfigLoading(false);
+    }
+  };
+
+  // Save generic raw config content
+  const saveRawConfig = async () => {
+    setRawConfigSaving(true);
+    try {
+      if (serviceType === 'nginx') await saveNginxConfRaw(rawConfigContent);
+      else if (serviceType === 'mariadb') await saveMariadbConfRaw(rawConfigContent);
+      else if (serviceType === 'apache') await saveApacheConfRaw(rawConfigContent);
+      
+      addToast({ type: 'success', message: 'Configuration saved successfully. Services may need a restart.' });
+    } catch (e: any) {
+      console.error(`Failed to save ${serviceType} config:`, e);
+      addToast({ type: 'error', message: `Failed to save configuration: ${e}` });
+    } finally {
+      setRawConfigSaving(false);
     }
   };
 
@@ -1182,8 +1236,67 @@ server {
             </>
           )}
 
+          {/* Generic Raw Config Editor (Nginx, MariaDB, Apache) */}
+          {['nginx', 'mariadb', 'apache'].includes(serviceType) && (
+            <div className="border border-edge-subtle rounded-lg overflow-hidden mt-4">
+              <button
+                onClick={() => toggleSection('rawconfig')}
+                className="w-full px-4 py-3 flex items-center justify-between bg-surface-raised hover:bg-hover transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText size={16} className={
+                    serviceType === 'nginx' ? 'text-green-500' : 
+                    serviceType === 'mariadb' ? 'text-blue-500' : 'text-red-500'
+                  } />
+                  <span className="font-medium">
+                    {serviceType === 'nginx' ? 'nginx.conf Editor' : 
+                     serviceType === 'mariadb' ? 'my.ini Editor' : 'httpd.conf Editor'}
+                  </span>
+                </div>
+                {expandedSections.rawconfig ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+
+              {expandedSections.rawconfig && (
+                <div className="p-4 space-y-4">
+                  {rawConfigLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="animate-spin text-content-muted" size={24} />
+                      <span className="ml-2 text-content-muted">Loading configuration...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <textarea
+                        value={rawConfigContent}
+                        onChange={(e) => setRawConfigContent(e.target.value)}
+                        className="w-full h-80 bg-surface-inset border border-edge-subtle rounded-lg p-3 font-mono text-sm text-content-primary resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        spellCheck={false}
+                      />
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-content-muted">
+                          Edit configuration directly. Backup created automatically. Restart service to apply.
+                        </p>
+                        <button
+                          onClick={saveRawConfig}
+                          disabled={rawConfigSaving}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {rawConfigSaving ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Save size={14} />
+                          )}
+                          Save
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Unsupported service type */}
-          {serviceType !== 'php' && serviceType !== 'nginx' && (
+          {serviceType !== 'php' && serviceType !== 'nginx' && serviceType !== 'mariadb' && serviceType !== 'apache' && (
             <div className="text-center py-8 text-content-muted">
               <p>No configuration available for this service type.</p>
             </div>

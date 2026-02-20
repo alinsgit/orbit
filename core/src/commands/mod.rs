@@ -20,3 +20,5 @@ pub mod performance;
 pub mod pecl;
 pub mod backup;
 pub mod updater;
+pub mod wizards;
+pub mod tunnel;

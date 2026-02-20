@@ -1,0 +1,101 @@
+[
+  {
+    "category": "Laravel / PHP",
+    "items": [
+      { "label": "Artisan Serve", "cmd": "php artisan serve" },
+      { "label": "Run Migrations", "cmd": "php artisan migrate" },
+      { "label": "Rollback Migration", "cmd": "php artisan migrate:rollback" },
+      { "label": "Fresh Migrations", "cmd": "php artisan migrate:fresh --seed" },
+      { "label": "Clear Cache", "cmd": "php artisan optimize:clear" },
+      { "label": "Route List", "cmd": "php artisan route:list" },
+      { "label": "Tinker Shell", "cmd": "php artisan tinker" },
+      { "label": "Make Controller", "cmd": "php artisan make:controller " },
+      { "label": "Make Model", "cmd": "php artisan make:model " },
+      { "label": "Make Migration", "cmd": "php artisan make:migration " },
+      { "label": "PHP Server", "cmd": "php -S localhost:8000" },
+      { "label": "PHP Config", "cmd": "php --ini" }
+    ]
+  },
+  {
+    "category": "Composer",
+    "items": [
+      { "label": "Install", "cmd": "composer install" },
+      { "label": "Update", "cmd": "composer update" },
+      { "label": "Dump Autoload", "cmd": "composer dump-autoload" },
+      { "label": "Require Package", "cmd": "composer require " },
+      { "label": "Remove Package", "cmd": "composer remove " }
+    ]
+  },
+  {
+    "category": "Node / NPM",
+    "items": [
+      { "label": "NPM Install", "cmd": "npm install" },
+      { "label": "NPM Run Dev", "cmd": "npm run dev" },
+      { "label": "NPM Run Build", "cmd": "npm run build" },
+      { "label": "NPM Update", "cmd": "npm update" },
+      { "label": "NPM Audit Fix", "cmd": "npm audit fix" }
+    ]
+  },
+  {
+    "category": "Modern JS / Tools",
+    "items": [
+      { "label": "Vite Dev", "cmd": "npx vite" },
+      { "label": "Vite Build", "cmd": "npx vite build" },
+      { "label": "Next.js Dev", "cmd": "npx next dev" },
+      { "label": "Next.js Build", "cmd": "npx next build" },
+      { "label": "Astro Dev", "cmd": "npx astro dev" },
+      { "label": "Astro Build", "cmd": "npx astro build" },
+      { "label": "Nuxt Dev", "cmd": "npx nuxi dev" },
+      { "label": "Nuxt Build", "cmd": "npx nuxi build" },
+      { "label": "Vue CLI Serve", "cmd": "npm run serve" }
+    ]
+  },
+  {
+    "category": "WordPress (WP-CLI)",
+    "items": [
+      { "label": "WP Info", "cmd": "wp info" },
+      { "label": "Search & Replace", "cmd": "wp search-replace 'http://old' 'http://new'" },
+      { "label": "Flush Cache", "cmd": "wp cache flush" },
+      { "label": "Plugin List", "cmd": "wp plugin list" },
+      { "label": "Theme List", "cmd": "wp theme list" },
+      { "label": "DB Export", "cmd": "wp db export" },
+      { "label": "Regenerate Thumbs", "cmd": "wp media regenerate" }
+    ]
+  },
+  {
+    "category": "Databases & Services",
+    "items": [
+      { "label": "MySQL Login (root)", "cmd": "mysql -u root" },
+      { "label": "Postgres Login", "cmd": "psql -U postgres" },
+      { "label": "MongoDB Shell", "cmd": "mongosh" },
+      { "label": "Redis CLI", "cmd": "redis-cli" }
+    ]
+  },
+  {
+    "category": "Git / Source Control",
+    "items": [
+      { "label": "Git Status", "cmd": "git status" },
+      { "label": "Git Add All", "cmd": "git add ." },
+      { "label": "Git Commit", "cmd": "git commit -m \"Update\"" },
+      { "label": "Git Push", "cmd": "git push" },
+      { "label": "Git Pull", "cmd": "git pull" },
+      { "label": "Git Branch", "cmd": "git branch" },
+      { "label": "Git Checkout", "cmd": "git checkout " },
+      { "label": "Git Log", "cmd": "git log --oneline" }
+    ]
+  },
+  {
+    "category": "Go & Deno",
+    "items": [
+      { "label": "Go Run", "cmd": "go run ." },
+      { "label": "Go Build", "cmd": "go build" },
+      { "label": "Go Mod Init", "cmd": "go mod init " },
+      { "label": "Go Test", "cmd": "go test ./..." },
+      { "label": "Deno Init", "cmd": "deno init" },
+      { "label": "Deno Run", "cmd": "deno run main.ts" },
+      { "label": "Deno Run (Net)", "cmd": "deno run --allow-net main.ts" },
+      { "label": "Deno Test", "cmd": "deno test" },
+      { "label": "Deno Install", "cmd": "deno install" }
+    ]
+  }
+]
