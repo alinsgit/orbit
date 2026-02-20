@@ -203,7 +203,7 @@ export function SettingsManager() {
         <p className="text-content-secondary">Application settings and maintenance</p>
       </header>
 
-      <div className="max-w-4xl space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Workspace & General Settings */}
         <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
           <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
@@ -227,7 +227,7 @@ export function SettingsManager() {
                   value={workspacePath}
                   readOnly
                   placeholder="e.g. D:\MyProjects"
-                  className="flex-1 px-4 py-2 border border-edge bg-surface-inset rounded-lg text-sm text-content-secondary"
+                  className="flex-1 px-4 py-2 border border-edge bg-surface-inset rounded-lg text-sm text-content-secondary min-w-0"
                 />
                 <button
                   onClick={handleChangeWorkspace}
@@ -241,7 +241,7 @@ export function SettingsManager() {
                 Orbit will create new projects inside this directory by default. Existing projects are not moved.
               </p>
             </div>
-            
+
             <div className="border-t border-edge-subtle pt-4">
               <label className="block text-sm font-medium mb-3">Ngrok Auth Token</label>
               <div className="flex gap-3">
@@ -250,7 +250,7 @@ export function SettingsManager() {
                   value={ngrokToken}
                   onChange={(e) => setNgrokToken(e.target.value)}
                   placeholder="e.g. 2sJ3k9sP2..."
-                  className="flex-1 px-4 py-2 border border-edge bg-surface-inset rounded-lg text-sm text-content-secondary"
+                  className="flex-1 px-4 py-2 border border-edge bg-surface-inset rounded-lg text-sm text-content-secondary min-w-0"
                 />
                 <button
                   onClick={handleSaveNgrokToken}
@@ -270,22 +270,23 @@ export function SettingsManager() {
           </div>
         </section>
 
-        {/* Appearance Settings */}
-        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                <Palette size={20} className="text-purple-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Appearance</h3>
-                <p className="text-sm text-content-secondary">Customize the look and feel</p>
+        {/* Appearance + Maintenance (combined column) */}
+        <div className="space-y-6">
+          {/* Appearance Settings */}
+          <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                  <Palette size={20} className="text-purple-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Appearance</h3>
+                  <p className="text-sm text-content-secondary">Customize the look and feel</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="p-4 space-y-6">
-            <div>
+            <div className="p-4">
               <label className="block text-sm font-medium mb-3">Theme</label>
               <div className="flex gap-3">
                 {themeOptions.map((option) => {
@@ -313,92 +314,40 @@ export function SettingsManager() {
                 {theme === 'system' && ' (following system preference)'}
               </p>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Maintenance */}
-        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
-                <Eraser size={20} className="text-red-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Maintenance</h3>
-                <p className="text-sm text-content-secondary">Clear caches and temporary files</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4">
-            <div className="flex items-center justify-between p-4 bg-surface-inset rounded-lg border border-edge-subtle">
-              <div>
-                <h4 className="font-medium">Clear All Caches</h4>
-                <p className="text-xs text-content-muted">OPcache, temp files, Nginx cache</p>
-              </div>
-              <button
-                onClick={handleClearAllCaches}
-                disabled={clearingCache}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
-              >
-                {clearingCache ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Clear Caches
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Update Checker */}
-        {updateAvailable && (
-          <section className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 rounded-xl overflow-hidden">
-            <div className="p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                <Sparkles size={24} className="text-emerald-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-emerald-400">Update Available</h3>
-                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
-                    v{updateAvailable.version}
-                  </span>
+          {/* Maintenance */}
+          <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                  <Eraser size={20} className="text-red-500" />
                 </div>
-                <p className="text-sm text-content-secondary">
-                  A new version of Orbit is available. You're currently on v{appVersion}.
-                </p>
-                {updateAvailable.body && (
-                  <p className="text-xs text-content-muted mt-1 truncate">{updateAvailable.body.split('\n')[0]}</p>
-                )}
-                {updating && (
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between text-xs text-content-muted mb-1">
-                      <span>{updateStatus}</span>
-                      <span>{updateProgress}%</span>
-                    </div>
-                    <div className="w-full bg-surface-inset rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out"
-                        style={{ width: `${updateProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+                <div>
+                  <h3 className="font-semibold">Maintenance</h3>
+                  <p className="text-sm text-content-secondary">Clear caches and temporary files</p>
+                </div>
               </div>
-              {!updating ? (
+            </div>
+
+            <div className="p-4">
+              <div className="flex items-center justify-between p-4 bg-surface-inset rounded-lg border border-edge-subtle">
+                <div>
+                  <h4 className="font-medium">Clear All Caches</h4>
+                  <p className="text-xs text-content-muted">OPcache, temp files, Nginx cache</p>
+                </div>
                 <button
-                  onClick={handleInstallUpdate}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors flex-shrink-0 cursor-pointer"
+                  onClick={handleClearAllCaches}
+                  disabled={clearingCache}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
                 >
-                  <ArrowUpCircle size={16} />
-                  Install & Restart
+                  {clearingCache ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Clear Caches
                 </button>
-              ) : (
-                <div className="flex items-center gap-2 px-4 py-2.5 text-sm text-content-muted flex-shrink-0">
-                  <RotateCcw size={16} className="animate-spin" />
-                </div>
-              )}
+              </div>
             </div>
           </section>
-        )}
+        </div>
 
         {/* System & Advanced Tools */}
         <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
@@ -413,7 +362,7 @@ export function SettingsManager() {
               </div>
             </div>
           </div>
-          
+
           <div className="p-4 grid grid-cols-2 gap-4">
             <button
               onClick={() => setShowHostsEditor(true)}
@@ -435,7 +384,7 @@ export function SettingsManager() {
           </div>
         </section>
 
-        {/* About */}
+        {/* About & Updates (merged) */}
         <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
           <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -444,34 +393,25 @@ export function SettingsManager() {
               </div>
               <div>
                 <h3 className="font-semibold">About Orbit</h3>
-                <p className="text-sm text-content-secondary">Version and license information</p>
+                <p className="text-sm text-content-secondary">Version, updates and license</p>
               </div>
             </div>
-            <button
-              onClick={handleCheckForUpdates}
-              disabled={checkingUpdate}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-surface-inset hover:bg-hover border border-edge rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-              title="Check for updates"
-            >
-              {checkingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              {checkingUpdate ? 'Checking...' : 'Check for Updates'}
-            </button>
           </div>
 
           <div className="p-4 space-y-4">
-            {/* Logo and Version */}
+            {/* Logo, Version & Update */}
             <div className="flex items-center gap-4 p-4 bg-surface-inset rounded-lg border border-edge-subtle">
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center flex-shrink-0">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" />
                   <circle cx="12" cy="12" r="4" fill="white" />
                   <circle cx="12" cy="4" r="2" fill="white" />
                 </svg>
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h4 className="text-xl font-bold">Orbit</h4>
                 <p className="text-sm text-content-secondary">Modern Local Development Environment</p>
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded font-mono">
                     v{appVersion || '0.1.0'}
                   </span>
@@ -485,7 +425,63 @@ export function SettingsManager() {
                   )}
                 </div>
               </div>
+              <button
+                onClick={handleCheckForUpdates}
+                disabled={checkingUpdate}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-surface hover:bg-hover border border-edge rounded-lg transition-colors disabled:opacity-50 cursor-pointer flex-shrink-0"
+                title="Check for updates"
+              >
+                {checkingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {checkingUpdate ? 'Checking...' : 'Check Updates'}
+              </button>
             </div>
+
+            {/* Update Banner (inline) */}
+            {updateAvailable && (
+              <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent rounded-lg border border-emerald-500/30">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <Sparkles size={20} className="text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-semibold text-sm text-emerald-400">New version available</span>
+                    <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
+                      v{updateAvailable.version}
+                    </span>
+                  </div>
+                  {updateAvailable.body && (
+                    <p className="text-xs text-content-muted truncate">{updateAvailable.body.split('\n')[0]}</p>
+                  )}
+                  {updating && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between text-xs text-content-muted mb-1">
+                        <span>{updateStatus}</span>
+                        <span>{updateProgress}%</span>
+                      </div>
+                      <div className="w-full bg-surface-inset rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out"
+                          style={{ width: `${updateProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!updating ? (
+                  <button
+                    onClick={handleInstallUpdate}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors flex-shrink-0 cursor-pointer"
+                  >
+                    <ArrowUpCircle size={16} />
+                    Install & Restart
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 px-4 py-2 text-sm text-content-muted flex-shrink-0">
+                    <RotateCcw size={16} className="animate-spin" />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Links */}
             <div className="grid grid-cols-2 gap-3">
