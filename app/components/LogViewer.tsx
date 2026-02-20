@@ -198,10 +198,9 @@ export function LogViewer() {
     }
   };
 
-  // Clear selected log (with confirmation)
+  // Clear selected log
   const handleClearLog = async () => {
     if (!selectedLog) return;
-    if (!confirm(`Clear "${selectedLog.name}"? This action cannot be undone.`)) return;
     try {
       await clearLogFile(selectedLog.path);
       addToast({ type: 'success', message: `${selectedLog.name} cleared` });
@@ -213,9 +212,8 @@ export function LogViewer() {
     }
   };
 
-  // Clear all logs (with confirmation)
+  // Clear all logs
   const handleClearAllLogs = async () => {
-    if (!confirm('Clear ALL log files? This action cannot be undone.')) return;
     try {
       const cleared = await clearAllLogs();
       addToast({ type: 'success', message: `${cleared} log files cleared` });
