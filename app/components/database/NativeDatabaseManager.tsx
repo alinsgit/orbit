@@ -16,8 +16,6 @@ import {
   EyeOff,
   Download,
   Upload,
-  RotateCcw,
-  Save,
   Pencil,
 } from 'lucide-react';
 import { save, open } from '@tauri-apps/plugin-dialog';
@@ -47,7 +45,6 @@ import {
   exportDatabase,
   exportAllDatabases,
   importSql,
-  rebuildDatabase,
 } from '../../lib/api';
 
 type Tab = 'databases' | 'users';
@@ -326,25 +323,6 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
-    } finally {
-      setBackupLoading(null);
-    }
-  };
-
-  const handleRebuildDatabase = async (dbName: string) => {
-    if (!confirm(`This will DROP and recreate '${dbName}'. All existing data will be lost. Continue?`)) return;
-    try {
-      const path = await open({
-        multiple: false,
-        filters: [{ name: 'SQL Files', extensions: ['sql'] }],
-      });
-      if (!path) return;
-      setBackupLoading(`rebuild-${dbName}`);
-      const result = await rebuildDatabase(dbName, path as string);
-      showSuccess(result);
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Rebuild failed');
     } finally {
       setBackupLoading(null);
     }
@@ -637,7 +615,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                     <button
                       onClick={() => {
                         setSelectedDatabase(''); // Clear selection so they must pick
-                        handleImportDatabase();
+                        handleImportSql('');
                       }}
                       disabled={backupLoading !== null}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-surface-raised hover:bg-surface text-content-secondary hover:text-content rounded-lg transition-colors border border-edge disabled:opacity-50"

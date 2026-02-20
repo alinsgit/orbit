@@ -1,8 +1,10 @@
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
-use std::os::windows::process::CommandExt;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // Since Ngrok tunnels block the thread, we will store the Child process handle
@@ -22,7 +24,11 @@ impl TunnelManager {
         let mut path = self.base_dir.clone();
         path.push("bin");
         path.push("ngrok");
-        path.push("ngrok.exe");
+        if cfg!(windows) {
+            path.push("ngrok.exe");
+        } else {
+            path.push("ngrok");
+        }
         path
     }
 
@@ -41,29 +47,30 @@ impl TunnelManager {
         }
 
         // Configure Auth Token first
-        let _ = Command::new(&bin_path)
-            .arg("config")
+        let mut auth_cmd = Command::new(&bin_path);
+        auth_cmd.arg("config")
             .arg("add-authtoken")
-            .arg(auth_token)
-            .creation_flags(CREATE_NO_WINDOW)
-            .output(); // wait for token to be saved
+            .arg(auth_token);
+        #[cfg(windows)]
+        auth_cmd.creation_flags(CREATE_NO_WINDOW);
+        let _ = auth_cmd.output();
 
-        // Start ngrok tunnel mapping to our domain (using specified host-header to pass to Nginx correctly)
-        // ngrok http <port> --host-header=<domain>
-        let child = Command::new(&bin_path)
-            .arg("http")
+        // Start ngrok tunnel mapping to our domain
+        let mut tunnel_cmd = Command::new(&bin_path);
+        tunnel_cmd.arg("http")
             .arg(port.to_string())
-            .arg(format!("--host-header={}", domain))
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
+            .arg(format!("--host-header={}", domain));
+        #[cfg(windows)]
+        tunnel_cmd.creation_flags(CREATE_NO_WINDOW);
+        
+        let child = tunnel_cmd.spawn()
             .map_err(|e| format!("Failed to spawn Ngrok: {}", e))?;
 
         *child_guard = Some(child);
 
-        // Allow some time for the process to spin up the local API (usually instant, wait 1.5 secs)
+        // Allow some time for the process to spin up the local API
         std::thread::sleep(std::time::Duration::from_millis(1500));
 
-        // Let the frontend know we started Successfully; frontend will fetch URL from get_tunnel_url
         Ok("Tunnel successfully initiated.".to_string())
     }
 
