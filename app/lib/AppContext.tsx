@@ -48,6 +48,10 @@ interface AppContextType {
   // Active tab (for cross-component communication)
   activeTab: string;
   setActiveTab: (tab: string) => void;
+
+  // Terminal state
+  isTerminalOpen: boolean;
+  setIsTerminalOpen: (open: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +66,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [activeTab, setActiveTab] = useState('services');
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
   // Generate unique ID for toasts
   const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -96,6 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Refresh services with status
   const refreshServices = useCallback(async () => {
+    setIsLoading(true);
     try {
       const installed = await getInstalledServices();
 
@@ -133,6 +139,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error('Failed to refresh services:', e);
       addToast({ type: 'error', message: 'Failed to load services' });
+    } finally {
+      setIsLoading(false);
     }
   }, [settings.ports, addToast]);
 
@@ -252,6 +260,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeToast,
       activeTab,
       setActiveTab,
+      isTerminalOpen,
+      setIsTerminalOpen,
     }}>
       {children}
 

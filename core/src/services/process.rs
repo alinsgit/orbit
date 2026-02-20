@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
+use sysinfo::{SystemExt, ProcessExt};
 
 // Service types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -10,11 +11,15 @@ pub enum ServiceType {
     Nginx,
     Php(u32), // PHP Version (e.g., 82 for 8.2)
     MariaDB,
+    PostgreSQL,
+    MongoDB,
     Apache,
     NodeJs,
     Python,
     Bun,
     Redis,
+    Go,
+    Deno,
 }
 
 use super::hidden_command;
@@ -29,6 +34,10 @@ fn is_port_in_use(port: u16) -> bool {
 fn get_service_port(service_name: &str) -> Option<u16> {
     if service_name.contains("mariadb") || service_name.contains("mysql") {
         Some(3306)
+    } else if service_name.contains("postgres") {
+        Some(5432)
+    } else if service_name.contains("mongo") {
+        Some(27017)
     } else if service_name.contains("nginx") {
         Some(80)
     } else if service_name.contains("apache") || service_name.contains("httpd") {
@@ -56,6 +65,10 @@ fn get_service_port(service_name: &str) -> Option<u16> {
 fn get_process_names(service_name: &str) -> Vec<&'static str> {
     if service_name.contains("mariadb") || service_name.contains("mysql") {
         vec!["mariadbd.exe", "mysqld.exe"]
+    } else if service_name.contains("postgres") {
+        vec!["postgres.exe"]
+    } else if service_name.contains("mongo") {
+        vec!["mongod.exe"]
     } else if service_name.contains("nginx") {
         vec!["nginx.exe"]
     } else if service_name.contains("apache") || service_name.contains("httpd") {
@@ -164,7 +177,7 @@ impl ServiceManager {
                 // Don't treat immediate exit as a crash for these types.
                 let is_runtime = matches!(
                     service_type,
-                    ServiceType::Bun | ServiceType::NodeJs | ServiceType::Python
+                    ServiceType::Bun | ServiceType::NodeJs | ServiceType::Python | ServiceType::Go | ServiceType::Deno
                 );
 
                 if is_runtime {
@@ -271,11 +284,48 @@ impl ServiceManager {
         // Not tracked or exited — check if running externally (orphan from previous session)
         if let Some(port) = get_service_port(service_name) {
             if is_port_in_use(port) {
-                return Some("running".to_string());
+                if Self::is_orbit_process_running(service_name) {
+                    return Some("running".to_string());
+                } else {
+                    return Some("stopped".to_string());
+                }
             }
         }
 
         Some("stopped".to_string())
+    }
+
+    fn is_orbit_process_running(service_name: &str) -> bool {
+        let process_names = get_process_names(service_name);
+        if process_names.is_empty() {
+            return true;
+        }
+
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes();
+
+        let orbit_bin_dir = crate::services::paths::get_bin_dir().to_string_lossy().to_string();
+        let clean_dir: String = orbit_bin_dir.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+
+        for process in sys.processes().values() {
+            let dbg_name = format!("{:?}", process.name());
+            let clean_name: String = dbg_name.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+
+            let matches_name = process_names.iter().any(|&n| {
+                let clean_n: String = n.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+                clean_name.contains(&clean_n)
+            });
+
+            if matches_name {
+                let dbg_exe = format!("{:?}", process.exe());
+                let clean_exe: String = dbg_exe.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+                if clean_exe.contains(&clean_dir) {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     #[allow(dead_code)]
@@ -336,9 +386,10 @@ impl ServiceManager {
                 vec!["-b".to_string(), format!("127.0.0.1:{}", port)]
             }
             ServiceType::MariaDB => vec![],
+            ServiceType::PostgreSQL | ServiceType::MongoDB => vec![],
             ServiceType::Apache => vec![],
             ServiceType::Redis => vec![],
-            ServiceType::NodeJs | ServiceType::Python | ServiceType::Bun => vec![],
+            ServiceType::NodeJs | ServiceType::Python | ServiceType::Bun | ServiceType::Go | ServiceType::Deno => vec![],
         };
 
         Err("Service path not found".to_string())

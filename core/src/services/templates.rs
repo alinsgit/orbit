@@ -243,7 +243,8 @@ server {
 
 # HTTPS server
 server {
-    listen       {{ssl_port}} ssl http2;
+    listen       {{ssl_port}} ssl;
+    http2        on;
     server_name  {{domain}};
     root         "{{path}}";
 
@@ -459,7 +460,8 @@ server {
 
 # HTTPS server
 server {
-    listen       {{ssl_port}} ssl http2;
+    listen       {{ssl_port}} ssl;
+    http2        on;
     server_name  {{domain}};
     root         "{{path}}";
 

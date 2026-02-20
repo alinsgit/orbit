@@ -1,28 +1,35 @@
 import { useState, useEffect } from 'react';
-import { Settings, Loader2, Sun, Moon, Monitor, Palette, FileDown, FileUp, Trash2, Eraser, Shield, Download, CheckCircle, Lock, RefreshCw, Info, ExternalLink, Github, Heart, ArrowUpCircle, Sparkles, RotateCcw } from 'lucide-react';
-import { exportSites, importSites, SiteExport, clearAllCaches, getSslStatus, installMkcert, installSslCa, SslStatus } from '../lib/api';
+import { Settings, Loader2, Sun, Moon, Monitor, Palette, Trash2, Eraser, Info, ExternalLink, Github, Heart, ArrowUpCircle, Sparkles, RotateCcw, FolderOpen, RefreshCw, CheckCircle, Terminal, Network, Zap } from 'lucide-react';
+import { clearAllCaches } from '../lib/api';
 import { useApp } from '../lib/AppContext';
+import { PathEditorModal } from './PathEditorModal';
+import { HostsEditorModal } from './HostsEditorModal';
 import { useTheme, Theme } from '../lib/ThemeContext';
 import { getVersion, getTauriVersion } from '@tauri-apps/api/app';
-import { open } from '@tauri-apps/plugin-shell';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { open as openUrl } from '@tauri-apps/plugin-shell';
+import { Store, load } from '@tauri-apps/plugin-store';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+
+let settingsStore: Store | null = null;
+const getSettingsStore = async () => {
+  if (!settingsStore) {
+    settingsStore = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '' } });
+  }
+  return settingsStore;
+};
 
 export function SettingsManager() {
   const { addToast } = useApp();
   const { theme, setTheme, resolvedTheme } = useTheme();
 
-  // Export/Import State
-  const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
-
   // Cache Clear State
   const [clearingCache, setClearingCache] = useState(false);
 
-  // SSL State
-  const [sslStatus, setSslStatus] = useState<SslStatus | null>(null);
-  const [sslLoading, setSslLoading] = useState(false);
-  const [sslRefreshing, setSslRefreshing] = useState(false);
+  // Advanced Tools State
+  const [showPathEditor, setShowPathEditor] = useState(false);
+  const [showHostsEditor, setShowHostsEditor] = useState(false);
 
   // About State
   const [appVersion, setAppVersion] = useState<string>('');
@@ -35,11 +42,70 @@ export function SettingsManager() {
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateStatus, setUpdateStatus] = useState<string>('');
 
+  // Workspace Path State
+  const [workspacePath, setWorkspacePath] = useState<string>('');
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+
+  // Ngrok Token State
+  const [ngrokToken, setNgrokToken] = useState<string>('');
+  const [ngrokTokenSaving, setNgrokTokenSaving] = useState(false);
+
   useEffect(() => {
-    loadSslStatus();
     loadVersionInfo();
     handleCheckForUpdates();
+    loadWorkspaceSettings();
   }, []);
+
+  const loadWorkspaceSettings = async () => {
+    try {
+      const store = await getSettingsStore();
+      const savedPath = await store.get<string>('workspacePath');
+      if (savedPath) setWorkspacePath(savedPath);
+
+      const savedToken = await store.get<string>('ngrokAuthToken');
+      if (savedToken) setNgrokToken(savedToken);
+    } catch (e) {
+      console.error('Failed to load workspace settings:', e);
+    }
+  };
+
+  const handleChangeWorkspace = async () => {
+    try {
+      setWorkspaceLoading(true);
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Select Workspace Directory',
+      });
+      if (selected && typeof selected === 'string') {
+        const store = await getSettingsStore();
+        setWorkspacePath(selected);
+        await store.set('workspacePath', selected);
+        await store.save();
+        addToast({ type: 'success', message: 'Workspace directory updated!' });
+      }
+    } catch (e) {
+      console.error('Failed to pick workspace dir:', e);
+      addToast({ type: 'error', message: `Could not select directory: ${e}` });
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  };
+
+  const handleSaveNgrokToken = async () => {
+    try {
+      setNgrokTokenSaving(true);
+      const store = await getSettingsStore();
+      await store.set('ngrokAuthToken', ngrokToken.trim());
+      await store.save();
+      addToast({ type: 'success', message: 'Ngrok Auth Token saved!' });
+    } catch (e) {
+      console.error('Failed to save Ngrok token:', e);
+      addToast({ type: 'error', message: `Could not save token: ${e}` });
+    } finally {
+      setNgrokTokenSaving(false);
+    }
+  };
 
   const loadVersionInfo = async () => {
     try {
@@ -108,44 +174,6 @@ export function SettingsManager() {
     }
   };
 
-  const loadSslStatus = async () => {
-    setSslRefreshing(true);
-    try {
-      const status = await getSslStatus();
-      setSslStatus(status);
-    } catch (e) {
-      console.error('Failed to load SSL status:', e);
-    } finally {
-      setSslRefreshing(false);
-    }
-  };
-
-  const handleInstallMkcert = async () => {
-    setSslLoading(true);
-    try {
-      const result = await installMkcert();
-      addToast({ type: 'success', message: result });
-      await loadSslStatus();
-    } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to install mkcert: ${e}` });
-    } finally {
-      setSslLoading(false);
-    }
-  };
-
-  const handleInstallCa = async () => {
-    setSslLoading(true);
-    try {
-      const result = await installSslCa();
-      addToast({ type: 'success', message: result });
-      await loadSslStatus();
-    } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to install CA: ${e}` });
-    } finally {
-      setSslLoading(false);
-    }
-  };
-
   const handleClearAllCaches = async () => {
     setClearingCache(true);
     try {
@@ -156,70 +184,6 @@ export function SettingsManager() {
     } finally {
       setClearingCache(false);
     }
-  };
-
-  // Export Sites
-  const handleExportSites = async () => {
-    setExporting(true);
-    try {
-      const exportData = await exportSites();
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `orbit-sites-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      addToast({ type: 'success', message: `Exported ${exportData.sites.length} sites successfully` });
-    } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to export sites: ${e}` });
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Import Sites
-  const handleImportSites = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      setImporting(true);
-      try {
-        const text = await file.text();
-        const data: SiteExport = JSON.parse(text);
-
-        if (!data.sites || !Array.isArray(data.sites)) {
-          throw new Error('Invalid export file format');
-        }
-
-        const result = await importSites(data, true);
-
-        if (result.errors.length > 0) {
-          addToast({
-            type: 'warning',
-            message: `Imported ${result.imported} sites, skipped ${result.skipped}. Errors: ${result.errors.length}`
-          });
-        } else {
-          addToast({
-            type: 'success',
-            message: `Successfully imported ${result.imported} sites${result.skipped > 0 ? `, skipped ${result.skipped} existing` : ''}`
-          });
-        }
-      } catch (e: any) {
-        addToast({ type: 'error', message: `Failed to import sites: ${e.message || e}` });
-      } finally {
-        setImporting(false);
-      }
-    };
-    input.click();
   };
 
   // Theme options
@@ -240,6 +204,72 @@ export function SettingsManager() {
       </header>
 
       <div className="max-w-4xl space-y-6">
+        {/* Workspace & General Settings */}
+        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <FolderOpen size={20} className="text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Workspace & General</h3>
+                <p className="text-sm text-content-secondary">Manage projects and integrations</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-3">Workspace Directory</label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={workspacePath}
+                  readOnly
+                  placeholder="e.g. D:\MyProjects"
+                  className="flex-1 px-4 py-2 border border-edge bg-surface-inset rounded-lg text-sm text-content-secondary"
+                />
+                <button
+                  onClick={handleChangeWorkspace}
+                  disabled={workspaceLoading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors flex items-center justify-center min-w-[120px]"
+                >
+                  {workspaceLoading ? <Loader2 size={16} className="animate-spin" /> : 'Change Folder'}
+                </button>
+              </div>
+              <p className="text-xs text-content-muted mt-2">
+                Orbit will create new projects inside this directory by default. Existing projects are not moved.
+              </p>
+            </div>
+            
+            <div className="border-t border-edge-subtle pt-4">
+              <label className="block text-sm font-medium mb-3">Ngrok Auth Token</label>
+              <div className="flex gap-3">
+                <input
+                  type="password"
+                  value={ngrokToken}
+                  onChange={(e) => setNgrokToken(e.target.value)}
+                  placeholder="e.g. 2sJ3k9sP2..."
+                  className="flex-1 px-4 py-2 border border-edge bg-surface-inset rounded-lg text-sm text-content-secondary"
+                />
+                <button
+                  onClick={handleSaveNgrokToken}
+                  disabled={ngrokTokenSaving || !ngrokToken}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors flex items-center justify-center min-w-[120px]"
+                >
+                  {ngrokTokenSaving ? <Loader2 size={16} className="animate-spin" /> : 'Save Token'}
+                </button>
+              </div>
+              <p className="text-xs text-content-muted mt-2 block">
+                Required for sharing local endpoints via Tunnel. Get yours from the{' '}
+                <button onClick={() => openUrl("https://dashboard.ngrok.com/get-started/your-authtoken")} className="text-blue-400 hover:underline">
+                  Ngrok Dashboard
+                </button>.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* Appearance Settings */}
         <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
           <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
@@ -254,7 +284,7 @@ export function SettingsManager() {
             </div>
           </div>
 
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-6">
             <div>
               <label className="block text-sm font-medium mb-3">Theme</label>
               <div className="flex gap-3">
@@ -282,142 +312,6 @@ export function SettingsManager() {
                 Current: {resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode
                 {theme === 'system' && ' (following system preference)'}
               </p>
-            </div>
-          </div>
-        </section>
-
-        {/* SSL Setup */}
-        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <Shield size={20} className="text-emerald-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold">SSL Setup</h3>
-                <p className="text-sm text-content-secondary">Install mkcert for local HTTPS</p>
-              </div>
-            </div>
-            <button
-              onClick={loadSslStatus}
-              disabled={sslRefreshing}
-              className="p-2 hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
-              title="Refresh"
-            >
-              <RefreshCw size={16} className={sslRefreshing ? 'animate-spin' : ''} />
-            </button>
-          </div>
-
-          <div className="p-4 space-y-4">
-            {/* mkcert Status */}
-            <div className="flex items-center gap-4 p-4 bg-surface-inset rounded-lg border border-edge-subtle">
-              <div className={`w-3 h-3 rounded-full ${sslStatus?.mkcert_installed ? 'bg-emerald-500' : 'bg-red-500'}`} />
-              <div className="flex-1">
-                <div className="font-medium">mkcert</div>
-                <div className="text-xs text-content-muted">
-                  {sslStatus?.mkcert_installed ? 'Installed and ready' : 'Not installed - required for HTTPS'}
-                </div>
-              </div>
-              {!sslStatus?.mkcert_installed ? (
-                <button
-                  onClick={handleInstallMkcert}
-                  disabled={sslLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {sslLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                  Install
-                </button>
-              ) : (
-                <CheckCircle size={20} className="text-emerald-500" />
-              )}
-            </div>
-
-            {/* Root CA Status */}
-            {sslStatus?.mkcert_installed && (
-              <div className="flex items-center gap-4 p-4 bg-surface-inset rounded-lg border border-edge-subtle">
-                <div className={`w-3 h-3 rounded-full ${sslStatus?.ca_installed ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <div className="flex-1">
-                  <div className="font-medium">Root CA</div>
-                  <div className="text-xs text-content-muted">
-                    {sslStatus?.ca_installed
-                      ? 'Installed - browsers will trust local certs'
-                      : 'Not installed - browsers will show warnings'}
-                  </div>
-                </div>
-                {!sslStatus?.ca_installed ? (
-                  <button
-                    onClick={handleInstallCa}
-                    disabled={sslLoading}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {sslLoading ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
-                    Install CA
-                  </button>
-                ) : (
-                  <CheckCircle size={20} className="text-emerald-500" />
-                )}
-              </div>
-            )}
-
-            <p className="text-xs text-content-muted">
-              SSL certificates for sites are generated automatically when you enable HTTPS in site settings.
-            </p>
-          </div>
-        </section>
-
-        {/* Export/Import Sites */}
-        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                <FileDown size={20} className="text-blue-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Backup & Restore</h3>
-                <p className="text-sm text-content-secondary">Export and import your site configurations</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Export */}
-              <div className="p-4 bg-surface-inset rounded-lg border border-edge-subtle">
-                <div className="flex items-center gap-3 mb-3">
-                  <FileDown size={20} className="text-emerald-500" />
-                  <h4 className="font-medium">Export Sites</h4>
-                </div>
-                <p className="text-sm text-content-secondary mb-4">
-                  Download all site configurations as JSON.
-                </p>
-                <button
-                  onClick={handleExportSites}
-                  disabled={exporting}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
-                  Export
-                </button>
-              </div>
-
-              {/* Import */}
-              <div className="p-4 bg-surface-inset rounded-lg border border-edge-subtle">
-                <div className="flex items-center gap-3 mb-3">
-                  <FileUp size={20} className="text-blue-500" />
-                  <h4 className="font-medium">Import Sites</h4>
-                </div>
-                <p className="text-sm text-content-secondary mb-4">
-                  Restore from a previously exported file.
-                </p>
-                <button
-                  onClick={handleImportSites}
-                  disabled={importing}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {importing ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
-                  Import
-                </button>
-              </div>
             </div>
           </div>
         </section>
@@ -506,6 +400,41 @@ export function SettingsManager() {
           </section>
         )}
 
+        {/* System & Advanced Tools */}
+        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                <Terminal size={20} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold">System Variables</h3>
+                <p className="text-sm text-content-secondary">Manage global environment logic</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-4 grid grid-cols-2 gap-4">
+            <button
+              onClick={() => setShowHostsEditor(true)}
+              className="flex flex-col items-start gap-2 p-4 bg-surface-inset hover:bg-hover border border-edge rounded-xl transition-colors text-left cursor-pointer"
+            >
+              <Network size={24} className="text-emerald-500 mb-1" />
+              <div className="font-medium">Hosts File Editor</div>
+              <div className="text-xs text-content-muted">Override system-level local DNS and configure custom routing mappings.</div>
+            </button>
+
+            <button
+              onClick={() => setShowPathEditor(true)}
+              className="flex flex-col items-start gap-2 p-4 bg-surface-inset hover:bg-hover border border-edge rounded-xl transition-colors text-left cursor-pointer"
+            >
+              <Zap size={24} className="text-blue-500 mb-1" />
+              <div className="font-medium">OS PATH Editor</div>
+              <div className="text-xs text-content-muted">Directly augment or manipulate your executable search environment values.</div>
+            </button>
+          </div>
+        </section>
+
         {/* About */}
         <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
           <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
@@ -561,7 +490,7 @@ export function SettingsManager() {
             {/* Links */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => open('https://github.com/alinsgit/orbit')}
+                onClick={() => openUrl('https://github.com/alinsgit/orbit')}
                 className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left cursor-pointer"
               >
                 <Github size={18} className="text-content-secondary" />
@@ -573,7 +502,7 @@ export function SettingsManager() {
               </button>
 
               <button
-                onClick={() => open('https://github.com/alinsgit/orbit/issues')}
+                onClick={() => openUrl('https://github.com/alinsgit/orbit/issues')}
                 className="flex items-center gap-3 p-3 bg-surface-inset rounded-lg border border-edge-subtle hover:border-edge transition-colors text-left cursor-pointer"
               >
                 <Heart size={18} className="text-red-400" />
@@ -593,6 +522,14 @@ export function SettingsManager() {
           </div>
         </section>
       </div>
+
+      {showPathEditor && (
+        <PathEditorModal onClose={() => setShowPathEditor(false)} />
+      )}
+      
+      {showHostsEditor && (
+        <HostsEditorModal onClose={() => setShowHostsEditor(false)} />
+      )}
     </div>
   );
 }

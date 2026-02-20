@@ -283,6 +283,141 @@ pub fn set_nginx_gzip_config(app: AppHandle, config: NginxGzipConfig) -> Result<
     Ok("Nginx gzip configuration updated.".to_string())
 }
 
+/// Get raw nginx.conf content for editing
+#[command]
+pub fn get_nginx_conf_raw(app: AppHandle) -> Result<String, String> {
+    let config_dir = NginxManager::get_config_dir(&app)?;
+    let nginx_conf = config_dir.join("nginx.conf");
+
+    if !nginx_conf.exists() {
+        return Err("nginx.conf not found".to_string());
+    }
+
+    fs::read_to_string(&nginx_conf).map_err(|e| format!("Failed to read nginx.conf: {}", e))
+}
+
+/// Save raw nginx.conf content
+#[command]
+pub fn save_nginx_conf_raw(app: AppHandle, content: String) -> Result<String, String> {
+    if content.trim().is_empty() {
+        return Err("nginx.conf content cannot be empty".to_string());
+    }
+
+    let config_dir = NginxManager::get_config_dir(&app)?;
+    let nginx_conf = config_dir.join("nginx.conf");
+
+    if nginx_conf.exists() {
+        let backup_path = nginx_conf.with_extension("conf.bak");
+        fs::copy(&nginx_conf, &backup_path).ok();
+    }
+
+    fs::write(&nginx_conf, &content).map_err(|e| format!("Failed to save nginx.conf: {}", e))?;
+
+    if NginxManager::is_running() {
+        NginxManager::reload(&app)?;
+    }
+
+    Ok("nginx.conf saved successfully".to_string())
+}
+
+/// Get raw MariaDB my.ini content
+#[command]
+pub fn get_mariadb_conf_raw(app: AppHandle) -> Result<String, String> {
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("data")
+        .join("mariadb")
+        .join("my.ini");
+
+    if !ini_path.exists() {
+        return Err("my.ini not found".to_string());
+    }
+
+    fs::read_to_string(&ini_path).map_err(|e| format!("Failed to read my.ini: {}", e))
+}
+
+/// Save raw MariaDB my.ini content
+#[command]
+pub fn save_mariadb_conf_raw(app: AppHandle, content: String) -> Result<String, String> {
+    if content.trim().is_empty() {
+        return Err("my.ini content cannot be empty".to_string());
+    }
+
+    let ini_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("data")
+        .join("mariadb")
+        .join("my.ini");
+
+    if ini_path.exists() {
+        let backup_path = ini_path.with_extension("ini.bak");
+        fs::copy(&ini_path, &backup_path).ok();
+    } else {
+        if let Some(parent) = ini_path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+    }
+
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save my.ini: {}", e))?;
+
+    Ok("my.ini saved successfully".to_string())
+}
+
+/// Get raw Apache httpd.conf content
+#[command]
+pub fn get_apache_conf_raw(app: AppHandle) -> Result<String, String> {
+    let conf_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("apache")
+        .join("conf")
+        .join("httpd.conf");
+
+    if !conf_path.exists() {
+        return Err("httpd.conf not found".to_string());
+    }
+
+    fs::read_to_string(&conf_path).map_err(|e| format!("Failed to read httpd.conf: {}", e))
+}
+
+/// Save raw Apache httpd.conf content
+#[command]
+pub fn save_apache_conf_raw(app: AppHandle, content: String) -> Result<String, String> {
+    if content.trim().is_empty() {
+        return Err("httpd.conf content cannot be empty".to_string());
+    }
+
+    let conf_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin")
+        .join("apache")
+        .join("conf")
+        .join("httpd.conf");
+
+    if conf_path.exists() {
+        let backup_path = conf_path.with_extension("conf.bak");
+        fs::copy(&conf_path, &backup_path).ok();
+    } else {
+        if let Some(parent) = conf_path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+    }
+
+    fs::write(&conf_path, &content).map_err(|e| format!("Failed to save httpd.conf: {}", e))?;
+
+    Ok("httpd.conf saved successfully".to_string())
+}
+
 // Helper functions
 
 fn get_opcache_status(app: &AppHandle, version: &str) -> Result<(bool, String), String> {
@@ -383,16 +518,42 @@ pub fn clear_all_caches(app: AppHandle, php_version: Option<String>) -> Result<C
     let mut nginx_cache_cleared = false;
     let mut messages: Vec<String> = Vec::new();
 
-    // 1. Clear OPcache via PHP script if PHP version provided
+    // 1. Clear OPcache via PHP script
     if let Some(version) = php_version {
+        // Clear for specific version
         match clear_opcache(&app, &version) {
             Ok(_) => {
                 opcache_cleared = true;
-                messages.push("OPcache cleared".to_string());
+                messages.push(format!("OPcache cleared for PHP {}", version));
             }
             Err(e) => {
-                messages.push(format!("OPcache: {}", e));
+                messages.push(format!("OPcache (PHP {}): {}", version, e));
             }
+        }
+    } else {
+        // Clear for all installed PHP versions in the bin/php directory
+        let php_dir_result = app.path().app_local_data_dir().map(|dir| dir.join("bin").join("php"));
+        
+        if let Ok(php_dir) = php_dir_result {
+            if php_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&php_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                                // Assume directory name is the version (e.g., "82")
+                                if clear_opcache(&app, dir_name).is_ok() {
+                                    opcache_cleared = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if opcache_cleared {
+            messages.push("OPcache cleared for all PHP versions".to_string());
         }
     }
 
@@ -423,7 +584,7 @@ pub fn clear_all_caches(app: AppHandle, php_version: Option<String>) -> Result<C
     }
 
     let message = if messages.is_empty() {
-        "No caches to clear".to_string()
+        "All caches are already clean".to_string()
     } else {
         messages.join(", ")
     };

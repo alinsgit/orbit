@@ -44,6 +44,8 @@ pub async fn download_service(
         "python" => (bin_path.join("python"), false),    // Python embed has flat structure
         "bun" => (bin_path.join("bun"), true),           // bun-windows-x64/ folder inside
         "apache" => (bin_path.join("apache"), true),     // Apache24/ folder inside
+        "go" => (bin_path.join("go"), true),             // go/ folder inside
+        "deno" => (bin_path.join("deno"), false),        // flat deno.exe inside
         _ => (bin_path.join("misc").join(&service_type), false),
     };
 
@@ -56,6 +58,31 @@ pub async fn download_service(
     }
     std::fs::create_dir_all(&extract_target)
         .map_err(|e| format!("Failed to create extract dir: {}", e))?;
+
+    // Check if it's a raw executable (like rustup-init) or an archive
+    if service_type == "rust" {
+        let extension = dest_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let final_binary_name = if extension == "exe" { "rustup-init.exe" } else { "rustup-init" };
+        let target_binary_path = extract_target.join(final_binary_name);
+        
+        match std::fs::copy(&dest_path, &target_binary_path) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&dest_path);
+                
+                // Make executable on Unix
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mut perms = std::fs::metadata(&target_binary_path).unwrap().permissions();
+                    perms.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&target_binary_path, perms);
+                }
+                
+                return Ok(format!("Service installed to {:?}", extract_target));
+            },
+            Err(e) => return Err(format!("Failed to move executable: {}", e)),
+        }
+    }
 
     match extract_zip_with_strip(&dest_path, &extract_target, strip_root) {
         Ok(_) => {

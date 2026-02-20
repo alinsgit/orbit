@@ -2,19 +2,21 @@ import { useState, useEffect } from 'react';
 import {
   FolderOpen, Plus, Trash2, Globe, ExternalLink, Loader2, Shield,
   AlertTriangle, RefreshCw, CheckCircle2, XCircle, Settings2,
-  FileCode, Layers, Database, ShoppingCart
+  FileCode, Layers, Database, ShoppingCart, Sparkles, CheckCircle, FileDown, FileUp
 } from 'lucide-react';
 import {
   getSites, createSite, deleteSite, updateSite, regenerateSiteConfig,
   generateSslCert, nginxTestConfig, nginxReload, nginxStatus,
   addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
-  getSslStatus
+  getSslStatus, getWorkspacePath, startTunnel, stopTunnel, getTunnelUrl,
+  writeTerminal, installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { open } from '@tauri-apps/plugin-dialog';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
+import { load } from '@tauri-apps/plugin-store';
 
-type SiteTemplate = 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static';
+type SiteTemplate = 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue';
 
 const WEB_SERVER_INFO: Record<WebServer, { label: string; icon: string; color: string }> = {
   nginx: { label: 'Nginx', icon: '🌐', color: 'bg-green-500/10 text-green-400' },
@@ -46,11 +48,31 @@ const TEMPLATE_INFO: Record<SiteTemplate, { label: string; icon: React.ReactNode
     label: 'Static',
     icon: <Globe size={14} />,
     description: 'Static HTML/CSS/JS files only'
+  },
+  nextjs: {
+    label: 'Next.js',
+    icon: <Layers size={14} />,
+    description: 'React Framework'
+  },
+  astro: {
+    label: 'Astro',
+    icon: <Globe size={14} />,
+    description: 'Astro Framework'
+  },
+  nuxt: {
+    label: 'Nuxt',
+    icon: <Layers size={14} />,
+    description: 'Vue Framework'
+  },
+  vue: {
+    label: 'Vue',
+    icon: <Layers size={14} />,
+    description: 'Vue.js Application'
   }
 };
 
 export function SitesManager() {
-  const { getInstalledPhpVersions, services, addToast } = useApp();
+  const { getInstalledPhpVersions, services, addToast, setIsTerminalOpen } = useApp();
 
   // Check which web servers are installed
   const nginxInstalled = services.some(s => s.service_type === 'nginx');
@@ -92,13 +114,116 @@ export function SitesManager() {
 
   // SSL status for mkcert/CA check
   const [sslReady, setSslReady] = useState(false);
+  const [showSslDropdown, setShowSslDropdown] = useState(false);
+  const [sslStatus, setSslStatus] = useState<SslStatus | null>(null);
+  const [sslLoading, setSslLoading] = useState(false);
+
+  // Export/Import State
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Tunnel State
+  const [activeTunnel, setActiveTunnel] = useState<{ domain: string; url: string } | null>(null);
+  const [tunnelingDomain, setTunnelingDomain] = useState<string | null>(null);
 
   // Check SSL status
-  useEffect(() => {
-    getSslStatus().then(status => {
+  const loadSslStatus = async () => {
+    try {
+      const status = await getSslStatus();
+      setSslStatus(status);
       setSslReady(status.mkcert_installed && status.ca_installed);
-    }).catch(console.error);
+    } catch (e) {
+      console.error('Failed to load SSL status:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadSslStatus();
   }, []);
+
+  const handleInstallMkcert = async () => {
+    setSslLoading(true);
+    try {
+      const result = await installMkcert();
+      addToast({ type: 'success', message: result });
+      await loadSslStatus();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to install mkcert: ${e}` });
+    } finally {
+      setSslLoading(false);
+    }
+  };
+
+  const handleInstallCa = async () => {
+    setSslLoading(true);
+    try {
+      const result = await installSslCa();
+      addToast({ type: 'success', message: result });
+      await loadSslStatus();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to install CA: ${e}` });
+    } finally {
+      setSslLoading(false);
+    }
+  };
+
+  // Export Sites
+  const handleExportSites = async () => {
+    setExporting(true);
+    try {
+      const exportData = await exportSites();
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orbit-sites-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      addToast({ type: 'success', message: `Exported ${exportData.sites.length} sites successfully` });
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to export sites: ${e}` });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Import Sites
+  const handleImportSites = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      setImporting(true);
+      try {
+        const text = await file.text();
+        const data: SiteExport = JSON.parse(text);
+
+        if (!data.sites || !Array.isArray(data.sites)) {
+          throw new Error('Invalid export file format');
+        }
+
+        const result = await importSites(data, true);
+
+        if (result.errors.length > 0) {
+          addToast({ type: 'warning', message: `Imported ${result.imported} sites, skipped ${result.skipped}. Errors: ${result.errors.length}` });
+        } else {
+          const skipMsg = result.skipped > 0 ? `, skipped ${result.skipped} existing` : '';
+          addToast({ type: 'success', message: `Successfully imported ${result.imported} sites${skipMsg}` });
+        }
+        await refreshSites();
+      } catch (e: any) {
+        addToast({ type: 'error', message: `Failed to import sites: ${e.message || e}` });
+      } finally {
+        setImporting(false);
+      }
+    };
+    input.click();
+  };
 
   // Load sites and check nginx status
   const refreshSites = async () => {
@@ -178,6 +303,60 @@ export function SitesManager() {
         path: selected,
         template: detectedTemplate
       });
+    }
+  };
+
+  // Handle Scaffold
+  const handleScaffold = async () => {
+    if (!newSite.domain) {
+      addToast({ type: 'warning', message: 'Enter a domain to use as the project name' });
+      return;
+    }
+
+    try {
+      const wp = await getWorkspacePath();
+      if (!wp) {
+        addToast({ type: 'error', message: 'No Workspace Directory set. Please set it in Settings.' });
+        return;
+      }
+      
+      const projectName = newSite.domain.split('.')[0];
+      const template = newSite.template || '';
+      
+      let scaffoldCmd = '';
+      if (template === 'nextjs') {
+        scaffoldCmd = `npx --yes create-next-app@latest ${projectName} --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm`;
+      } else if (template === 'nuxt') {
+        scaffoldCmd = `npx --yes nuxi@latest init ${projectName}`;
+      } else if (template === 'vue') {
+        scaffoldCmd = `npx --yes create-vue@latest ${projectName} --yes`;
+      } else if (template === 'astro') {
+        scaffoldCmd = `npx --yes create-astro@latest ${projectName} --yes`;
+      } else if (template === 'laravel') {
+        scaffoldCmd = `composer create-project laravel/laravel ${projectName}`;
+      } else if (template === 'wordpress') {
+        scaffoldCmd = `php -r "copy('https://wordpress.org/latest.zip', 'wp.zip'); $z = new ZipArchive; if ($z->open('wp.zip') === TRUE) { $z->extractTo('.'); $z->close(); rename('wordpress', '${projectName}'); unlink('wp.zip'); }"`;
+      } else {
+        addToast({ type: 'warning', message: 'Unsupported template configuration.'});
+        return;
+      }
+
+      // Open terminal for visibility
+      setIsTerminalOpen(true);
+      addToast({ type: 'info', message: 'Executing scaffold in the Integrated Terminal...' });
+
+      // Run command recursively after a short delay for Terminal Mount
+      setTimeout(async () => {
+         const cdCmd = navigator.userAgent.includes('Win') ? `cd /d "${wp}"` : `cd "${wp}"`;
+         await writeTerminal('main', `${cdCmd} && ${scaffoldCmd}\r`);
+      }, 1200);
+      
+      // Auto-fill path
+      const separator = navigator.userAgent.includes('Win') ? '\\' : '/';
+      setNewSite({ ...newSite, path: `${wp}${separator}${projectName}` });
+
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Scaffolding failed: ${e}` });
     }
   };
 
@@ -311,12 +490,74 @@ export function SitesManager() {
       } else {
         await nginxReload();
       }
+      addToast({ type: 'success', message: 'Config regenerated successfully!' });
       await refreshSites();
     } catch (e: any) {
       console.error(e);
-      addToast({ type: 'error', message: 'Failed to regenerate config: ' + e });
+      addToast({ type: 'error', message: `Failed to regenerate config: ${e}` });
     } finally {
       setProcessing(null);
+    }
+  };
+
+  const getNgrokToken = async (): Promise<string | null> => {
+    try {
+      const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '', ngrokAuthToken: '' } });
+      return await store.get<string>('ngrokAuthToken') || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleStartTunnel = async (site: Site) => {
+    setTunnelingDomain(site.domain);
+    try {
+      const token = await getNgrokToken();
+      if (!token) {
+        addToast({ type: 'error', message: 'Ngrok Auth Token missing. Please save it in Settings first.' });
+        return;
+      }
+      
+      const portToTunnel = site.ssl_enabled ? (site.port !== 80 && site.port !== 443 ? site.port : 443) : (site.port !== 80 && site.port !== 443 ? site.port : 80);
+      
+      const res = await startTunnel(site.domain, portToTunnel, token);
+      if (res.success) {
+        // Poll for public URL
+        let url = null;
+        for (let i = 0; i < 5; i++) {
+          try {
+            url = await getTunnelUrl();
+            if (url) break;
+          } catch(e) {
+            // Ngrok node might still be waking up, wait 1 sec
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+        
+        if (url) {
+          setActiveTunnel({ domain: site.domain, url });
+          addToast({ type: 'success', message: 'Tunnel is live!' });
+        } else {
+          addToast({ type: 'error', message: 'Tunnel started but could not resolve public URL.' });
+        }
+      }
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to start tunnel: ${e}` });
+    } finally {
+      setTunnelingDomain(null);
+    }
+  };
+
+  const handleStopTunnel = async () => {
+    setTunnelingDomain('stopping');
+    try {
+      await stopTunnel();
+      setActiveTunnel(null);
+      addToast({ type: 'success', message: 'Tunnel stopped.' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to stop tunnel: ${e}` });
+    } finally {
+      setTunnelingDomain(null);
     }
   };
 
@@ -329,10 +570,88 @@ export function SitesManager() {
           <p className="text-content-secondary">Manage your local development sites</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* SSL Tools */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSslDropdown(!showSslDropdown)}
+              className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer flex items-center gap-2 border border-edge"
+              title="SSL & Root CA Settings"
+            >
+              <Shield size={16} className={sslReady ? "text-emerald-500" : "text-amber-500"} />
+            </button>
+
+            {showSslDropdown && (
+              <div className="absolute top-full right-0 mt-2 w-72 bg-surface-raised border border-edge rounded-lg shadow-xl shadow-black/20 z-50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-sm">Local SSL Root CA</h4>
+                  <button onClick={() => setShowSslDropdown(false)} className="text-content-muted hover:text-content">
+                    <XCircle size={16} />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${sslStatus?.mkcert_installed ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <div className="flex-1 text-xs">
+                      <p className="font-medium">mkcert Core</p>
+                      <p className="text-content-muted">{sslStatus?.mkcert_installed ? 'Installed' : 'Missing'}</p>
+                    </div>
+                    {!sslStatus?.mkcert_installed && (
+                      <button onClick={handleInstallMkcert} disabled={sslLoading} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs rounded transition-colors disabled:opacity-50">
+                        {sslLoading ? <Loader2 size={12} className="animate-spin" /> : 'Install'}
+                      </button>
+                    )}
+                  </div>
+
+                  {sslStatus?.mkcert_installed && (
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${sslStatus?.ca_installed ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <div className="flex-1 text-xs">
+                        <p className="font-medium">Browser CA Trust</p>
+                        <p className="text-content-muted">{sslStatus?.ca_installed ? 'Trusted' : 'Untrusted'}</p>
+                      </div>
+                      {!sslStatus?.ca_installed && (
+                        <button onClick={handleInstallCa} disabled={sslLoading} className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-xs rounded transition-colors disabled:opacity-50">
+                          {sslLoading ? <Loader2 size={12} className="animate-spin" /> : 'Install'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {sslReady && (
+                    <p className="text-xs text-emerald-400 pt-1 flex items-center gap-1.5">
+                      <CheckCircle size={12} /> Ready to generate HTTPS sites.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Export/Import Backup */}
+          <div className="flex items-center bg-surface-raised rounded-lg border border-edge">
+            <button
+              onClick={handleImportSites}
+              disabled={importing}
+              className="p-2 hover:bg-hover rounded-l-lg transition-colors cursor-pointer disabled:opacity-50 border-r border-edge"
+              title="Import Sites Config"
+            >
+              {importing ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+            </button>
+            <button
+              onClick={handleExportSites}
+              disabled={exporting}
+              className="p-2 hover:bg-hover rounded-r-lg transition-colors cursor-pointer disabled:opacity-50"
+              title="Export Sites Config"
+            >
+              {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+            </button>
+          </div>
+
           {/* Nginx Status & Reload */}
           <div className="flex items-center gap-2 px-3 py-2 bg-surface-raised rounded-lg border border-edge">
             <div className={`w-2 h-2 rounded-full ${isNginxRunning ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-content-secondary">Nginx</span>
+            <span className="text-sm text-content-secondary hidden lg:inline">Nginx</span>
             <button
               onClick={handleNginxReload}
               disabled={reloadingNginx}
@@ -347,7 +666,7 @@ export function SitesManager() {
           <button
             onClick={refreshSites}
             disabled={refreshing}
-            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50 border border-edge"
             title="Refresh Sites"
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -434,8 +753,18 @@ export function SitesManager() {
               <button
                 onClick={selectFolder}
                 className="px-3 py-2 bg-surface-inset hover:bg-hover rounded-lg transition-colors cursor-pointer"
+                title="Select Existing Folder"
               >
                 <FolderOpen size={16} />
+              </button>
+              <button
+                onClick={handleScaffold}
+                disabled={!newSite.domain || (newSite.template !== 'laravel' && newSite.template !== 'nextjs' && newSite.template !== 'astro' && newSite.template !== 'nuxt' && newSite.template !== 'vue' && newSite.template !== 'wordpress')}
+                className="px-3 py-2 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                title="Scaffold new project in Workspace"
+              >
+                <Sparkles size={16} />
+                Generate Default
               </button>
             </div>
           </div>
@@ -802,13 +1131,47 @@ export function SitesManager() {
                     )}
 
                     {/* Open Link */}
-                    <button
-                      onClick={() => shellOpen(`${site.ssl_enabled ? 'https' : 'http'}://${site.domain}${site.port !== 80 && site.port !== 443 ? ':' + site.port : ''}`)}
-                      className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer"
-                    >
-                      <ExternalLink size={12} />
-                      Open in browser
-                    </button>
+                    <div className="flex items-center gap-4 mt-1">
+                      <button
+                        onClick={() => shellOpen(`${site.ssl_enabled ? 'https' : 'http'}://${site.domain}${site.port !== 80 && site.port !== 443 ? ':' + site.port : ''}`)}
+                        className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400 transition-colors cursor-pointer"
+                      >
+                        <ExternalLink size={12} />
+                        Local Admin
+                      </button>
+
+                      <div className="h-3 w-px bg-edge" />
+                      
+                      {activeTunnel?.domain === site.domain ? (
+                        <>
+                          <button
+                            onClick={() => shellOpen(activeTunnel.url)}
+                            className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 font-mono transition-colors cursor-pointer"
+                            title="Open public URL"
+                          >
+                            <Globe size={12} />
+                            {activeTunnel.url}
+                          </button>
+                          <button
+                            onClick={handleStopTunnel}
+                            disabled={tunnelingDomain === 'stopping'}
+                            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                          >
+                            {tunnelingDomain === 'stopping' ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                            Stop
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleStartTunnel(site)}
+                          disabled={tunnelingDomain !== null || activeTunnel !== null}
+                          className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          {tunnelingDomain === site.domain ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
+                          Share URL
+                        </button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

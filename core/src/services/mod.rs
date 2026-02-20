@@ -9,6 +9,8 @@ pub mod hosts;
 pub mod logs;
 pub mod mailpit;
 pub mod mariadb;
+pub mod postgresql;
+pub mod mongodb;
 pub mod nginx;
 pub mod php_registry;
 pub mod phpmyadmin;
@@ -21,6 +23,8 @@ pub mod templates;
 pub mod backup;
 pub mod validation;
 pub mod versions;
+pub mod tunnel;
+pub mod terminal;
 
 use std::process::Command;
 

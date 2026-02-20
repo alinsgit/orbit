@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "xterm/css/xterm.css";
 
 /* Class-based dark mode override for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -18,7 +19,8 @@
 }
 
 /* Dark Theme (Default) */
-:root, .dark {
+:root,
+.dark {
   /* Primary - Emerald */
   --color-primary: #10b981;
   --color-primary-light: #34d399;
@@ -77,11 +79,15 @@
 }
 
 /* Reset and base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   margin: 0;
@@ -90,7 +96,13 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -144,7 +156,9 @@ body {
 
 /* Smooth transitions */
 * {
-  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-property:
+    background-color, border-color, color, fill, stroke, opacity, box-shadow,
+    transform;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }

@@ -1,10 +1,11 @@
-import { Server, Settings, Minus, Square, X, ScrollText, Database, Globe } from 'lucide-react'
+import { Server, Settings, Minus, Square, X, ScrollText, Database, Globe, TerminalSquare, Loader2 } from 'lucide-react'
 import { useApp } from './lib/AppContext'
 import { ServiceManager } from './components/ServiceManager'
 import { SitesManager } from './components/SitesManager'
 import { SettingsManager } from './components/SettingsManager'
 import { LogViewer } from './components/LogViewer'
 import DatabaseViewer from './components/DatabaseViewer'
+import { Terminal } from './components/Terminal'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const appWindow = getCurrentWindow()
@@ -12,11 +13,24 @@ const appWindow = getCurrentWindow()
 function App() {
   const {
     activeTab,
-    setActiveTab
+    setActiveTab,
+    isTerminalOpen,
+    setIsTerminalOpen,
+    isLoading
   } = useApp()
 
   return (
-    <div className="app-container text-content font-sans select-none">
+    <div className="app-container text-content font-sans select-none relative">
+      {/* Global Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-200">
+          <div className="bg-surface border border-edge shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+            <Loader2 size={32} className="animate-spin text-emerald-500" />
+            <p className="text-sm font-medium text-content-secondary">Waking up services...</p>
+          </div>
+        </div>
+      )}
+
       {/* Title Bar */}
       <div className="h-11 bg-surface flex items-center px-4 border-b border-edge shrink-0" data-tauri-drag-region>
         <div className="flex items-center gap-2.5 pointer-events-none">
@@ -92,20 +106,35 @@ function App() {
           />
           <div className="flex-1" />
           <NavButton
+            active={isTerminalOpen}
+            onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            icon={<TerminalSquare size={24} />}
+            title="Terminal"
+          />
+          <NavButton
             active={activeTab === 'settings'}
-            onClick={() => setActiveTab('settings')}
+            onClick={() => { setActiveTab('settings'); setIsTerminalOpen(false); }}
             icon={<Settings size={24} />}
             title="Settings"
           />
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-h-0 bg-surface-alt overflow-hidden">
-          {activeTab === 'services' && <ServiceManager />}
-          {activeTab === 'sites' && <SitesManager />}
-          {activeTab === 'logs' && <LogViewer />}
-          {activeTab === 'database' && <DatabaseViewer />}
-          {activeTab === 'settings' && <SettingsManager />}
+        <main className="flex-1 min-h-0 relative flex flex-col bg-surface-alt overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-auto">
+            {activeTab === 'services' && <ServiceManager />}
+            {activeTab === 'sites' && <SitesManager />}
+            {activeTab === 'logs' && <LogViewer />}
+            {activeTab === 'database' && <DatabaseViewer />}
+            {activeTab === 'settings' && <SettingsManager />}
+          </div>
+          
+          {/* Docked Terminal */}
+          {isTerminalOpen && (
+             <div className="h-1/3 min-h-[300px] border-t border-edge bg-[#0a0a0a] relative z-40">
+                <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
+             </div>
+          )}
         </main>
       </div>
     </div>
