@@ -46,6 +46,7 @@ coverage/
 *.temp
 .cache/
 
-# Claude local settings
+# Claude
+CLAUDE.md
 .claude/settings.local.json
 .claude/CLAUDE.local.md
