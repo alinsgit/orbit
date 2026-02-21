@@ -47,8 +47,9 @@ pub async fn download_service(
         "bun" => (bin_path.join("bun"), true),               // bun-windows-x64/ folder inside
         "apache" => (bin_path.join("apache"), true),         // Apache24/ folder inside
         "go" => (bin_path.join("go"), true),                 // go/ folder inside
-        "redis" => (bin_path.join("redis"), false),            // flat structure inside
+        "redis" => (bin_path.join("redis"), true),             // Redis-x.x.x-Windows-.../ folder inside
         "deno" => (bin_path.join("deno"), false),            // flat deno.exe inside
+        "rust" => (bin_path.join("rust"), false),            // raw executable, handled separately below
         _ => (bin_path.join("misc").join(&service_type), false),
     };
 
@@ -97,6 +98,9 @@ pub async fn download_service(
                 configure_php(&extract_target)?;
             } else if service_type == "apache" {
                 configure_apache(&extract_target)?;
+            } else if service_type == "postgresql" {
+                // PostgreSQL ZIP has root/pgsql/ structure — flatten pgsql/ up
+                flatten_subfolder(&extract_target, "pgsql")?;
             }
 
             Ok(format!("Service installed to {:?}", extract_target))
@@ -105,10 +109,20 @@ pub async fn download_service(
     }
 }
 
+/// Move contents from a subfolder up to parent (used when ZIP has nested structure)
+fn flatten_subfolder(parent: &PathBuf, subfolder_name: &str) -> Result<(), String> {
+    let subfolder = parent.join(subfolder_name);
+    if subfolder.exists() && subfolder.is_dir() {
+        log::info!("Flattening {}/{} to {}", parent.display(), subfolder_name, parent.display());
+        move_subfolder_up(&subfolder, parent)?;
+    }
+    Ok(())
+}
+
 /// Move contents from source directory to destination (used for Apache24 subfolder)
-fn move_apache_contents(source: &PathBuf, dest: &PathBuf) -> Result<(), String> {
+fn move_subfolder_up(source: &PathBuf, dest: &PathBuf) -> Result<(), String> {
     let entries = std::fs::read_dir(source)
-        .map_err(|e| format!("Failed to read Apache24 directory: {}", e))?;
+        .map_err(|e| format!("Failed to read subfolder: {}", e))?;
 
     for entry in entries.flatten() {
         let src_path = entry.path();
@@ -130,7 +144,7 @@ fn move_apache_contents(source: &PathBuf, dest: &PathBuf) -> Result<(), String> 
         }
     }
 
-    // Remove empty Apache24 folder
+    // Remove empty subfolder
     let _ = std::fs::remove_dir(source);
 
     Ok(())
@@ -164,7 +178,7 @@ fn configure_apache(apache_path: &PathBuf) -> Result<(), String> {
     } else if apache_path.join("Apache24").join("conf").exists() {
         // Move contents from Apache24 to apache_path
         let apache24_path = apache_path.join("Apache24");
-        move_apache_contents(&apache24_path, apache_path)?;
+        move_subfolder_up(&apache24_path, apache_path)?;
         apache_path.join("conf")
     } else {
         // List directory contents for debugging

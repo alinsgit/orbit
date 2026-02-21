@@ -133,7 +133,13 @@ pub fn start_service(
                 .map_err(|e| e.to_string())?
                 .join("bin");
 
-            let postgres_root = app_bin.join("postgresql");
+            // Handle both flattened (postgresql/bin/) and nested (postgresql/pgsql/bin/) structures
+            let postgres_base = app_bin.join("postgresql");
+            let postgres_root = if postgres_base.join("pgsql").join("bin").exists() {
+                postgres_base.join("pgsql")
+            } else {
+                postgres_base
+            };
             let data_dir = app_bin.join("data").join("postgres");
 
             if !data_dir.join("PG_VERSION").exists() {

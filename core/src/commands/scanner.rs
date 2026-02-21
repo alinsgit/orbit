@@ -179,8 +179,9 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
     let postgresql_path = bin_path.join("postgresql");
     if postgresql_path.exists() {
         let possible_paths = [
-            postgresql_path.join("bin").join("postgres.exe"),
-            postgresql_path.join("postgres.exe"),
+            postgresql_path.join("bin").join("postgres.exe"),       // Normal (after flatten)
+            postgresql_path.join("pgsql").join("bin").join("postgres.exe"), // Before flatten
+            postgresql_path.join("postgres.exe"),                  // Flat
         ];
 
         for exe_path in possible_paths {
@@ -273,6 +274,27 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
                 service_type: "deno".to_string(),
                 port: None,
             });
+        }
+    }
+
+    // 13. Check Rust (rustup-init)
+    let rust_paths = [
+        bin_path.join("rust"),
+        bin_path.join("misc").join("rust"),
+    ];
+    for rust_path in rust_paths {
+        if rust_path.exists() {
+            let exe_path = rust_path.join("rustup-init.exe");
+            if exe_path.exists() {
+                services.push(InstalledService {
+                    name: "rust".to_string(),
+                    version: "latest".to_string(),
+                    path: exe_path.to_string_lossy().to_string(),
+                    service_type: "rust".to_string(),
+                    port: None,
+                });
+                break;
+            }
         }
     }
 
