@@ -6,16 +6,16 @@
     <title>Orbit — Modern Local Development Environment</title>
     <meta
       name="description"
-      content="Manage Nginx, PHP, MariaDB, Redis and more from a single, beautiful interface. The modern alternative to XAMPP and Laragon."
+      content="AI-ready local development environment with MCP integration. Manage Nginx, PHP, MariaDB, Redis and 16 services from a beautiful interface. Works with Claude Code, Cursor, and Windsurf."
     />
     <meta
       name="keywords"
-      content="local development, XAMPP alternative, Laragon alternative, PHP, Nginx, MariaDB, development environment"
+      content="local development, XAMPP alternative, Laragon alternative, PHP, Nginx, MariaDB, development environment, MCP, AI development, Claude Code, Cursor"
     />
-    <meta property="og:title" content="Orbit — Modern Local Dev Environment" />
+    <meta property="og:title" content="Orbit — AI-Ready Local Dev Environment" />
     <meta
       property="og:description"
-      content="Manage Nginx, PHP, MariaDB, Redis and more from a single interface."
+      content="Your AI tools understand your dev stack. MCP-powered local development with 16 services."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -83,7 +83,7 @@
       <div class="container">
         <div class="hero-badge">
           <span class="badge-dot"></span>
-          <span>v0.1.9 — CLI Install/Uninstall & PostgreSQL Support</span>
+          <span>v1.0.0 — AI-Powered Development with MCP</span>
         </div>
         <h1 class="hero-title">
           Your local dev stack,<br />
@@ -91,7 +91,7 @@
         </h1>
         <p class="hero-subtitle">
           Nginx, PHP, MariaDB, PostgreSQL, Redis and 16 services — install, configure
-          and manage everything from a single interface or the CLI. No more terminal juggling.
+          and manage everything from a single interface, the CLI, or your AI tools via MCP.
         </p>
         <div class="hero-actions">
           <a href="#download" class="btn btn-primary">
@@ -421,6 +421,23 @@
             </p>
           </div>
           <div class="feature-card">
+            <div class="fc-icon" style="--accent: #a855f7">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+                <path d="M5 3v4"></path>
+                <path d="M19 17v4"></path>
+                <path d="M3 5h4"></path>
+                <path d="M17 19h4"></path>
+              </svg>
+            </div>
+            <h3>AI-Ready Development</h3>
+            <p>
+              Built-in MCP server lets Claude Code, Cursor, and Windsurf
+              control your dev stack directly. Ask your AI to start services,
+              read logs, or create databases.
+            </p>
+          </div>
+          <div class="feature-card">
             <div class="fc-icon" style="--accent: #06b6d4">
               <svg
                 width="24"
@@ -506,6 +523,25 @@
       </div>
     </section>
 
+    <!-- Works With -->
+    <section class="works-with-section">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">// works_with</span>
+          <h2>
+            Your AI tools,<br /><span class="gradient-text">fully connected.</span>
+          </h2>
+          <p>Orbit speaks MCP — your AI tools understand your entire dev stack.</p>
+        </div>
+        <div class="services-row">
+          <div class="svc-chip ai-chip"><span class="svc-icon">&#9670;</span> Claude Code</div>
+          <div class="svc-chip ai-chip"><span class="svc-icon">&#9671;</span> Cursor</div>
+          <div class="svc-chip ai-chip"><span class="svc-icon">&#9672;</span> Windsurf</div>
+          <div class="svc-chip ai-chip"><span class="svc-icon">&#9674;</span> VS Code</div>
+        </div>
+      </div>
+    </section>
+
     <!-- Terminal-style section -->
     <section class="terminal-section">
       <div class="container">
@@ -562,6 +598,50 @@
         <p class="terminal-caption">
           Yes, these commands actually work. Or just use the GUI — we don't
           judge.
+        </p>
+
+        <!-- MCP AI Demo -->
+        <div class="terminal-window" style="margin-top: 40px">
+          <div class="term-bar">
+            <div class="term-dots"><span></span><span></span><span></span></div>
+            <span class="term-title">ai assistant (via MCP)</span>
+          </div>
+          <div class="term-body">
+            <div class="term-line">
+              <span class="term-prompt" style="color: #a855f7">&#10024;</span>
+              <span class="term-cmd">"What services are running?"</span>
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">&#9679;</span>
+              Nginx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.29.4&nbsp;&nbsp;&nbsp;:80&nbsp;&nbsp;&nbsp;&nbsp;running
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">&#9679;</span>
+              PHP&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8.4.16&nbsp;&nbsp;&nbsp;:9084&nbsp;&nbsp;running
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">&#9679;</span>
+              MariaDB&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;12.2.2&nbsp;&nbsp;&nbsp;:3306&nbsp;&nbsp;running
+            </div>
+            <div class="term-line" style="margin-top: 8px">
+              <span class="term-prompt" style="color: #a855f7">&#10024;</span>
+              <span class="term-cmd">"Create a database for my project"</span>
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">&#10003;</span>
+              Database 'myproject' created (utf8mb4)
+            </div>
+            <div class="term-line" style="margin-top: 8px">
+              <span class="term-prompt" style="color: #a855f7">&#10024;</span>
+              <span class="term-cmd">"Show me the latest nginx errors"</span>
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;Reading nginx/error.log (last 20 lines)...
+            </div>
+          </div>
+        </div>
+        <p class="terminal-caption">
+          Your AI assistant talks directly to your dev stack via MCP. Zero config.
         </p>
       </div>
     </section>

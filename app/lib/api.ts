@@ -1471,6 +1471,70 @@ export const scaffoldBasicProject = async (
   }
 };
 
+// --- MCP Server ---
+
+export interface McpStatus {
+  installed: boolean;
+  running: boolean;
+  path: string | null;
+  pid: number | null;
+  binary_exists: boolean;
+}
+
+export const getMcpStatus = async (): Promise<McpStatus> => {
+  try {
+    return await invoke('get_mcp_status');
+  } catch (error) {
+    console.error('Failed to get MCP status:', error);
+    throw error;
+  }
+};
+
+export const installMcp = async (): Promise<string> => {
+  try {
+    return await invoke('install_mcp');
+  } catch (error) {
+    console.error('Failed to install MCP:', error);
+    throw error;
+  }
+};
+
+export const uninstallMcp = async (): Promise<string> => {
+  try {
+    return await invoke('uninstall_mcp');
+  } catch (error) {
+    console.error('Failed to uninstall MCP:', error);
+    throw error;
+  }
+};
+
+export const startMcp = async (): Promise<string> => {
+  try {
+    return await invoke('start_mcp');
+  } catch (error) {
+    console.error('Failed to start MCP:', error);
+    throw error;
+  }
+};
+
+export const stopMcp = async (): Promise<string> => {
+  try {
+    return await invoke('stop_mcp');
+  } catch (error) {
+    console.error('Failed to stop MCP:', error);
+    throw error;
+  }
+};
+
+export const getMcpBinaryPath = async (): Promise<string> => {
+  try {
+    return await invoke('get_mcp_binary_path');
+  } catch (error) {
+    console.error('Failed to get MCP binary path:', error);
+    throw error;
+  }
+};
+
 // --- Tunneling ---
 
 export interface TunnelResponse {

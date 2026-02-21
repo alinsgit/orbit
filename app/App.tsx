@@ -93,16 +93,16 @@ function App() {
             title="Sites"
           />
           <NavButton
-            active={activeTab === 'logs'}
-            onClick={() => setActiveTab('logs')}
-            icon={<ScrollText size={24} />}
-            title="Logs"
-          />
-          <NavButton
             active={activeTab === 'database'}
             onClick={() => setActiveTab('database')}
             icon={<Database size={24} />}
             title="Database"
+          />
+          <NavButton
+            active={activeTab === 'logs'}
+            onClick={() => setActiveTab('logs')}
+            icon={<ScrollText size={24} />}
+            title="Logs"
           />
           <div className="flex-1" />
           <NavButton
