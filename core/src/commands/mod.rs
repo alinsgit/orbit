@@ -22,3 +22,4 @@ pub mod backup;
 pub mod updater;
 pub mod wizards;
 pub mod tunnel;
+pub mod mcp;

@@ -604,6 +604,19 @@ body {
     opacity: 0.6;
 }
 
+/* ===== Works With ===== */
+.works-with-section {
+    position: relative;
+    z-index: 1;
+    padding: 80px 0;
+}
+
+.ai-chip:hover {
+    border-color: #a855f7 !important;
+    background: rgba(168, 85, 247, 0.15) !important;
+    color: #c084fc !important;
+}
+
 /* ===== Terminal ===== */
 .terminal-section {
     position: relative;
@@ -899,7 +912,8 @@ body {
 .feature-card,
 .dl-card,
 .svc-chip,
-.terminal-window {
+.terminal-window,
+.ai-chip {
     opacity: 0;
     transform: translateY(30px);
     transition: opacity 0.6s ease, transform 0.6s ease;
@@ -908,7 +922,8 @@ body {
 .feature-card.visible,
 .dl-card.visible,
 .svc-chip.visible,
-.terminal-window.visible {
+.terminal-window.visible,
+.ai-chip.visible {
     opacity: 1;
     transform: translateY(0);
 }

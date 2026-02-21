@@ -1,0 +1,269 @@
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
+
+use super::hidden_command;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpStatus {
+    pub installed: bool,
+    pub running: bool,
+    pub path: Option<String>,
+    pub pid: Option<u32>,
+    pub binary_exists: bool,
+}
+
+pub struct McpManager;
+
+impl McpManager {
+    /// Get MCP directory
+    fn get_mcp_dir(app: &AppHandle) -> Result<PathBuf, String> {
+        let bin_dir = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("bin")
+            .join("mcp");
+        Ok(bin_dir)
+    }
+
+    /// Get MCP executable path
+    pub fn get_exe_path(app: &AppHandle) -> Result<PathBuf, String> {
+        let mcp_dir = Self::get_mcp_dir(app)?;
+        #[cfg(target_os = "windows")]
+        let exe_name = "orbit-mcp.exe";
+        #[cfg(not(target_os = "windows"))]
+        let exe_name = "orbit-mcp";
+        Ok(mcp_dir.join(exe_name))
+    }
+
+    /// Check if MCP is installed
+    pub fn is_installed(app: &AppHandle) -> Result<bool, String> {
+        let exe_path = Self::get_exe_path(app)?;
+        Ok(exe_path.exists())
+    }
+
+    /// Check if MCP server is running by looking for the process
+    pub fn is_running() -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            let output = hidden_command("tasklist")
+                .args(["/FI", "IMAGENAME eq orbit-mcp.exe", "/FO", "CSV", "/NH"])
+                .output();
+            match output {
+                Ok(out) => {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    stdout.contains("orbit-mcp.exe")
+                }
+                Err(_) => false,
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let output = hidden_command("pgrep")
+                .args(["-f", "orbit-mcp"])
+                .output();
+            match output {
+                Ok(out) => out.status.success(),
+                Err(_) => false,
+            }
+        }
+    }
+
+    /// Get PID of running MCP process
+    fn get_pid() -> Option<u32> {
+        #[cfg(target_os = "windows")]
+        {
+            let output = hidden_command("tasklist")
+                .args(["/FI", "IMAGENAME eq orbit-mcp.exe", "/FO", "CSV", "/NH"])
+                .output()
+                .ok()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            // CSV format: "orbit-mcp.exe","1234","Console","1","12,345 K"
+            for line in stdout.lines() {
+                if line.contains("orbit-mcp.exe") {
+                    let parts: Vec<&str> = line.split(',').collect();
+                    if parts.len() >= 2 {
+                        let pid_str = parts[1].trim_matches('"');
+                        return pid_str.parse().ok();
+                    }
+                }
+            }
+            None
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let output = hidden_command("pgrep")
+                .args(["-f", "orbit-mcp"])
+                .output()
+                .ok()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.lines().next()?.trim().parse().ok()
+        }
+    }
+
+    /// Get full MCP status
+    pub fn get_status(app: &AppHandle) -> Result<McpStatus, String> {
+        let installed = Self::is_installed(app)?;
+        let exe_path = Self::get_exe_path(app)?;
+        let running = Self::is_running();
+        let pid = if running { Self::get_pid() } else { None };
+
+        Ok(McpStatus {
+            installed,
+            running,
+            path: if installed {
+                Some(exe_path.to_string_lossy().to_string())
+            } else {
+                None
+            },
+            pid,
+            binary_exists: exe_path.exists(),
+        })
+    }
+
+    /// Download and install MCP binary from GitHub releases
+    pub async fn install(app: &AppHandle) -> Result<(), String> {
+        let mcp_dir = Self::get_mcp_dir(app)?;
+
+        // Create directory
+        fs::create_dir_all(&mcp_dir)
+            .map_err(|e| format!("Failed to create MCP directory: {}", e))?;
+
+        let url = Self::get_download_url().await;
+        let exe_path = Self::get_exe_path(app)?;
+
+        crate::services::download::download_file(&url, &exe_path).await?;
+
+        Ok(())
+    }
+
+    /// Uninstall MCP
+    pub fn uninstall(app: &AppHandle) -> Result<(), String> {
+        let mcp_dir = Self::get_mcp_dir(app)?;
+
+        if mcp_dir.exists() {
+            fs::remove_dir_all(&mcp_dir)
+                .map_err(|e| format!("Failed to remove MCP: {}", e))?;
+        }
+
+        Ok(())
+    }
+
+    /// Get download URL for current platform from GitHub releases
+    async fn get_download_url() -> String {
+        // Try to get latest release URL from GitHub API
+        if let Some(url) = Self::fetch_latest_release_url().await {
+            return url;
+        }
+        // Fallback to a known version
+        #[cfg(target_os = "windows")]
+        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-windows-x64.exe".to_string();
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-macos-arm64".to_string();
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-macos-x64".to_string();
+        #[cfg(target_os = "linux")]
+        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-linux-x64".to_string();
+    }
+
+    /// Try to fetch the latest release download URL from GitHub API
+    async fn fetch_latest_release_url() -> Option<String> {
+        #[cfg(target_os = "windows")]
+        let asset_name = "orbit-mcp-windows-x64.exe";
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        let asset_name = "orbit-mcp-macos-arm64";
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        let asset_name = "orbit-mcp-macos-x64";
+        #[cfg(target_os = "linux")]
+        let asset_name = "orbit-mcp-linux-x64";
+
+        let client = reqwest::Client::builder()
+            .user_agent("Orbit")
+            .build()
+            .ok()?;
+
+        let response = client
+            .get("https://api.github.com/repos/alinsgit/orbit/releases/latest")
+            .send()
+            .await
+            .ok()?;
+
+        let release: serde_json::Value = response.json().await.ok()?;
+        let assets = release.get("assets")?.as_array()?;
+
+        for asset in assets {
+            let name = asset.get("name")?.as_str()?;
+            if name == asset_name {
+                return asset
+                    .get("browser_download_url")?
+                    .as_str()
+                    .map(|s| s.to_string());
+            }
+        }
+
+        None
+    }
+
+    /// Start MCP server
+    pub fn start(app: &AppHandle) -> Result<(), String> {
+        let exe_path = Self::get_exe_path(app)?;
+
+        if !exe_path.exists() {
+            return Err("MCP server is not installed".to_string());
+        }
+
+        // Check if already running
+        if Self::is_running() {
+            return Ok(());
+        }
+
+        // Redirect stdout/stderr to log file
+        let log_path = Self::get_mcp_dir(app)?.join("mcp.log");
+        let log_file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .map_err(|e| format!("Failed to open log file: {}", e))?;
+        let log_err = log_file
+            .try_clone()
+            .map_err(|e| format!("Failed to clone log handle: {}", e))?;
+
+        hidden_command(&exe_path)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::from(log_file))
+            .stderr(std::process::Stdio::from(log_err))
+            .spawn()
+            .map_err(|e| format!("Failed to start MCP server: {}", e))?;
+
+        // Wait for process to appear (up to 3 seconds)
+        for _ in 0..6 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if Self::is_running() {
+                return Ok(());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Stop MCP server
+    #[cfg(target_os = "windows")]
+    pub fn stop() -> Result<(), String> {
+        hidden_command("taskkill")
+            .args(["/F", "/IM", "orbit-mcp.exe"])
+            .output()
+            .map_err(|e| format!("Failed to stop MCP server: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn stop() -> Result<(), String> {
+        hidden_command("pkill")
+            .args(["-f", "orbit-mcp"])
+            .output()
+            .map_err(|e| format!("Failed to stop MCP server: {}", e))?;
+        Ok(())
+    }
+}

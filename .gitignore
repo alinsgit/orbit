@@ -46,6 +46,10 @@ coverage/
 *.temp
 .cache/
 
+# MCP test artifacts
+core/mcp_stdout.txt
+core/mcp_stderr.txt
+
 # Claude
 CLAUDE.md
 .claude/settings.local.json

@@ -1,7 +1,7 @@
 {
   "name": "orbit-local-server",
   "private": true,
-  "version": "0.1.9",
+  "version": "1.0.0",
   "description": "Modern local development environment - Manage Nginx, PHP, MariaDB and more",
   "author": "Orbit Dev Team",
   "license": "MIT",
