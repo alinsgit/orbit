@@ -83,15 +83,15 @@
       <div class="container">
         <div class="hero-badge">
           <span class="badge-dot"></span>
-          <span>v0.1.8 — JS Framework Support & Redis Consolidation</span>
+          <span>v0.1.9 — CLI Install/Uninstall & PostgreSQL Support</span>
         </div>
         <h1 class="hero-title">
           Your local dev stack,<br />
           <span class="gradient-text">beautifully managed.</span>
         </h1>
         <p class="hero-subtitle">
-          Nginx, PHP, MariaDB, Redis — install, configure and manage everything
-          from a single, modern interface. No more terminal juggling.
+          Nginx, PHP, MariaDB, PostgreSQL, Redis and 16 services — install, configure
+          and manage everything from a single interface or the CLI. No more terminal juggling.
         </p>
         <div class="hero-actions">
           <a href="#download" class="btn btn-primary">
@@ -500,6 +500,7 @@
           <div class="svc-chip"><span class="svc-icon">🦀</span> Rust</div>
           <div class="svc-chip"><span class="svc-icon">♫</span> Composer</div>
           <div class="svc-chip"><span class="svc-icon">✉</span> Mailpit</div>
+          <div class="svc-chip"><span class="svc-icon">🌐</span> Ngrok</div>
         </div>
       </div>
     </section>
@@ -515,34 +516,41 @@
           <div class="term-body">
             <div class="term-line">
               <span class="term-prompt">$</span>
-              <span class="term-cmd">orbit-cli status</span>
+              <span class="term-cmd">orbit install redis</span>
             </div>
             <div class="term-line output">
-              &nbsp;&nbsp;<span class="term-ok">●</span>
-              Nginx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.28.2&nbsp;&nbsp;&nbsp;:80&nbsp;&nbsp;&nbsp;&nbsp;running
-            </div>
-            <div class="term-line output">
-              &nbsp;&nbsp;<span class="term-ok">●</span>
-              PHP&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8.4.16&nbsp;&nbsp;&nbsp;:9084&nbsp;&nbsp;running
-            </div>
-            <div class="term-line output">
-              &nbsp;&nbsp;<span class="term-ok">●</span>
-              MariaDB&nbsp;&nbsp;&nbsp;11.4.10&nbsp;&nbsp;:3306&nbsp;&nbsp;running
-            </div>
-            <div class="term-line output">
-              &nbsp;&nbsp;<span class="term-ok">●</span>
-              Postgres&nbsp;&nbsp;17.3.0&nbsp;&nbsp;&nbsp;:5432&nbsp;&nbsp;running
-            </div>
-            <div class="term-line output">
-              &nbsp;&nbsp;<span style="color: #555">○</span>
-              Redis&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;—&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;—&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stopped
+              &nbsp;&nbsp;<span class="term-ok">✓</span> redis 8.6.0 installed
             </div>
             <div class="term-line">
               <span class="term-prompt">$</span>
-              <span class="term-cmd">orbit-cli start redis</span>
+              <span class="term-cmd">orbit status</span>
             </div>
             <div class="term-line output">
-              &nbsp;&nbsp;<span class="term-ok">✓</span> redis started
+              &nbsp;&nbsp;<span class="term-ok">●</span>
+              Nginx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.29.4&nbsp;&nbsp;&nbsp;:80&nbsp;&nbsp;&nbsp;&nbsp;running
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">●</span>
+              PHP&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8.4.16&nbsp;&nbsp;&nbsp;:9084&nbsp;&nbsp;running
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">●</span>
+              MariaDB&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;12.2.2&nbsp;&nbsp;&nbsp;:3306&nbsp;&nbsp;running
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">●</span>
+              PostgreSQL&nbsp;&nbsp;16.12&nbsp;&nbsp;&nbsp;&nbsp;:5432&nbsp;&nbsp;running
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span style="color: #555">○</span>
+              Redis&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8.6.0&nbsp;&nbsp;&nbsp;&nbsp;:6379&nbsp;&nbsp;stopped
+            </div>
+            <div class="term-line">
+              <span class="term-prompt">$</span>
+              <span class="term-cmd">orbit start redis</span>
+            </div>
+            <div class="term-line output">
+              &nbsp;&nbsp;<span class="term-ok">✓</span> redis started on :6379
             </div>
             <div class="term-line">
               <span class="term-prompt">$</span>
