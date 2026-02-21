@@ -720,7 +720,7 @@ fn open_in_browser(url: &str) {
 #[command(
     name = "orbit",
     about = "Orbit — Modern Local Development Environment",
-    version = "0.1.8",
+    version = "1.0.0",
     author = "Orbit Dev Team",
     long_about = "Manage Nginx, PHP, MariaDB, Redis and more from the command line.\nThe modern alternative to XAMPP and Laragon."
 )]

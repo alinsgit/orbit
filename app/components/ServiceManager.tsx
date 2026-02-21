@@ -6,6 +6,7 @@ import { ServiceConfigDrawer } from './ServiceConfigDrawer';
 import { ServiceOverview } from './ServiceOverview';
 import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
+import { McpManager } from './McpManager';
 import { getServiceIcon } from '../lib/serviceIcons';
 
 export function ServiceManager() {
@@ -538,6 +539,7 @@ export function ServiceManager() {
           <div className="space-y-6">
             <ComposerManager />
             <MailManager />
+            <McpManager />
           </div>
         )}
       </div>

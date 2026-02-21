@@ -239,6 +239,13 @@ pub fn run() {
         commands::tunnel::get_tunnel_url,
         // Wizards
         commands::wizards::scaffold_project,
+        // MCP Server
+        commands::mcp::get_mcp_status,
+        commands::mcp::install_mcp,
+        commands::mcp::uninstall_mcp,
+        commands::mcp::start_mcp,
+        commands::mcp::stop_mcp,
+        commands::mcp::get_mcp_binary_path,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

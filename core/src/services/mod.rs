@@ -25,6 +25,7 @@ pub mod validation;
 pub mod versions;
 pub mod tunnel;
 pub mod terminal;
+pub mod mcp;
 
 use std::process::Command;
 
