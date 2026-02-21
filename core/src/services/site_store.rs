@@ -17,6 +17,8 @@ pub struct SiteMetadata {
     pub template: Option<String>,
     #[serde(default = "default_web_server")]
     pub web_server: String,
+    #[serde(default)]
+    pub dev_port: Option<u16>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -193,6 +195,7 @@ impl SiteStore {
             ssl_key_path: None,
             template: None,
             web_server: "nginx".to_string(), // Migrated from nginx config
+            dev_port: None,
             created_at: now.clone(),
             updated_at: now,
         })

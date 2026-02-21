@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import {
   getInstalledServices,
   getServiceStatus,
@@ -25,7 +25,7 @@ export interface Toast {
 interface AppContextType {
   // Services
   services: ServiceWithStatus[];
-  refreshServices: () => Promise<void>;
+  refreshServices: (showLoader?: boolean) => Promise<void>;
   startServiceByName: (name: string) => Promise<void>;
   stopServiceByName: (name: string) => Promise<void>;
   startAllServices: () => Promise<void>;
@@ -100,8 +100,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Refresh services with status
-  const refreshServices = useCallback(async () => {
-    setIsLoading(true);
+  // showLoader=true only on first load; subsequent refreshes are silent
+  const refreshServices = useCallback(async (showLoader = false) => {
+    if (showLoader) setIsLoading(true);
     try {
       const installed = await getInstalledServices();
 
@@ -115,23 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             status = 'stopped';
           }
 
-          // Determine port based on service type
-          let port: number | undefined;
-          if (service.service_type === 'nginx') {
-            port = settings.ports.nginx;
-          } else if (service.service_type === 'mariadb') {
-            port = settings.ports.mariadb;
-          } else if (service.service_type === 'php') {
-            // Extract version and calculate port
-            const versionMatch = service.version.match(/^(\d+)\.(\d+)/);
-            if (versionMatch) {
-              const major = parseInt(versionMatch[1]);
-              const minor = parseInt(versionMatch[2]);
-              port = settings.ports.php_start + (major * 10 + minor) - 80;
-            }
-          }
-
-          return { ...service, status, port };
+          return { ...service, status, port: service.port };
         })
       );
 
@@ -140,9 +125,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Failed to refresh services:', e);
       addToast({ type: 'error', message: 'Failed to load services' });
     } finally {
-      setIsLoading(false);
+      if (showLoader) setIsLoading(false);
     }
-  }, [settings.ports, addToast]);
+  }, [addToast]);
 
   // Start service by name
   const startServiceByName = useCallback(async (name: string) => {
@@ -230,12 +215,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSettings();
   }, [refreshSettings]);
 
-  // Load services after settings
+  // Load services after settings (first load — show loader)
+  const initialLoadDone = useRef(false);
   useEffect(() => {
-    refreshServices();
+    refreshServices(!initialLoadDone.current).then(() => {
+      initialLoadDone.current = true;
+    });
   }, [refreshServices]);
 
-  // Refresh services when switching to dashboard tab
+  // Refresh services when switching to dashboard tab (silent)
   useEffect(() => {
     if (activeTab === 'services') {
       refreshServices();

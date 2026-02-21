@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.1.7"
+version = "0.1.8"
 description = "Modern local development environment - Manage Nginx, PHP, MariaDB and more"
 authors = ["Orbit Dev Team"]
 license = "MIT"

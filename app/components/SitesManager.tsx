@@ -9,7 +9,8 @@ import {
   generateSslCert, nginxTestConfig, nginxReload, nginxStatus,
   addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
   getSslStatus, getWorkspacePath, startTunnel, stopTunnel, getTunnelUrl,
-  writeTerminal, installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus
+  writeTerminal, installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus,
+  scaffoldBasicProject
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -22,6 +23,8 @@ const WEB_SERVER_INFO: Record<WebServer, { label: string; icon: string; color: s
   nginx: { label: 'Nginx', icon: '🌐', color: 'bg-green-500/10 text-green-400' },
   apache: { label: 'Apache', icon: '🪶', color: 'bg-orange-500/10 text-orange-400' }
 };
+
+const PHP_TEMPLATES: SiteTemplate[] = ['http', 'laravel', 'wordpress', 'litecart'];
 
 const TEMPLATE_INFO: Record<SiteTemplate, { label: string; icon: React.ReactNode; description: string }> = {
   http: {
@@ -319,10 +322,25 @@ export function SitesManager() {
         addToast({ type: 'error', message: 'No Workspace Directory set. Please set it in Settings.' });
         return;
       }
-      
+
       const projectName = newSite.domain.split('.')[0];
       const template = newSite.template || '';
-      
+      const separator = navigator.userAgent.includes('Win') ? '\\' : '/';
+      const projectPath = `${wp}${separator}${projectName}`;
+
+      // Basic templates: create files directly via backend
+      if (template === 'http' || template === 'static' || template === 'litecart') {
+        try {
+          const result = await scaffoldBasicProject(projectPath, template);
+          addToast({ type: 'success', message: result });
+          setNewSite({ ...newSite, path: projectPath });
+        } catch (e: any) {
+          addToast({ type: 'error', message: `Scaffolding failed: ${e}` });
+        }
+        return;
+      }
+
+      // Terminal-based scaffolding for frameworks
       let scaffoldCmd = '';
       if (template === 'nextjs') {
         scaffoldCmd = `npx --yes create-next-app@latest ${projectName} --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm`;
@@ -347,13 +365,11 @@ export function SitesManager() {
 
       // Run command recursively after a short delay for Terminal Mount
       setTimeout(async () => {
-         const cdCmd = navigator.userAgent.includes('Win') ? `cd /d "${wp}"` : `cd "${wp}"`;
-         await writeTerminal('main', `${cdCmd} && ${scaffoldCmd}\r`);
+         await writeTerminal('main', `cd "${wp}" && ${scaffoldCmd}\r`);
       }, 1200);
-      
-      // Auto-fill path
-      const separator = navigator.userAgent.includes('Win') ? '\\' : '/';
-      setNewSite({ ...newSite, path: `${wp}${separator}${projectName}` });
+
+      // Auto-fill path — Laravel needs /public as nginx root
+      setNewSite({ ...newSite, path: projectPath });
 
     } catch (e: any) {
       addToast({ type: 'error', message: `Scaffolding failed: ${e}` });
@@ -393,6 +409,9 @@ export function SitesManager() {
         setNginxMessage({ type: 'error', text: result.warning, domain: result.domain });
       }
 
+      // Open terminal in the new site's directory
+      const sitePath = newSite.path;
+
       setNewSite({
         domain: '',
         path: '',
@@ -404,6 +423,14 @@ export function SitesManager() {
       });
       setShowAddForm(false);
       await refreshSites();
+
+      // Open terminal and cd to the site path
+      if (sitePath) {
+        setIsTerminalOpen(true);
+        setTimeout(async () => {
+          await writeTerminal('main', `cd "${sitePath}"\r`);
+        }, 1200);
+      }
     } catch (e: any) {
       console.error(e);
       addToast({ type: 'error', message: 'Failed to create site: ' + e });
@@ -759,7 +786,7 @@ export function SitesManager() {
               </button>
               <button
                 onClick={handleScaffold}
-                disabled={!newSite.domain || (newSite.template !== 'laravel' && newSite.template !== 'nextjs' && newSite.template !== 'astro' && newSite.template !== 'nuxt' && newSite.template !== 'vue' && newSite.template !== 'wordpress')}
+                disabled={!newSite.domain}
                 className="px-3 py-2 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 title="Scaffold new project in Workspace"
               >
@@ -778,7 +805,11 @@ export function SitesManager() {
                 {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map((template) => (
                   <button
                     key={template}
-                    onClick={() => setNewSite({ ...newSite, template })}
+                    onClick={() => setNewSite({
+                      ...newSite,
+                      template,
+                      ...(!PHP_TEMPLATES.includes(template) ? { php_version: undefined } : {})
+                    })}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${newSite.template === template
                       ? 'bg-emerald-600 text-white'
                       : 'bg-surface-raised hover:bg-hover text-content-secondary'
@@ -794,8 +825,8 @@ export function SitesManager() {
             {/* PHP Version */}
             <div>
               <label className="block text-sm text-content-secondary mb-1">PHP Version</label>
-              {newSite.template === 'static' ? (
-                <p className="text-sm text-content-muted py-2">Not needed for static sites</p>
+              {!PHP_TEMPLATES.includes(newSite.template as SiteTemplate) ? (
+                <p className="text-sm text-content-muted py-2">Not needed for this template</p>
               ) : phpVersions.length === 0 ? (
                 <p className="text-sm text-amber-500 py-2">No PHP installed. Install from Services tab.</p>
               ) : (
@@ -956,7 +987,7 @@ export function SitesManager() {
                       {/* PHP Version */}
                       <div>
                         <label className="block text-xs text-content-muted mb-1">PHP Version</label>
-                        {editForm.template === 'static' ? (
+                        {!PHP_TEMPLATES.includes(editForm.template as SiteTemplate) ? (
                           <p className="text-xs text-content-muted py-2">Not needed</p>
                         ) : phpVersions.length === 0 ? (
                           <p className="text-xs text-amber-500 py-1">No PHP installed</p>

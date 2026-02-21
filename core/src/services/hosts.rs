@@ -81,14 +81,15 @@ Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
         fs::write(&script_path, &script_content)
             .map_err(|e| format!("Failed to create temp script: {}", e))?;
 
-        // Run the script with elevation
+        // Run the script with elevation (hidden window — only UAC prompt visible)
         let mut ps_command = Command::new("powershell");
         ps_command.args([
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
+            "-WindowStyle", "Hidden",
             "-Command",
             &format!(
-                "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '{}'",
+                "Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', '{}'",
                 script_path.display()
             ),
         ]);

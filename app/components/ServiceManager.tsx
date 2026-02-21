@@ -4,7 +4,6 @@ import { getAvailableVersions, downloadService, uninstallService, refreshAllVers
 import { useApp } from '../lib/AppContext';
 import { ServiceConfigDrawer } from './ServiceConfigDrawer';
 import { ServiceOverview } from './ServiceOverview';
-import { CacheManager } from './CacheManager';
 import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
 import { getServiceIcon } from '../lib/serviceIcons';
@@ -27,6 +26,7 @@ export function ServiceManager() {
     { key: 'mariadb', title: 'MariaDB Database', icon: '🗄️', group: 'server' },
     { key: 'postgresql', title: 'PostgreSQL Database', icon: '🐘', group: 'server' },
     { key: 'mongodb', title: 'MongoDB Database', icon: '🍃', group: 'server' },
+    { key: 'redis', title: 'Redis Cache Store', icon: '🗝️', group: 'server' },
     { key: 'nodejs', title: 'Node.js Runtime', icon: '💚', group: 'devtools' },
     { key: 'python', title: 'Python', icon: '🐍', group: 'devtools' },
     { key: 'bun', title: 'Bun Runtime', icon: '🥟', group: 'devtools' },
@@ -54,7 +54,7 @@ export function ServiceManager() {
 
   // Services that have configuration
   const hasConfiguration = (serviceType: string) => {
-    return ['php', 'nginx', 'mariadb', 'apache'].includes(serviceType);
+    return ['php', 'nginx', 'mariadb', 'apache', 'redis'].includes(serviceType);
   };
 
   const openConfigDrawer = (name: string, type: string, version: string) => {
@@ -529,7 +529,6 @@ export function ServiceManager() {
 
         {subTab === 'tools' && (
           <div className="space-y-6">
-            <CacheManager />
             <ComposerManager />
             <MailManager />
           </div>

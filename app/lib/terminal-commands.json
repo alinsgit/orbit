@@ -1,5 +1,23 @@
 [
   {
+    "category": "Orbit CLI",
+    "items": [
+      { "label": "Service Status", "cmd": "orbit-cli status" },
+      { "label": "Start All", "cmd": "orbit-cli start --all" },
+      { "label": "Stop All", "cmd": "orbit-cli stop --all" },
+      { "label": "Restart All", "cmd": "orbit-cli restart --all" },
+      { "label": "List Sites", "cmd": "orbit-cli sites" },
+      { "label": "View Logs", "cmd": "orbit-cli logs list" },
+      { "label": "DB List", "cmd": "orbit-cli db list" },
+      { "label": "DB Create", "cmd": "orbit-cli db create " },
+      { "label": "DB Export", "cmd": "orbit-cli db export " },
+      { "label": "DB Import", "cmd": "orbit-cli db import " },
+      { "label": "PHP Versions", "cmd": "orbit-cli php list" },
+      { "label": "Hosts List", "cmd": "orbit-cli hosts list" },
+      { "label": "Environment Info", "cmd": "orbit-cli info" }
+    ]
+  },
+  {
     "category": "Laravel / PHP",
     "items": [
       { "label": "Artisan Serve", "cmd": "php artisan serve" },

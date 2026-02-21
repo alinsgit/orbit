@@ -19,6 +19,7 @@ export interface InstalledService {
   version: string;
   path: string;
   service_type: string;
+  port?: number;
 }
 
 export const startService = async (name: string, binPath: string): Promise<string> => {
@@ -96,9 +97,11 @@ export interface Site {
   ssl_enabled?: boolean;
   template?: 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue';
   web_server?: WebServer;
+  dev_port?: number;
 }
 
 export interface SiteWithStatus extends Site {
+  dev_port?: number;
   created_at?: string;
   config_valid: boolean;
   warning?: string;
@@ -1452,6 +1455,18 @@ export const scaffoldProject = async (
     });
   } catch (error) {
     console.error(`Failed to scaffold ${projectType} project:`, error);
+    throw error;
+  }
+};
+
+export const scaffoldBasicProject = async (
+  path: string,
+  template: string
+): Promise<string> => {
+  try {
+    return await invoke('scaffold_basic_project', { path, template });
+  } catch (error) {
+    console.error(`Failed to scaffold basic ${template} project:`, error);
     throw error;
   }
 };

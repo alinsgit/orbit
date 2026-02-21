@@ -102,6 +102,7 @@ pub fn run() {
         commands::sites::update_site,
         commands::sites::delete_site,
         commands::sites::regenerate_site_config,
+        commands::sites::scaffold_basic_project,
         // Nginx
         commands::sites::nginx_test_config,
         commands::sites::nginx_reload,

@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import { listen, Event } from '@tauri-apps/api/event';
-import { spawnTerminal, writeTerminal, resizeTerminal, getWorkspacePath } from '../lib/api';
+import { spawnTerminal, writeTerminal, resizeTerminal, getWorkspacePath, getSites, SiteWithStatus } from '../lib/api';
+import { useApp } from '../lib/AppContext';
 import QUICK_COMMANDS from '../lib/terminal-commands.json';
-import { Maximize2, Minimize2, Terminal as TerminalIcon, X } from 'lucide-react';
+import { Maximize2, Minimize2, Terminal as TerminalIcon, X, ChevronLeft, ChevronRight, FolderOpen, Play, Square, RotateCw } from 'lucide-react';
 import clsx from 'clsx';
 
 interface TerminalProps {
@@ -14,12 +15,19 @@ interface TerminalProps {
   onClose?: () => void;
 }
 
+// Manageable service types (ones that can be started/stopped)
+const MANAGEABLE_TYPES = ['nginx', 'php', 'mariadb', 'apache'];
+
 export function Terminal({ id = 'main-term', className, onClose }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [sites, setSites] = useState<SiteWithStatus[]>([]);
+  const [activeSite, setActiveSite] = useState<string | null>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const { services, startServiceByName, stopServiceByName } = useApp();
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -105,12 +113,20 @@ export function Terminal({ id = 'main-term', className, onClose }: TerminalProps
     };
 
     window.addEventListener('resize', handleResize);
-    
+
     // Fit again after a short delay to ensure fonts/layout are loaded
     setTimeout(handleResize, 100);
 
+    // Watch container size changes (e.g. sites bar loading, layout shifts)
+    let resizeObserver: ResizeObserver | undefined;
+    if (terminalRef.current) {
+      resizeObserver = new ResizeObserver(() => handleResize());
+      resizeObserver.observe(terminalRef.current);
+    }
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
       if (unlisten) unlisten();
       term.dispose();
     };
@@ -127,6 +143,43 @@ export function Terminal({ id = 'main-term', className, onClose }: TerminalProps
       }, 50); // Small delay to let CSS transition finish
     }
   }, [isExpanded, isReady, id]);
+
+  // Load sites
+  useEffect(() => {
+    getSites().then(setSites).catch(() => setSites([]));
+  }, []);
+
+  // Strip known document root suffixes to get the project root
+  const getProjectRoot = (sitePath: string): string => {
+    const docRoots = ['public_html', 'public', 'dist', 'build', 'www', 'htdocs', 'web'];
+    const normalized = sitePath.replace(/[\\/]+$/, ''); // trim trailing slashes
+    const lastSegment = normalized.split(/[\\/]/).pop()?.toLowerCase() || '';
+    if (docRoots.includes(lastSegment)) {
+      return normalized.substring(0, normalized.length - lastSegment.length - 1);
+    }
+    return normalized;
+  };
+
+  const handleSiteClick = useCallback((site: SiteWithStatus) => {
+    if (!isReady) return;
+    setActiveSite(site.domain);
+    const projectRoot = getProjectRoot(site.path);
+    writeTerminal(id, `cd "${projectRoot}"\r`).catch(console.error);
+  }, [id, isReady]);
+
+  const scrollSlider = useCallback((dir: 'left' | 'right') => {
+    if (!sliderRef.current) return;
+    sliderRef.current.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
+  }, []);
+
+  const manageableServices = services.filter(s => MANAGEABLE_TYPES.includes(s.service_type));
+
+  const handleRestart = useCallback(async (name: string) => {
+    await stopServiceByName(name);
+    // Small delay to ensure process is fully stopped
+    await new Promise(r => setTimeout(r, 500));
+    await startServiceByName(name);
+  }, [stopServiceByName, startServiceByName]);
 
   const handleCommandPaste = (cmd: string) => {
     writeTerminal(id, cmd).catch(console.error);
@@ -177,13 +230,52 @@ export function Terminal({ id = 'main-term', className, onClose }: TerminalProps
         </div>
       </div>
 
+      {/* Sites Slider Bar */}
+      {sites.length > 0 && (
+        <div className="flex items-center gap-0 bg-[#111] border-b border-edge/50 shrink-0">
+          <button
+            onClick={() => scrollSlider('left')}
+            className="p-1 text-content-muted hover:text-content shrink-0 hover:bg-white/5 transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <div
+            ref={sliderRef}
+            className="flex items-center gap-1.5 overflow-x-auto py-1.5 px-1 flex-1 scrollbar-none"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {sites.map((site) => (
+              <button
+                key={site.domain}
+                onClick={() => handleSiteClick(site)}
+                className={clsx(
+                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-all shrink-0",
+                  activeSite === site.domain
+                    ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30"
+                    : "text-content-muted hover:text-content-secondary hover:bg-white/5"
+                )}
+                title={site.path}
+              >
+                <FolderOpen className="w-3 h-3 shrink-0" />
+                {site.domain}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => scrollSlider('right')}
+            className="p-1 text-content-muted hover:text-content shrink-0 hover:bg-white/5 transition-colors"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Terminal Container */}
-        <div 
-          className="flex-1 w-full h-full p-2 overflow-hidden" 
-          ref={terminalRef} 
-          style={{ minHeight: isExpanded ? 'auto' : '300px' }}
+        <div
+          className="flex-1 min-h-0 p-2 overflow-hidden"
+          ref={terminalRef}
         />
 
         {/* Quick Commands Sidebar */}
@@ -191,8 +283,60 @@ export function Terminal({ id = 'main-term', className, onClose }: TerminalProps
           <div className="p-3 border-b border-edge bg-surface-raised sticky top-0 z-10 font-semibold text-xs text-content-secondary uppercase tracking-wider">
             Quick Commands
           </div>
-          
+
           <div className="p-2 flex flex-col gap-4">
+            {/* Service Controls — direct API, no CLI dependency */}
+            {manageableServices.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <div className="text-[11px] text-content-muted uppercase tracking-wider pl-2 mb-1">
+                  Service Controls
+                </div>
+                {manageableServices.map((svc) => (
+                  <div key={svc.name} className="flex items-center justify-between rounded-md hover:bg-hover px-2 py-1 transition-colors">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className={clsx(
+                        "w-1.5 h-1.5 rounded-full shrink-0",
+                        svc.status === 'running' ? "bg-emerald-500" :
+                        svc.status === 'starting' || svc.status === 'stopping' ? "bg-amber-500 animate-pulse" :
+                        "bg-zinc-500"
+                      )} />
+                      <span className="text-xs text-content-secondary truncate">{svc.name}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {svc.status === 'stopped' ? (
+                        <button
+                          onClick={() => startServiceByName(svc.name)}
+                          className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded"
+                          title={`Start ${svc.name}`}
+                        >
+                          <Play className="w-3 h-3" />
+                        </button>
+                      ) : svc.status === 'running' ? (
+                        <>
+                          <button
+                            onClick={() => handleRestart(svc.name)}
+                            className="p-1 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 rounded"
+                            title={`Restart ${svc.name}`}
+                          >
+                            <RotateCw className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => stopServiceByName(svc.name)}
+                            className="p-1 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded"
+                            title={`Stop ${svc.name}`}
+                          >
+                            <Square className="w-3 h-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-amber-500 px-1">...</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {QUICK_COMMANDS.map((group, groupIdx) => (
               <div key={groupIdx} className="flex flex-col gap-1">
                 <div className="text-[11px] text-content-muted uppercase tracking-wider pl-2 mb-1">
