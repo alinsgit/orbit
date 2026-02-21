@@ -78,9 +78,14 @@ export function ServiceManager() {
       const iParts = installed.split('.');
       const aParts = available.split('.');
 
-      // Multi-version: match major.minor (php 8.4.x, mariadb 11.4.x, python 3.13.x, nginx 1.28.x, go 1.22.x)
+      // Multi-version: match by available version depth
+      // Some services use major-only keys (postgresql "16", mongodb "8.0"), others use major.minor (php "8.4")
       if (['php', 'mariadb', 'postgresql', 'mongodb', 'python', 'nginx', 'go'].includes(type)) {
-        return iParts[0] === aParts[0] && iParts[1] === aParts[1];
+        // Match all parts that the available (registry) version specifies
+        for (let i = 0; i < aParts.length; i++) {
+          if (iParts[i] !== aParts[i]) return false;
+        }
+        return true;
       }
 
       // Node.js: match major version (22.x.x)
@@ -501,6 +506,7 @@ export function ServiceManager() {
                     onInstall={handleInstall}
                     processing={processing}
                     isInstalled={(v) => isVersionInstalled(svc.key, v)}
+                    installedServices={services}
                   />
                 ))}
 
@@ -520,6 +526,7 @@ export function ServiceManager() {
                     onInstall={handleInstall}
                     processing={processing}
                     isInstalled={(v) => isVersionInstalled(svc.key, v)}
+                    installedServices={services}
                   />
                 ))}
               </>
@@ -554,7 +561,8 @@ function ServiceGroup({
   type,
   onInstall,
   processing,
-  isInstalled
+  isInstalled,
+  installedServices
 }: {
   title: string;
   icon: string;
@@ -563,6 +571,7 @@ function ServiceGroup({
   onInstall: (type: string, version: ServiceVersion) => void;
   processing: string | null;
   isInstalled: (version: string) => boolean;
+  installedServices?: { service_type: string; version: string }[];
 }) {
   const source = versions[0]?.source;
   const sourceLabel = source === 'Cache' ? 'cached' : source === 'Fallback' ? 'fallback' : 'live';
@@ -572,13 +581,22 @@ function ServiceGroup({
         'text-emerald-500';
 
   if (versions.length === 0) {
+    // Check if this service type is already installed even without registry versions
+    const installedInfo = installedServices?.find(s => s.service_type === type);
     return (
       <div>
         <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <span className="text-xl">{icon}</span>
           {title}
+          {installedInfo && (
+            <span className="text-xs font-normal text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <CheckCircle size={12} /> v{installedInfo.version}
+            </span>
+          )}
         </h3>
-        <p className="text-content-muted text-sm">No versions available</p>
+        {!installedInfo && (
+          <p className="text-content-muted text-sm">No versions available in registry</p>
+        )}
       </div>
     );
   }

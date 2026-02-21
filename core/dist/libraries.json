@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/alinsgit/orbit-libraries/main/schema.json",
-  "updated": "2026-02-17T01:28:15.898Z",
-  "version": "1.1.0",
+  "updated": "2026-02-21T01:27:19.513Z",
+  "version": "1.2.0",
   "services": {
     "php": {
       "name": "PHP",
@@ -221,6 +221,102 @@
         }
       }
     },
+    "postgresql": {
+      "name": "PostgreSQL",
+      "description": "Advanced open source relational database",
+      "availableVersions": [
+        "16",
+        "15",
+        "14"
+      ],
+      "versions": {
+        "14": {
+          "latest": "14.21",
+          "windows": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-14.21-1-windows-x64-binaries.zip",
+            "filename": "postgresql-14.21-windows-x64.zip"
+          },
+          "macos_arm64": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-14.21-1-osx-binaries.zip",
+            "filename": "postgresql-14.21-osx.zip"
+          },
+          "macos_x64": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-14.21-1-osx-binaries.zip",
+            "filename": "postgresql-14.21-osx.zip"
+          }
+        },
+        "15": {
+          "latest": "15.16",
+          "windows": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-15.16-1-windows-x64-binaries.zip",
+            "filename": "postgresql-15.16-windows-x64.zip"
+          },
+          "macos_arm64": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-15.16-1-osx-binaries.zip",
+            "filename": "postgresql-15.16-osx.zip"
+          },
+          "macos_x64": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-15.16-1-osx-binaries.zip",
+            "filename": "postgresql-15.16-osx.zip"
+          }
+        },
+        "16": {
+          "latest": "16.12",
+          "windows": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.12-1-windows-x64-binaries.zip",
+            "filename": "postgresql-16.12-windows-x64.zip"
+          },
+          "macos_arm64": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.12-1-osx-binaries.zip",
+            "filename": "postgresql-16.12-osx.zip"
+          },
+          "macos_x64": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.12-1-osx-binaries.zip",
+            "filename": "postgresql-16.12-osx.zip"
+          }
+        }
+      }
+    },
+    "mongodb": {
+      "name": "MongoDB",
+      "description": "NoSQL document database",
+      "availableVersions": [
+        "8.0",
+        "7.0"
+      ],
+      "versions": {
+        "8.0": {
+          "latest": "8.0.19",
+          "windows": {
+            "url": "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-8.0.19.zip",
+            "filename": "mongodb-8.0.19-win.zip"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mongodb.com/osx/mongodb-macos-arm64-enterprise-8.0.19.tgz",
+            "filename": "mongodb-8.0.19-mac.tgz"
+          },
+          "linux": {
+            "url": "https://downloads.mongodb.com/linux/mongodb-linux-x86_64-enterprise-ubuntu2204-8.0.19.tgz",
+            "filename": "mongodb-8.0.19-linux.tgz"
+          }
+        },
+        "7.0": {
+          "latest": "7.0.30",
+          "windows": {
+            "url": "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-7.0.30.zip",
+            "filename": "mongodb-7.0.30-win.zip"
+          },
+          "macos_arm64": {
+            "url": "https://downloads.mongodb.com/osx/mongodb-macos-arm64-enterprise-7.0.30.tgz",
+            "filename": "mongodb-7.0.30-mac.tgz"
+          },
+          "linux": {
+            "url": "https://downloads.mongodb.com/linux/mongodb-linux-x86_64-enterprise-ubuntu2204-7.0.30.tgz",
+            "filename": "mongodb-7.0.30-linux.tgz"
+          }
+        }
+      }
+    },
     "nodejs": {
       "name": "Node.js",
       "description": "JavaScript runtime built on V8",
@@ -333,6 +429,96 @@
         }
       }
     },
+    "go": {
+      "name": "Go",
+      "description": "Statically typed, compiled programming language",
+      "availableVersions": [
+        "1.26",
+        "1.25"
+      ],
+      "versions": {
+        "1.26": {
+          "latest": "1.26.0",
+          "windows": {
+            "url": "https://dl.google.com/go/go1.26.0.windows-amd64.zip",
+            "filename": "go1.26.0.windows-amd64.zip"
+          },
+          "macos_arm64": {
+            "url": "https://dl.google.com/go/go1.26.0.darwin-arm64.tar.gz",
+            "filename": "go1.26.0.darwin-arm64.tar.gz"
+          },
+          "macos_x64": {
+            "url": "https://dl.google.com/go/go1.26.0.darwin-amd64.tar.gz",
+            "filename": "go1.26.0.darwin-amd64.tar.gz"
+          },
+          "linux": {
+            "url": "https://dl.google.com/go/go1.26.0.linux-amd64.tar.gz",
+            "filename": "go1.26.0.linux-amd64.tar.gz"
+          }
+        },
+        "1.25": {
+          "latest": "1.25.7",
+          "windows": {
+            "url": "https://dl.google.com/go/go1.25.7.windows-amd64.zip",
+            "filename": "go1.25.7.windows-amd64.zip"
+          },
+          "macos_arm64": {
+            "url": "https://dl.google.com/go/go1.25.7.darwin-arm64.tar.gz",
+            "filename": "go1.25.7.darwin-arm64.tar.gz"
+          },
+          "macos_x64": {
+            "url": "https://dl.google.com/go/go1.25.7.darwin-amd64.tar.gz",
+            "filename": "go1.25.7.darwin-amd64.tar.gz"
+          },
+          "linux": {
+            "url": "https://dl.google.com/go/go1.25.7.linux-amd64.tar.gz",
+            "filename": "go1.25.7.linux-amd64.tar.gz"
+          }
+        }
+      }
+    },
+    "deno": {
+      "name": "Deno",
+      "description": "Next-generation JavaScript runtime",
+      "latest": "2.6.10",
+      "windows": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-x86_64-pc-windows-msvc.zip",
+        "filename": "deno-x86_64-pc-windows-msvc.zip"
+      },
+      "macos_arm64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-aarch64-apple-darwin.zip",
+        "filename": "deno-aarch64-apple-darwin.zip"
+      },
+      "macos_x64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-x86_64-apple-darwin.zip",
+        "filename": "deno-x86_64-apple-darwin.zip"
+      },
+      "linux": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-x86_64-unknown-linux-gnu.zip",
+        "filename": "deno-x86_64-unknown-linux-gnu.zip"
+      }
+    },
+    "rust": {
+      "name": "Rust (rustup)",
+      "description": "Systems programming language toolchain",
+      "latest": "latest",
+      "windows": {
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe",
+        "filename": "rustup-init.exe"
+      },
+      "macos_arm64": {
+        "url": "https://static.rust-lang.org/rustup/dist/aarch64-apple-darwin/rustup-init",
+        "filename": "rustup-init"
+      },
+      "macos_x64": {
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init",
+        "filename": "rustup-init"
+      },
+      "linux": {
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init",
+        "filename": "rustup-init"
+      }
+    },
     "redis": {
       "name": "Redis",
       "description": "In-memory data structure store",
@@ -368,62 +554,25 @@
         "filename": "composer.phar"
       }
     },
-    "go": {
-      "name": "Go",
-      "description": "Statically typed, compiled programming language",
-      "availableVersions": [
-        "1.22"
-      ],
-      "versions": {
-        "1.22": {
-          "latest": "1.22.1",
-          "windows": {
-            "url": "https://dl.google.com/go/go1.22.1.windows-amd64.zip",
-            "filename": "go1.22.1.windows-amd64.zip"
-          }
-        }
-      }
-    },
-    "deno": {
-      "name": "Deno",
-      "description": "Next-generation JavaScript runtime",
-      "latest": "2.1.0",
+    "ngrok": {
+      "name": "Ngrok",
+      "description": "Secure introspectable tunnels to localhost",
+      "latest": "v3",
       "windows": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-x86_64-pc-windows-msvc.zip",
-        "filename": "deno-x86_64-pc-windows-msvc.zip"
+        "url": "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip",
+        "filename": "ngrok-v3-stable-windows-amd64.zip"
       },
       "macos_arm64": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-aarch64-apple-darwin.zip",
-        "filename": "deno-aarch64-apple-darwin.zip"
+        "url": "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-arm64.zip",
+        "filename": "ngrok-v3-stable-darwin-arm64.zip"
       },
       "macos_x64": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-x86_64-apple-darwin.zip",
-        "filename": "deno-x86_64-apple-darwin.zip"
+        "url": "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-amd64.zip",
+        "filename": "ngrok-v3-stable-darwin-amd64.zip"
       },
       "linux": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.1.0/deno-x86_64-unknown-linux-gnu.zip",
-        "filename": "deno-x86_64-unknown-linux-gnu.zip"
-      }
-    },
-    "rust": {
-      "name": "Rust (rustup)",
-      "description": "Systems programming language toolchain",
-      "latest": "latest",
-      "windows": {
-        "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe",
-        "filename": "rustup-init.exe"
-      },
-      "macos_arm64": {
-        "url": "https://static.rust-lang.org/rustup/dist/aarch64-apple-darwin/rustup-init",
-        "filename": "rustup-init"
-      },
-      "macos_x64": {
-        "url": "https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init",
-        "filename": "rustup-init"
-      },
-      "linux": {
-        "url": "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init",
-        "filename": "rustup-init"
+        "url": "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz",
+        "filename": "ngrok-v3-stable-linux-amd64.tgz"
       }
     }
   }

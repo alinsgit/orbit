@@ -98,10 +98,9 @@ pub async fn download_service(
                 configure_php(&extract_target)?;
             } else if service_type == "apache" {
                 configure_apache(&extract_target)?;
-            } else if service_type == "postgresql" {
-                // PostgreSQL ZIP has root/pgsql/ structure — flatten pgsql/ up
-                flatten_subfolder(&extract_target, "pgsql")?;
             }
+            // Note: PostgreSQL ZIP extracts to postgresql/pgsql/bin/ (nested).
+            // Scanner and service.rs handle both flattened and nested structures.
 
             Ok(format!("Service installed to {:?}", extract_target))
         },

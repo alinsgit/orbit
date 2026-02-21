@@ -36,7 +36,9 @@ impl PostgreSQLManager {
         cmd.arg("-D").arg(data_dir)
            .arg("-U").arg(username)
            .arg("--auth-local=trust")
-           .arg("--auth-host=trust");
+           .arg("--auth-host=trust")
+           .arg("--locale=C")
+           .arg("--encoding=UTF8");
 
         #[cfg(target_os = "windows")]
         {
