@@ -1,6 +1,8 @@
 use crate::services::nginx::NginxManager;
 use crate::services::sites::{Site, SiteManager, SiteWithStatus};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
 use tauri::command;
 use tauri::AppHandle;
 
@@ -71,6 +73,47 @@ pub fn nginx_status() -> Result<bool, String> {
 }
 
 #[command]
+pub fn scaffold_basic_project(path: String, template: String) -> Result<String, String> {
+    let project_path = Path::new(&path);
+
+    // Create directory
+    fs::create_dir_all(project_path)
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    match template.as_str() {
+        "http" => {
+            let index_php = project_path.join("index.php");
+            fs::write(&index_php, "<?php\nphpinfo();\n")
+                .map_err(|e| format!("Failed to create index.php: {}", e))?;
+            Ok(format!("Created PHP project at {}", path))
+        }
+        "static" => {
+            let index_html = project_path.join("index.html");
+            let content = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Site</title>
+</head>
+<body>
+    <h1>Welcome</h1>
+    <p>Your static site is ready.</p>
+</body>
+</html>"#;
+            fs::write(&index_html, content)
+                .map_err(|e| format!("Failed to create index.html: {}", e))?;
+            Ok(format!("Created static project at {}", path))
+        }
+        "litecart" => {
+            // Just create the directory, user downloads LiteCart manually
+            Ok(format!("Created directory at {}. Download LiteCart files into this folder.", path))
+        }
+        _ => Err(format!("Unsupported template for basic scaffold: {}", template)),
+    }
+}
+
+#[command]
 pub fn export_sites(app: AppHandle) -> Result<SiteExport, String> {
     let sites = SiteManager::get_sites(&app)?;
 
@@ -125,6 +168,7 @@ pub fn import_sites(app: AppHandle, import_data: SiteExport, skip_existing: bool
             ssl_enabled: entry.ssl_enabled,
             template: entry.template,
             web_server: entry.web_server,
+            dev_port: None,
         };
 
         match SiteManager::create_site(&app, site) {

@@ -11,7 +11,8 @@ import {
   getMariadbConfRaw, saveMariadbConfRaw,
   getApacheConfRaw, saveApacheConfRaw,
   configurePhpMailpit, getPhpMailpitStatus,
-  configurePhpRedisSession, getPhpRedisSessionStatus
+  configurePhpRedisSession, getPhpRedisSessionStatus,
+  getCacheStatus, updateRedisConfig, CacheStatus
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 
@@ -24,7 +25,7 @@ interface ServiceConfigDrawerProps {
 }
 
 export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType, serviceVersion }: ServiceConfigDrawerProps) {
-  const { addToast } = useApp();
+  const { addToast, refreshServices } = useApp();
 
   // PHP State
   const [phpConfig, setPhpConfig] = useState<PhpConfig | null>(null);
@@ -62,6 +63,12 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
   const [rawConfigLoading, setRawConfigLoading] = useState(false);
   const [rawConfigSaving, setRawConfigSaving] = useState(false);
   const [rawConfigLoaded, setRawConfigLoaded] = useState(false);
+
+  // Redis State
+  const [redisStatus, setRedisStatus] = useState<CacheStatus | null>(null);
+  const [redisLoading, setRedisLoading] = useState(false);
+  const [redisPort, setRedisPort] = useState(6379);
+  const [redisMaxMemory, setRedisMaxMemory] = useState('128mb');
 
   // Integrations State
   const [mailpitEnabled, setMailpitEnabled] = useState(false);
@@ -120,6 +127,35 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       await loadPhpConfig();
     } else if (serviceType === 'nginx') {
       await loadNginxConfig();
+    } else if (serviceType === 'redis') {
+      await loadRedisConfig();
+    }
+  };
+
+  const loadRedisConfig = async () => {
+    setRedisLoading(true);
+    try {
+      const status = await getCacheStatus();
+      setRedisStatus(status);
+      setRedisPort(status.redis_port);
+    } catch (e) {
+      console.error('Failed to load Redis config:', e);
+      addToast({ type: 'error', message: 'Failed to load Redis configuration' });
+    } finally {
+      setRedisLoading(false);
+    }
+  };
+
+  const handleSaveRedisConfig = async () => {
+    setSaving('redis-config');
+    try {
+      await updateRedisConfig(redisPort, redisMaxMemory);
+      addToast({ type: 'success', message: 'Redis configuration updated. Restart Redis to apply.' });
+      await loadRedisConfig();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to update Redis config: ${e}` });
+    } finally {
+      setSaving(null);
     }
   };
 
@@ -213,8 +249,9 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       if (serviceType === 'nginx') await saveNginxConfRaw(rawConfigContent);
       else if (serviceType === 'mariadb') await saveMariadbConfRaw(rawConfigContent);
       else if (serviceType === 'apache') await saveApacheConfRaw(rawConfigContent);
-      
+
       addToast({ type: 'success', message: 'Configuration saved successfully. Services may need a restart.' });
+      await refreshServices();
     } catch (e: any) {
       console.error(`Failed to save ${serviceType} config:`, e);
       addToast({ type: 'error', message: `Failed to save configuration: ${e}` });
@@ -569,7 +606,7 @@ server {
         <div className="p-4 border-b border-edge flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-surface-raised flex items-center justify-center text-xl">
-              {serviceType === 'php' ? '🐘' : serviceType === 'nginx' ? '🌐' : '⚙️'}
+              {serviceType === 'php' ? '🐘' : serviceType === 'nginx' ? '🌐' : serviceType === 'redis' ? '🗝️' : '⚙️'}
             </div>
             <div>
               <h2 className="font-semibold">{serviceName}</h2>
@@ -579,11 +616,11 @@ server {
           <div className="flex items-center gap-2">
             <button
               onClick={loadConfig}
-              disabled={phpLoading || nginxLoading}
+              disabled={phpLoading || nginxLoading || redisLoading}
               className="p-2 hover:bg-hover rounded-lg transition-colors disabled:opacity-50"
               title="Refresh"
             >
-              <RefreshCw size={16} className={(phpLoading || nginxLoading) ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={(phpLoading || nginxLoading || redisLoading) ? 'animate-spin' : ''} />
             </button>
             <button
               onClick={onClose}
@@ -1295,8 +1332,103 @@ server {
             </div>
           )}
 
+          {/* Redis Configuration */}
+          {serviceType === 'redis' && (
+            <>
+              {redisLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-red-500" size={32} />
+                </div>
+              ) : (
+                <div className="border border-edge-subtle rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => toggleSection('settings')}
+                    className="w-full px-4 py-3 flex items-center justify-between bg-surface-raised hover:bg-hover transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Database size={16} className="text-red-500" />
+                      <span className="font-medium">Redis Settings</span>
+                    </div>
+                    {expandedSections.settings ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+
+                  {expandedSections.settings && (
+                    <div className="p-4 space-y-4">
+                      {/* Status info */}
+                      {redisStatus && (
+                        <div className="p-3 bg-surface-inset rounded-lg text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-content-muted">Status:</span>
+                            <span className={redisStatus.redis_running ? 'text-emerald-400' : 'text-content-secondary'}>
+                              {redisStatus.redis_running ? 'Running' : 'Stopped'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-content-muted">Port:</span>
+                            <span className="font-mono">{redisStatus.redis_port}</span>
+                          </div>
+                          {redisStatus.redis_path && (
+                            <div className="flex justify-between">
+                              <span className="text-content-muted">Path:</span>
+                              <span className="font-mono text-xs truncate max-w-[200px]">{redisStatus.redis_path}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Port */}
+                      <div>
+                        <label className="block text-xs text-content-muted mb-1">Port</label>
+                        <input
+                          type="number"
+                          value={redisPort}
+                          onChange={(e) => setRedisPort(parseInt(e.target.value) || 6379)}
+                          className="w-full px-3 py-2 bg-surface-raised border border-edge rounded-lg text-sm"
+                        />
+                      </div>
+
+                      {/* Max Memory */}
+                      <div>
+                        <label className="block text-xs text-content-muted mb-1">Max Memory</label>
+                        <select
+                          value={redisMaxMemory}
+                          onChange={(e) => setRedisMaxMemory(e.target.value)}
+                          className="w-full px-3 py-2 bg-surface-raised border border-edge rounded-lg text-sm"
+                        >
+                          <option value="64mb">64 MB</option>
+                          <option value="128mb">128 MB (Default)</option>
+                          <option value="256mb">256 MB</option>
+                          <option value="512mb">512 MB</option>
+                          <option value="1gb">1 GB</option>
+                        </select>
+                      </div>
+
+                      {/* Save button */}
+                      <button
+                        onClick={handleSaveRedisConfig}
+                        disabled={saving === 'redis-config'}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        {saving === 'redis-config' ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        Save Configuration
+                      </button>
+
+                      <p className="text-xs text-content-muted">
+                        Restart Redis after saving for changes to take effect.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
           {/* Unsupported service type */}
-          {serviceType !== 'php' && serviceType !== 'nginx' && serviceType !== 'mariadb' && serviceType !== 'apache' && (
+          {serviceType !== 'php' && serviceType !== 'nginx' && serviceType !== 'mariadb' && serviceType !== 'apache' && serviceType !== 'redis' && (
             <div className="text-center py-8 text-content-muted">
               <p>No configuration available for this service type.</p>
             </div>

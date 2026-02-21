@@ -38,6 +38,7 @@ impl TemplateManager {
             ("laravel", TEMPLATE_LARAVEL),
             ("wordpress", TEMPLATE_WORDPRESS),
             ("litecart", TEMPLATE_LITECART),
+            ("reverse-proxy", TEMPLATE_REVERSE_PROXY),
         ];
 
         for (name, content) in defaults {
@@ -65,6 +66,7 @@ impl TemplateManager {
             ("laravel", "Laravel framework site"),
             ("wordpress", "WordPress CMS site"),
             ("litecart", "LiteCart e-commerce site"),
+            ("reverse-proxy", "Reverse proxy for JS frameworks"),
         ]);
 
         if let Ok(entries) = fs::read_dir(&templates_dir) {
@@ -122,6 +124,7 @@ impl TemplateManager {
                 "laravel" => Ok(TEMPLATE_LARAVEL.to_string()),
                 "wordpress" => Ok(TEMPLATE_WORDPRESS.to_string()),
                 "litecart" => Ok(TEMPLATE_LITECART.to_string()),
+                "reverse-proxy" => Ok(TEMPLATE_REVERSE_PROXY.to_string()),
                 _ => Err(format!("Template not found: {}", name)),
             }
         }
@@ -147,6 +150,7 @@ impl TemplateManager {
             "laravel" => Ok(TEMPLATE_LARAVEL),
             "wordpress" => Ok(TEMPLATE_WORDPRESS),
             "litecart" => Ok(TEMPLATE_LITECART),
+            "reverse-proxy" => Ok(TEMPLATE_REVERSE_PROXY),
             _ => Err(format!("No default template for: {}", name)),
         }?;
 
@@ -155,7 +159,7 @@ impl TemplateManager {
 
     /// Delete a custom template
     pub fn delete_template(bin_path: &PathBuf, name: &str) -> Result<(), String> {
-        let defaults = ["http", "https", "static", "laravel", "wordpress", "litecart"];
+        let defaults = ["http", "https", "static", "laravel", "wordpress", "litecart", "reverse-proxy"];
         if defaults.contains(&name) {
             return Err("Cannot delete default templates".to_string());
         }
@@ -590,6 +594,90 @@ pub const TEMPLATE_WORDPRESS: &str = r#"server {
 }
 "#;
 
+/// Reverse proxy nginx template (for JS frameworks: Next.js, Astro, Nuxt, Vue)
+pub const TEMPLATE_REVERSE_PROXY: &str = r#"server {
+    listen       {{port}};
+    server_name  {{domain}};
+
+    access_log  logs/{{domain}}.access.log;
+    error_log   logs/{{domain}}.error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{dev_port}};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+"#;
+
+/// Reverse proxy nginx template with SSL
+pub const TEMPLATE_REVERSE_PROXY_SSL: &str = r#"# HTTP to HTTPS redirect
+server {
+    listen       {{port}};
+    server_name  {{domain}};
+    return 301   https://$server_name$request_uri;
+}
+
+# HTTPS server
+server {
+    listen       {{ssl_port}} ssl;
+    http2        on;
+    server_name  {{domain}};
+
+    # SSL Configuration
+    ssl_certificate      "{{ssl_cert}}";
+    ssl_certificate_key  "{{ssl_key}}";
+    ssl_protocols        TLSv1.2 TLSv1.3;
+    ssl_ciphers          HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache    shared:SSL:10m;
+    ssl_session_timeout  10m;
+
+    access_log  logs/{{domain}}.access.log;
+    error_log   logs/{{domain}}.error.log;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{dev_port}};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+"#;
+
+/// Apache reverse proxy vhost template (for JS frameworks)
+pub const APACHE_TEMPLATE_REVERSE_PROXY: &str = r#"<VirtualHost *:{{port}}>
+    ServerName {{domain}}
+
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:{{dev_port}}/
+    ProxyPassReverse / http://127.0.0.1:{{dev_port}}/
+
+    # WebSocket support
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule /(.*) ws://127.0.0.1:{{dev_port}}/$1 [P,L]
+
+    ErrorLog "logs/{{domain}}-error.log"
+    CustomLog "logs/{{domain}}-access.log" combined
+</VirtualHost>
+"#;
+
 /// Apache HTTP vhost template
 pub const APACHE_TEMPLATE_HTTP: &str = r#"<VirtualHost *:{{port}}>
     ServerName {{domain}}
@@ -743,6 +831,7 @@ pub enum SiteTemplate {
     Laravel,
     WordPress,
     LiteCart,
+    ReverseProxy,
 }
 
 impl SiteTemplate {
@@ -761,6 +850,7 @@ impl SiteTemplate {
             SiteTemplate::Laravel => TEMPLATE_LARAVEL,
             SiteTemplate::WordPress => TEMPLATE_WORDPRESS,
             SiteTemplate::LiteCart => TEMPLATE_LITECART,
+            SiteTemplate::ReverseProxy => TEMPLATE_REVERSE_PROXY,
         }
     }
 
@@ -772,6 +862,7 @@ impl SiteTemplate {
             SiteTemplate::Laravel => APACHE_TEMPLATE_LARAVEL,
             SiteTemplate::WordPress => APACHE_TEMPLATE_WORDPRESS,
             SiteTemplate::LiteCart => APACHE_TEMPLATE_LITECART,
+            SiteTemplate::ReverseProxy => APACHE_TEMPLATE_REVERSE_PROXY,
         }
     }
 

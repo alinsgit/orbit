@@ -4,7 +4,7 @@ use crate::services::nginx::NginxManager;
 use crate::services::php_registry::PhpRegistry;
 use crate::services::site_store::{SiteMetadata, SiteStore};
 use crate::services::ssl::SSLManager;
-use crate::services::templates::{SiteTemplate, TemplateEngine, TEMPLATE_LITECART_SSL};
+use crate::services::templates::{SiteTemplate, TemplateEngine, TEMPLATE_LITECART_SSL, TEMPLATE_REVERSE_PROXY_SSL};
 use crate::services::validation::{validate_domain, validate_port, validate_site_path, sanitize_for_nginx};
 use std::collections::HashMap;
 use std::fs;
@@ -21,9 +21,11 @@ pub struct Site {
     #[serde(default)]
     pub ssl_enabled: bool,
     #[serde(default)]
-    pub template: Option<String>, // "http", "laravel", "wordpress", "static"
+    pub template: Option<String>, // "http", "laravel", "wordpress", "static", "nextjs", "astro", "nuxt", "vue"
     #[serde(default = "default_web_server")]
     pub web_server: String, // "nginx" or "apache"
+    #[serde(default)]
+    pub dev_port: Option<u16>,
 }
 
 fn default_web_server() -> String {
@@ -40,6 +42,7 @@ pub struct SiteWithStatus {
     pub ssl_enabled: bool,
     pub template: Option<String>,
     pub web_server: String,
+    pub dev_port: Option<u16>,
     pub created_at: Option<String>,
     pub config_valid: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -105,6 +108,13 @@ impl SiteManager {
             NginxManager::get_sites_dir(app)?
         };
 
+        // Create project directory if it doesn't exist
+        let project_path = std::path::Path::new(&site.path);
+        if !project_path.exists() {
+            fs::create_dir_all(project_path)
+                .map_err(|e| format!("Failed to create project directory '{}': {}", site.path, e))?;
+        }
+
         // Load store
         let mut store = SiteStore::load(app)?;
 
@@ -131,6 +141,7 @@ impl SiteManager {
                 "litecart" => SiteTemplate::LiteCart,
                 "static" => SiteTemplate::Static,
                 "https" => SiteTemplate::Https,
+                "nextjs" | "astro" | "nuxt" | "vue" => SiteTemplate::ReverseProxy,
                 _ => SiteTemplate::Http,
             })
             .unwrap_or_else(|| {
@@ -153,6 +164,18 @@ impl SiteManager {
                 .unwrap_or(9004)
         });
         vars.insert("php_port", final_php_port.to_string());
+
+        // Dev port for reverse proxy (JS frameworks)
+        let dev_port = site.dev_port.unwrap_or_else(|| {
+            match site.template.as_deref() {
+                Some("nextjs") => 3000,
+                Some("astro") => 4321,
+                Some("nuxt") => 3000,
+                Some("vue") => 5173,
+                _ => 3000,
+            }
+        });
+        vars.insert("dev_port", dev_port.to_string());
 
         // SSL certificate paths
         let mut ssl_cert_path: Option<String> = None;
@@ -194,6 +217,7 @@ impl SiteManager {
             // Use SSL version of template for nginx
             match template {
                 SiteTemplate::LiteCart => TEMPLATE_LITECART_SSL,
+                SiteTemplate::ReverseProxy => TEMPLATE_REVERSE_PROXY_SSL,
                 _ => crate::services::templates::TEMPLATE_HTTPS,
             }
         } else {
@@ -223,20 +247,32 @@ impl SiteManager {
             }
         }
 
-        // Add to hosts file (optional - warn but continue if fails)
+        // Add to hosts file — try normal first, then elevated silently
         let hosts_warning = match HostsManager::add_domain(&site.domain) {
             Ok(_) => None,
-            Err(e) => {
-                log::warn!("Could not update hosts file (run as Administrator): {}", e);
-                Some(format!(
-                    "Note: Could not add {} to hosts file. Run as Administrator or add manually: 127.0.0.1 {}",
-                    site.domain, site.domain
-                ))
+            Err(_) => {
+                // Normal write failed (permission denied), try elevated approach
+                match HostsManager::add_domain_elevated(&site.domain) {
+                    Ok(_) => None,
+                    Err(e) => {
+                        log::warn!("Could not update hosts file: {}", e);
+                        Some(format!(
+                            "Could not add {} to hosts file. Add manually: 127.0.0.1 {}",
+                            site.domain, site.domain
+                        ))
+                    }
+                }
             }
         };
 
         // Create site metadata
         let now = chrono::Utc::now().to_rfc3339();
+        // Only store dev_port for reverse proxy templates
+        let stored_dev_port = match template {
+            SiteTemplate::ReverseProxy => Some(dev_port),
+            _ => None,
+        };
+
         let metadata = SiteMetadata {
             domain: site.domain.clone(),
             path: site.path.clone(),
@@ -248,6 +284,7 @@ impl SiteManager {
             ssl_key_path: ssl_key_path,
             template: site.template.clone(),
             web_server: site.web_server.clone(),
+            dev_port: stored_dev_port,
             created_at: now.clone(),
             updated_at: now.clone(),
         };
@@ -272,6 +309,7 @@ impl SiteManager {
             ssl_enabled: site.ssl_enabled,
             template: site.template,
             web_server: site.web_server,
+            dev_port: stored_dev_port,
             created_at: Some(now),
             config_valid: true,
             warning: hosts_warning,
@@ -316,6 +354,7 @@ impl SiteManager {
                     ssl_enabled: s.ssl_enabled,
                     template: s.template.clone(),
                     web_server: s.web_server.clone(),
+                    dev_port: s.dev_port,
                     created_at: Some(s.created_at.clone()),
                     config_valid,
                     warning: None,
@@ -351,6 +390,7 @@ impl SiteManager {
                 ssl_enabled: s.ssl_enabled,
                 template: s.template.clone(),
                 web_server: s.web_server.clone(),
+                dev_port: s.dev_port,
                 created_at: Some(s.created_at.clone()),
                 config_valid,
                 warning: None,
@@ -425,6 +465,7 @@ impl SiteManager {
             ssl_enabled: updates.ssl_enabled,
             template: updates.template,
             web_server: updates.web_server,
+            dev_port: updates.dev_port,
         };
 
         Self::create_site(app, new_site)
@@ -500,6 +541,7 @@ impl SiteManager {
             ssl_enabled: site.ssl_enabled,
             template: site.template.clone(),
             web_server: site.web_server.clone(),
+            dev_port: site.dev_port,
         };
 
         // Delete old config from appropriate directory

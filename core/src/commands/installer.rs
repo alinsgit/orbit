@@ -34,18 +34,21 @@ pub async fn download_service(
 
     // Determine extraction target and whether to strip root folder
     let (extract_target, strip_root) = match service_type.as_str() {
-        "nginx" => (bin_path.join("nginx"), true),       // nginx-x.x.x/ folder inside
-        "mariadb" => (bin_path.join("mariadb"), true),   // mariadb-x.x.x-winx64/ folder inside
+        "nginx" => (bin_path.join("nginx"), true),           // nginx-x.x.x/ folder inside
+        "mariadb" => (bin_path.join("mariadb"), true),       // mariadb-x.x.x-winx64/ folder inside
+        "postgresql" => (bin_path.join("postgresql"), true), // pgsql/ folder inside
+        "mongodb" => (bin_path.join("mongodb"), true),       // mongodb-win32-x86_64-.../ folder inside
         s if s.starts_with("php") => {
             let version = s.strip_prefix("php-").unwrap_or("latest");
-            (bin_path.join("php").join(version), false)  // PHP zips have flat structure
+            (bin_path.join("php").join(version), false)      // PHP zips have flat structure
         }
-        "nodejs" => (bin_path.join("nodejs"), true),     // node-vx.x.x-win-x64/ folder inside
-        "python" => (bin_path.join("python"), false),    // Python embed has flat structure
-        "bun" => (bin_path.join("bun"), true),           // bun-windows-x64/ folder inside
-        "apache" => (bin_path.join("apache"), true),     // Apache24/ folder inside
-        "go" => (bin_path.join("go"), true),             // go/ folder inside
-        "deno" => (bin_path.join("deno"), false),        // flat deno.exe inside
+        "nodejs" => (bin_path.join("nodejs"), true),         // node-vx.x.x-win-x64/ folder inside
+        "python" => (bin_path.join("python"), false),        // Python embed has flat structure
+        "bun" => (bin_path.join("bun"), true),               // bun-windows-x64/ folder inside
+        "apache" => (bin_path.join("apache"), true),         // Apache24/ folder inside
+        "go" => (bin_path.join("go"), true),                 // go/ folder inside
+        "redis" => (bin_path.join("redis"), false),            // flat structure inside
+        "deno" => (bin_path.join("deno"), false),            // flat deno.exe inside
         _ => (bin_path.join("misc").join(&service_type), false),
     };
 

@@ -131,7 +131,7 @@ function App() {
           
           {/* Docked Terminal */}
           {isTerminalOpen && (
-             <div className="h-1/3 min-h-[300px] border-t border-edge bg-[#0a0a0a] relative z-40">
+             <div className="h-2/5 min-h-[250px] border-t border-edge bg-[#0a0a0a] relative z-40 flex flex-col">
                 <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
              </div>
           )}

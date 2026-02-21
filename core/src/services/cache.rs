@@ -61,9 +61,28 @@ impl CacheManager {
         }
     }
 
-    /// Check if Redis is running
-    pub fn is_redis_running() -> bool {
-        Self::check_port_in_use(6379)
+    /// Check if Redis is running (checks configured port)
+    pub fn is_redis_running(app: &AppHandle) -> bool {
+        let port = Self::get_configured_port(app);
+        Self::check_port_in_use(port)
+    }
+
+    /// Get the configured Redis port from redis.conf, defaults to 6379
+    fn get_configured_port(app: &AppHandle) -> u16 {
+        if let Ok(bin_dir) = Self::get_cache_dir(app) {
+            let config_path = bin_dir.join("redis").join("redis.conf");
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("port ") {
+                        if let Ok(port) = trimmed[5..].trim().parse::<u16>() {
+                            return port;
+                        }
+                    }
+                }
+            }
+        }
+        6379
     }
 
     /// Check if a port is in use
@@ -74,11 +93,12 @@ impl CacheManager {
 
     /// Get full cache status
     pub fn get_status(app: &AppHandle) -> Result<CacheStatus, String> {
+        let port = Self::get_configured_port(app);
         Ok(CacheStatus {
             redis_installed: Self::is_redis_installed(app)?,
             redis_path: Self::get_redis_path(app)?.map(|p| p.to_string_lossy().to_string()),
-            redis_running: Self::is_redis_running(),
-            redis_port: 6379,
+            redis_running: Self::is_redis_running(app),
+            redis_port: port,
         })
     }
 
