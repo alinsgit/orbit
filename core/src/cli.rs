@@ -24,12 +24,14 @@
 //!   orbit-cli php ext <version>   Manage PHP extensions
 //!   orbit-cli hosts list|add|remove  Manage hosts file
 //!   orbit-cli composer <args>     Run composer via Orbit's PHP
+//!   orbit-cli install <service>   Install a service (nginx, php, redis, etc.)
+//!   orbit-cli uninstall <service> Uninstall a service
 
 use clap::{Parser, Subcommand};
 use colored::*;
 use serde::Deserialize;
 use std::fs;
-use std::io::{BufRead, BufReader, Seek, SeekFrom, Write as IoWrite};
+use std::io::{BufRead, BufReader, Read as IoRead, Seek, SeekFrom, Write as IoWrite};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -295,16 +297,22 @@ fn scan_services(bin_path: &PathBuf) -> Vec<ServiceInfo> {
         });
     }
 
-    // PostgreSQL
-    let pg_exe = bin_path.join("postgresql").join("bin").join("postgres.exe");
-    if pg_exe.exists() {
-        let version = parse_version_output(&pg_exe, &["--version"], "postgres (PostgreSQL) ", 22);
-        services.push(ServiceInfo {
-            name: "postgresql".to_string(),
-            version,
-            path: pg_exe.to_string_lossy().to_string(),
-            service_type: "postgresql".to_string(),
-        });
+    // PostgreSQL (check both flattened and nested structures)
+    let pg_paths = [
+        bin_path.join("postgresql").join("bin").join("postgres.exe"),
+        bin_path.join("postgresql").join("pgsql").join("bin").join("postgres.exe"),
+    ];
+    for pg_exe in &pg_paths {
+        if pg_exe.exists() {
+            let version = parse_version_output(pg_exe, &["--version"], "postgres (PostgreSQL) ", 22);
+            services.push(ServiceInfo {
+                name: "postgresql".to_string(),
+                version,
+                path: pg_exe.to_string_lossy().to_string(),
+                service_type: "postgresql".to_string(),
+            });
+            break;
+        }
     }
 
     // MongoDB
@@ -316,6 +324,77 @@ fn scan_services(bin_path: &PathBuf) -> Vec<ServiceInfo> {
             path: mongo_exe.to_string_lossy().to_string(),
             service_type: "mongodb".to_string(),
         });
+    }
+
+    // Go
+    let go_paths = [
+        bin_path.join("go").join("bin").join("go.exe"),
+        bin_path.join("go").join("go.exe"),
+    ];
+    for go_exe in &go_paths {
+        if go_exe.exists() {
+            let version = parse_version_output(go_exe, &["version"], "go", 2);
+            services.push(ServiceInfo {
+                name: "go".to_string(),
+                version,
+                path: go_exe.to_string_lossy().to_string(),
+                service_type: "go".to_string(),
+            });
+            break;
+        }
+    }
+
+    // Deno
+    let deno_exe = bin_path.join("deno").join("deno.exe");
+    if deno_exe.exists() {
+        let version = parse_version_output(&deno_exe, &["--version"], "deno ", 5);
+        services.push(ServiceInfo {
+            name: "deno".to_string(),
+            version,
+            path: deno_exe.to_string_lossy().to_string(),
+            service_type: "deno".to_string(),
+        });
+    }
+
+    // Bun
+    let bun_exe = bin_path.join("bun").join("bun.exe");
+    if bun_exe.exists() {
+        let version = parse_version_output(&bun_exe, &["--version"], "", 0);
+        services.push(ServiceInfo {
+            name: "bun".to_string(),
+            version,
+            path: bun_exe.to_string_lossy().to_string(),
+            service_type: "bun".to_string(),
+        });
+    }
+
+    // Python
+    let python_exe = bin_path.join("python").join("python.exe");
+    if python_exe.exists() {
+        let version = parse_version_output(&python_exe, &["--version"], "Python ", 7);
+        services.push(ServiceInfo {
+            name: "python".to_string(),
+            version,
+            path: python_exe.to_string_lossy().to_string(),
+            service_type: "python".to_string(),
+        });
+    }
+
+    // Rust
+    let rust_paths = [
+        bin_path.join("rust").join("rustup-init.exe"),
+        bin_path.join("misc").join("rust").join("rustup-init.exe"),
+    ];
+    for rust_exe in &rust_paths {
+        if rust_exe.exists() {
+            services.push(ServiceInfo {
+                name: "rust".to_string(),
+                version: "installed".to_string(),
+                path: rust_exe.to_string_lossy().to_string(),
+                service_type: "rust".to_string(),
+            });
+            break;
+        }
     }
 
     services
@@ -422,6 +501,18 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
         }
         "mailpit" => {
             (exe_path.clone(), vec![])
+        }
+        "postgresql" => {
+            let data_dir = bin_dir.join("data").join("postgres");
+            (exe_path.clone(), vec!["-D".to_string(), data_dir.display().to_string()])
+        }
+        "mongodb" => {
+            let data_dir = bin_dir.join("data").join("mongodb");
+            fs::create_dir_all(&data_dir).ok();
+            (exe_path.clone(), vec![
+                "--dbpath".to_string(), data_dir.display().to_string(),
+                "--port".to_string(), "27017".to_string(),
+            ])
         }
         _ => {
             return Err(format!("Unknown service type: {}", service.service_type));
@@ -714,6 +805,24 @@ enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+
+    /// Install a service (e.g., orbit install nginx)
+    Install {
+        /// Service to install (nginx, php, mariadb, redis, nodejs, etc.)
+        service: String,
+        /// Version to install (e.g., 8.4 for PHP, 1.28 for Nginx)
+        #[arg(long)]
+        version: Option<String>,
+    },
+
+    /// Uninstall a service
+    Uninstall {
+        /// Service to uninstall
+        service: String,
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -881,11 +990,16 @@ fn cmd_start(bin_dir: &PathBuf, service_name: Option<String>, all: bool) {
 
     let targets: Vec<&ServiceInfo> = if all {
         services.iter().filter(|s| {
-            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit")
+            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit" | "postgresql" | "mongodb")
         }).collect()
     } else if let Some(ref name) = service_name {
         services.iter().filter(|s| {
             s.name == *name || s.service_type == *name || s.name.starts_with(name)
+                || (*name == "pg" && s.service_type == "postgresql")
+                || (*name == "postgres" && s.service_type == "postgresql")
+                || (*name == "mongo" && s.service_type == "mongodb")
+                || (*name == "maria" && s.service_type == "mariadb")
+                || (*name == "node" && s.service_type == "nodejs")
         }).collect()
     } else {
         println!("  {} Specify a service name or use --all", "!".yellow());
@@ -970,11 +1084,16 @@ fn cmd_restart(bin_dir: &PathBuf, service_name: Option<String>, all: bool) {
 
     let targets: Vec<&ServiceInfo> = if all {
         services.iter().filter(|s| {
-            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit")
+            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit" | "postgresql" | "mongodb")
         }).collect()
     } else if let Some(ref name) = service_name {
         services.iter().filter(|s| {
             s.name == *name || s.service_type == *name || s.name.starts_with(name)
+                || (*name == "pg" && s.service_type == "postgresql")
+                || (*name == "postgres" && s.service_type == "postgresql")
+                || (*name == "mongo" && s.service_type == "mongodb")
+                || (*name == "maria" && s.service_type == "mariadb")
+                || (*name == "node" && s.service_type == "nodejs")
         }).collect()
     } else {
         println!("  {} Specify a service name or use --all", "!".yellow());
@@ -1034,8 +1153,14 @@ fn cmd_list(bin_dir: &PathBuf) {
         ("php", "PHP", "Server-side scripting language"),
         ("mariadb", "MariaDB", "MySQL-compatible database"),
         ("postgresql", "PostgreSQL", "Advanced relational database"),
+        ("mongodb", "MongoDB", "NoSQL document database"),
         ("redis", "Redis", "In-memory data store"),
         ("nodejs", "Node.js", "JavaScript runtime"),
+        ("python", "Python", "General-purpose language"),
+        ("bun", "Bun", "Fast JavaScript runtime"),
+        ("go", "Go", "Compiled programming language"),
+        ("deno", "Deno", "Next-gen JavaScript runtime"),
+        ("rust", "Rust", "Systems programming language"),
         ("mailpit", "Mailpit", "Email testing tool"),
         ("composer", "Composer", "PHP dependency manager"),
     ];
@@ -1824,6 +1949,640 @@ fn cmd_composer(bin_dir: &PathBuf, args: Vec<String>) {
     }
 }
 
+// ─── Registry Types ───────────────────────────────────────────────
+
+/// Embedded fallback registry
+const CLI_FALLBACK_REGISTRY: &str = include_str!("../dist/libraries.json");
+
+#[derive(Deserialize)]
+struct RegistryPlatformDownload {
+    url: String,
+    filename: String,
+}
+
+#[derive(Deserialize)]
+struct RegistryVersionInfo {
+    #[allow(dead_code)]
+    latest: String,
+    #[serde(default)]
+    windows: Option<RegistryPlatformDownload>,
+    #[serde(default)]
+    all_platforms: Option<RegistryPlatformDownload>,
+}
+
+#[derive(Deserialize)]
+struct RegistryServiceInfo {
+    name: String,
+    #[serde(default, rename = "availableVersions")]
+    available_versions: Option<Vec<String>>,
+    #[serde(default)]
+    versions: Option<std::collections::HashMap<String, RegistryVersionInfo>>,
+    // Single-version services
+    #[serde(default)]
+    windows: Option<RegistryPlatformDownload>,
+    #[serde(default)]
+    all_platforms: Option<RegistryPlatformDownload>,
+}
+
+#[derive(Deserialize)]
+struct CliRegistry {
+    services: std::collections::HashMap<String, RegistryServiceInfo>,
+}
+
+fn load_registry() -> Result<CliRegistry, String> {
+    // Try remote first, fall back to embedded
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .ok();
+
+    if let Some(client) = client {
+        if let Ok(resp) = client.get("https://raw.githubusercontent.com/alinsgit/orbit-libraries/main/dist/libraries.json").send() {
+            if resp.status().is_success() {
+                if let Ok(text) = resp.text() {
+                    if let Ok(registry) = serde_json::from_str::<CliRegistry>(&text) {
+                        return Ok(registry);
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to embedded
+    serde_json::from_str(CLI_FALLBACK_REGISTRY)
+        .map_err(|e| format!("Failed to parse registry: {}", e))
+}
+
+fn get_download_info(service_info: &RegistryServiceInfo, version: Option<&str>) -> Option<(String, String)> {
+    // Multi-version service
+    if let Some(versions) = &service_info.versions {
+        let ver = version.or_else(|| {
+            service_info.available_versions.as_ref()
+                .and_then(|v| v.first())
+                .map(|s| s.as_str())
+        })?;
+
+        let version_info = versions.get(ver)?;
+
+        #[cfg(target_os = "windows")]
+        if let Some(dl) = &version_info.windows {
+            return Some((dl.url.clone(), dl.filename.clone()));
+        }
+        if let Some(dl) = &version_info.all_platforms {
+            return Some((dl.url.clone(), dl.filename.clone()));
+        }
+        return None;
+    }
+
+    // Single-version service
+    #[cfg(target_os = "windows")]
+    if let Some(dl) = &service_info.windows {
+        return Some((dl.url.clone(), dl.filename.clone()));
+    }
+    if let Some(dl) = &service_info.all_platforms {
+        return Some((dl.url.clone(), dl.filename.clone()));
+    }
+    None
+}
+
+// ─── Install/Uninstall Commands ──────────────────────────────────
+
+fn cmd_install(bin_dir: &PathBuf, service: &str, version: Option<String>) {
+    println!();
+
+    // Normalize service name
+    let service_key = match service {
+        "node" => "nodejs",
+        "pg" | "postgres" => "postgresql",
+        "mongo" => "mongodb",
+        "maria" => "mariadb",
+        s => s,
+    };
+
+    // Load registry
+    print!("  {} Fetching registry...", "⟳".dimmed());
+    std::io::stdout().flush().unwrap_or(());
+    let registry = match load_registry() {
+        Ok(r) => {
+            print!("\r");
+            std::io::stdout().flush().unwrap_or(());
+            r
+        }
+        Err(e) => {
+            println!("\r  {} Failed to load registry: {}", "✗".red(), e);
+            return;
+        }
+    };
+
+    let service_info = match registry.services.get(service_key) {
+        Some(info) => info,
+        None => {
+            println!("  {} Service '{}' not found in registry.", "✗".red(), service);
+            println!("  {} Available services:", "→".dimmed());
+            let mut names: Vec<&String> = registry.services.keys().collect();
+            names.sort();
+            for name in names {
+                println!("      {}", name.white());
+            }
+            println!();
+            return;
+        }
+    };
+
+    // For PHP, build the service_type with version prefix
+    let install_type = if service_key == "php" {
+        let ver = version.as_deref().unwrap_or_else(|| {
+            service_info.available_versions.as_ref()
+                .and_then(|v| v.first())
+                .map(|s| s.as_str())
+                .unwrap_or("8.4")
+        });
+        format!("php-{}", ver)
+    } else {
+        service_key.to_string()
+    };
+
+    // Get download URL
+    let (url, filename) = match get_download_info(service_info, version.as_deref()) {
+        Some(info) => info,
+        None => {
+            println!("  {} No download available for '{}' on this platform.", "✗".red(), service);
+            if let Some(versions) = &service_info.available_versions {
+                println!("  {} Available versions: {}", "→".dimmed(), versions.join(", "));
+            }
+            println!();
+            return;
+        }
+    };
+
+    let ver_display = version.as_deref().unwrap_or("latest");
+    println!("  {} Installing {} {}...", "→".dimmed(), service_info.name.white().bold(), ver_display.dimmed());
+    println!("  {} {}", "↓".dimmed(), url.dimmed());
+
+    // Create downloads directory
+    let downloads_dir = bin_dir.join("downloads");
+    fs::create_dir_all(&downloads_dir).ok();
+
+    let dest_path = downloads_dir.join(&filename);
+
+    // Download
+    print!("  {} Downloading...", "⟳".dimmed());
+    std::io::stdout().flush().unwrap_or(());
+
+    match cli_download_file(&url, &dest_path) {
+        Ok(size) => {
+            println!("\r  {} Downloaded ({})", "✓".bright_green(), format_size(size));
+        }
+        Err(e) => {
+            println!("\r  {} Download failed: {}", "✗".red(), e);
+            return;
+        }
+    }
+
+    // Determine extraction target and strip_root
+    let (extract_target, strip_root) = match install_type.as_str() {
+        "nginx" => (bin_dir.join("nginx"), true),
+        "mariadb" => (bin_dir.join("mariadb"), true),
+        "postgresql" => (bin_dir.join("postgresql"), true),
+        "mongodb" => (bin_dir.join("mongodb"), true),
+        "nodejs" => (bin_dir.join("nodejs"), true),
+        "bun" => (bin_dir.join("bun"), true),
+        "apache" => (bin_dir.join("apache"), true),
+        "go" => (bin_dir.join("go"), true),
+        "redis" => (bin_dir.join("redis"), true),
+        "deno" => (bin_dir.join("deno"), false),
+        "python" => (bin_dir.join("python"), false),
+        "mailpit" => (bin_dir.join("mailpit"), true),
+        s if s.starts_with("php-") => {
+            let ver = s.strip_prefix("php-").unwrap_or("latest");
+            (bin_dir.join("php").join(ver), false)
+        }
+        "composer" => (bin_dir.join("composer"), false),
+        "rust" => (bin_dir.join("rust"), false),
+        _ => (bin_dir.join("misc").join(service_key), false),
+    };
+
+    // Handle raw executables (rust, composer)
+    if service_key == "rust" {
+        fs::create_dir_all(&extract_target).ok();
+        let target_exe = extract_target.join(&filename);
+        match fs::copy(&dest_path, &target_exe) {
+            Ok(_) => {
+                let _ = fs::remove_file(&dest_path);
+                println!("  {} Installed to {}", "✓".bright_green(), extract_target.display().to_string().cyan());
+                println!();
+                return;
+            }
+            Err(e) => {
+                println!("  {} Failed to copy executable: {}", "✗".red(), e);
+                return;
+            }
+        }
+    }
+
+    if service_key == "composer" {
+        fs::create_dir_all(&extract_target).ok();
+        let target_phar = extract_target.join("composer.phar");
+        match fs::copy(&dest_path, &target_phar) {
+            Ok(_) => {
+                let _ = fs::remove_file(&dest_path);
+                println!("  {} Installed to {}", "✓".bright_green(), extract_target.display().to_string().cyan());
+                println!();
+                return;
+            }
+            Err(e) => {
+                println!("  {} Failed to copy composer.phar: {}", "✗".red(), e);
+                return;
+            }
+        }
+    }
+
+    // Clean and create extraction target
+    if extract_target.exists() {
+        let _ = fs::remove_dir_all(&extract_target);
+    }
+    fs::create_dir_all(&extract_target).ok();
+
+    // Extract
+    print!("  {} Extracting...", "⟳".dimmed());
+    std::io::stdout().flush().unwrap_or(());
+
+    match cli_extract_zip(&dest_path, &extract_target, strip_root) {
+        Ok(_) => {
+            let _ = fs::remove_file(&dest_path);
+            println!("\r  {} Extracted successfully", "✓".bright_green());
+        }
+        Err(e) => {
+            println!("\r  {} Extraction failed: {}", "✗".red(), e);
+            return;
+        }
+    }
+
+    // Post-install configuration
+    if install_type.starts_with("php-") {
+        match cli_configure_php(&extract_target) {
+            Ok(_) => println!("  {} PHP configured (php.ini created)", "✓".bright_green()),
+            Err(e) => println!("  {} PHP config warning: {}", "!".yellow(), e),
+        }
+    } else if service_key == "apache" {
+        // Apache24 subfolder handling
+        let apache24 = extract_target.join("Apache24");
+        if apache24.exists() {
+            cli_move_subfolder_up(&apache24, &extract_target).ok();
+        }
+        match cli_configure_apache(&extract_target) {
+            Ok(_) => println!("  {} Apache configured (httpd.conf updated)", "✓".bright_green()),
+            Err(e) => println!("  {} Apache config warning: {}", "!".yellow(), e),
+        }
+    }
+    // Note: PostgreSQL ZIP extracts to postgresql/pgsql/bin/ (nested).
+    // Scanner handles both flattened and nested structures.
+
+    // Verify installation
+    let services = scan_services(bin_dir);
+    let found = services.iter().find(|s| {
+        s.service_type == service_key || s.name == install_type
+    });
+
+    if let Some(svc) = found {
+        println!("  {} {} {} installed successfully",
+            "✓".bright_green(),
+            svc.name.white().bold(),
+            svc.version.dimmed()
+        );
+    } else {
+        println!("  {} Installed to {}", "✓".bright_green(), extract_target.display().to_string().cyan());
+    }
+    println!();
+}
+
+fn cmd_uninstall(bin_dir: &PathBuf, service: &str, skip_confirm: bool) {
+    println!();
+
+    let service_key = match service {
+        "node" => "nodejs",
+        "pg" | "postgres" => "postgresql",
+        "mongo" => "mongodb",
+        "maria" => "mariadb",
+        s => s,
+    };
+
+    // Find the service directory
+    let service_dir = if service_key.starts_with("php-") {
+        let ver = service_key.strip_prefix("php-").unwrap_or("8.4");
+        bin_dir.join("php").join(ver)
+    } else {
+        bin_dir.join(service_key)
+    };
+
+    if !service_dir.exists() {
+        println!("  {} Service '{}' is not installed.", "✗".red(), service);
+        println!();
+        return;
+    }
+
+    if !skip_confirm {
+        print!("  {} Remove {} at {}? [y/N] ",
+            "?".yellow(),
+            service.white().bold(),
+            service_dir.display().to_string().dimmed()
+        );
+        std::io::stdout().flush().unwrap_or(());
+
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_err() {
+            println!("  {} Cancelled.", "—".dimmed());
+            return;
+        }
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("  {} Cancelled.", "—".dimmed());
+            println!();
+            return;
+        }
+    }
+
+    // Stop service if running
+    if is_service_running(service_key) {
+        match stop_service_process(service_key) {
+            Ok(()) => println!("  {} Stopped {}", "✓".bright_green(), service_key.white()),
+            Err(_) => println!("  {} Could not stop {} (may need manual cleanup)", "!".yellow(), service_key),
+        }
+    }
+
+    // Remove directory
+    match fs::remove_dir_all(&service_dir) {
+        Ok(_) => {
+            println!("  {} {} uninstalled successfully", "✓".bright_green(), service.white().bold());
+        }
+        Err(e) => {
+            println!("  {} Failed to remove {}: {}", "✗".red(), service_dir.display(), e);
+        }
+    }
+    println!();
+}
+
+// ─── CLI Download & Extract ──────────────────────────────────────
+
+fn cli_download_file(url: &str, dest_path: &PathBuf) -> Result<u64, String> {
+    // Try mirror URL for MariaDB
+    let urls_to_try: Vec<String> = {
+        let mut urls = vec![url.to_string()];
+        if url.contains("downloads.mariadb.org/f/") {
+            if let Some(after_f) = url.split("downloads.mariadb.org/f/").nth(1) {
+                urls.push(format!("https://mirror.kumi.systems/mariadb/{}", after_f));
+            }
+        }
+        urls
+    };
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut last_error = String::new();
+
+    for attempt_url in &urls_to_try {
+        let resp = match client.get(attempt_url)
+            .header("Accept", "application/octet-stream, application/zip, */*;q=0.1")
+            .header("Accept-Encoding", "identity")
+            .send()
+        {
+            Ok(r) => r,
+            Err(e) => {
+                last_error = format!("Request failed: {}", e);
+                continue;
+            }
+        };
+
+        if !resp.status().is_success() {
+            last_error = format!("HTTP {}", resp.status());
+            continue;
+        }
+
+        // Reject HTML responses
+        if let Some(ct) = resp.headers().get("content-type") {
+            if ct.to_str().unwrap_or("").contains("text/html") {
+                last_error = "Received HTML instead of file".to_string();
+                continue;
+            }
+        }
+
+        let total_size = resp.content_length().unwrap_or(0);
+
+        if let Some(parent) = dest_path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+
+        let bytes = resp.bytes()
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+
+        fs::write(dest_path, &bytes)
+            .map_err(|e| format!("Failed to write file: {}", e))?;
+
+        let written = if total_size > 0 { total_size } else { bytes.len() as u64 };
+        return Ok(written);
+    }
+
+    Err(last_error)
+}
+
+fn cli_extract_zip(zip_path: &PathBuf, extract_path: &PathBuf, strip_root: bool) -> Result<(), String> {
+    use zip::ZipArchive;
+
+    let file = std::fs::File::open(zip_path)
+        .map_err(|e| format!("Failed to open zip: {}", e))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read zip: {}", e))?;
+
+    // Detect root folder
+    let root_folder = if strip_root && archive.len() > 0 {
+        if let Ok(first) = archive.by_index(0) {
+            let name = first.name().to_string();
+            if name.ends_with('/') {
+                Some(name)
+            } else if let Some(idx) = name.find('/') {
+                Some(format!("{}/", &name[..idx]))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)
+            .map_err(|e| format!("Failed to read zip entry: {}", e))?;
+
+        let file_path = match entry.enclosed_name() {
+            Some(path) => path.to_path_buf(),
+            None => continue,
+        };
+
+        let relative_path = if let Some(ref root) = root_folder {
+            let path_str = file_path.to_string_lossy();
+            if path_str.starts_with(root) {
+                PathBuf::from(&path_str[root.len()..])
+            } else {
+                file_path
+            }
+        } else {
+            file_path
+        };
+
+        if relative_path.as_os_str().is_empty() {
+            continue;
+        }
+
+        let outpath = extract_path.join(&relative_path);
+
+        if entry.name().ends_with('/') {
+            fs::create_dir_all(&outpath).ok();
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p).ok();
+                }
+            }
+            let mut outfile = std::fs::File::create(&outpath)
+                .map_err(|e| format!("Failed to create file: {}", e))?;
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)
+                .map_err(|e| format!("Failed to read entry: {}", e))?;
+            outfile.write_all(&buf)
+                .map_err(|e| format!("Failed to write file: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn cli_move_subfolder_up(source: &PathBuf, dest: &PathBuf) -> Result<(), String> {
+    let entries = fs::read_dir(source)
+        .map_err(|e| format!("Failed to read subfolder: {}", e))?;
+
+    for entry in entries.flatten() {
+        let src_path = entry.path();
+        let file_name = entry.file_name();
+        let dest_path = dest.join(&file_name);
+
+        if dest_path.exists() && dest_path != src_path {
+            continue;
+        }
+
+        if src_path.is_dir() {
+            cli_copy_dir_all(&src_path, &dest_path)?;
+            let _ = fs::remove_dir_all(&src_path);
+        } else {
+            fs::rename(&src_path, &dest_path)
+                .map_err(|e| format!("Failed to move {}: {}", file_name.to_string_lossy(), e))?;
+        }
+    }
+
+    let _ = fs::remove_dir(source);
+    Ok(())
+}
+
+fn cli_copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("Failed to create dir: {}", e))?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            cli_copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)
+                .map_err(|e| format!("Failed to copy {:?}: {}", src_path, e))?;
+        }
+    }
+    Ok(())
+}
+
+fn cli_configure_php(php_path: &PathBuf) -> Result<(), String> {
+    let ini_dev = php_path.join("php.ini-development");
+    let ini_prod = php_path.join("php.ini-production");
+    let ini_target = php_path.join("php.ini");
+
+    if !ini_target.exists() {
+        if ini_dev.exists() {
+            fs::copy(&ini_dev, &ini_target).map_err(|e| format!("Failed to create php.ini: {}", e))?;
+        } else if ini_prod.exists() {
+            fs::copy(&ini_prod, &ini_target).map_err(|e| format!("Failed to create php.ini: {}", e))?;
+        } else {
+            return Err("No php.ini template found".to_string());
+        }
+    }
+
+    let mut content = fs::read_to_string(&ini_target)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    // Set extension_dir
+    let ext_dir = php_path.join("ext");
+    let ext_dir_str = ext_dir.to_string_lossy().replace('\\', "/");
+
+    if content.contains(";extension_dir = \"ext\"") {
+        content = content.replace(
+            ";extension_dir = \"ext\"",
+            &format!("extension_dir = \"{}\"", ext_dir_str)
+        );
+    }
+
+    // Enable common extensions
+    for ext in ["curl", "fileinfo", "gd", "mbstring", "mysqli", "openssl", "pdo_mysql", "zip"] {
+        let disabled = format!(";extension={}", ext);
+        let enabled = format!("extension={}", ext);
+        if content.contains(&disabled) {
+            content = content.replace(&disabled, &enabled);
+        }
+    }
+
+    fs::write(&ini_target, content).map_err(|e| format!("Failed to write php.ini: {}", e))?;
+    Ok(())
+}
+
+fn cli_configure_apache(apache_path: &PathBuf) -> Result<(), String> {
+    let conf_dir = if apache_path.join("conf").exists() {
+        apache_path.join("conf")
+    } else {
+        return Err("conf directory not found".to_string());
+    };
+
+    let httpd_conf = conf_dir.join("httpd.conf");
+    if !httpd_conf.exists() {
+        return Err("httpd.conf not found".to_string());
+    }
+
+    let mut content = fs::read_to_string(&httpd_conf)
+        .map_err(|e| format!("Failed to read httpd.conf: {}", e))?;
+
+    let server_root = apache_path.to_string_lossy().replace('\\', "/");
+
+    // Update SRVROOT
+    let re = regex::Regex::new(r#"(?m)^Define SRVROOT.*$"#).unwrap();
+    content = re.replace(&content, format!(r#"Define SRVROOT "{}""#, server_root)).to_string();
+
+    // Set port to 8082
+    let listen_re = regex::Regex::new(r"(?m)^Listen\s+\d+").unwrap();
+    content = listen_re.replace(&content, "Listen 8082").to_string();
+
+    // Update ServerName
+    let sn_re = regex::Regex::new(r"(?m)^#?ServerName.*$").unwrap();
+    content = sn_re.replace(&content, "ServerName localhost:8082").to_string();
+
+    fs::write(&httpd_conf, content).map_err(|e| format!("Failed to write httpd.conf: {}", e))?;
+
+    // Create logs directory
+    let logs_dir = apache_path.join("logs");
+    fs::create_dir_all(&logs_dir).ok();
+
+    Ok(())
+}
+
 // ─── Main ─────────────────────────────────────────────────────────
 
 fn main() {
@@ -1861,5 +2620,7 @@ fn main() {
             HostsCommands::Remove { domain } => cmd_hosts_remove(&domain),
         },
         Commands::Composer { args } => cmd_composer(&bin_dir, args),
+        Commands::Install { service, version } => cmd_install(&bin_dir, &service, version),
+        Commands::Uninstall { service, yes } => cmd_uninstall(&bin_dir, &service, yes),
     }
 }
