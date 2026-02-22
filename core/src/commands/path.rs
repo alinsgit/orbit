@@ -44,6 +44,7 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
         "bun" => bin_path.join("bun"),
         "go" => bin_path.join("go").join("bin"),
         "deno" => bin_path.join("deno"),
+        "mcp" => bin_path.join("mcp"),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -109,6 +110,7 @@ pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<
         "bun" => bin_path.join("bun").to_string_lossy().to_string(),
         "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
         "deno" => bin_path.join("deno").to_string_lossy().to_string(),
+        "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 

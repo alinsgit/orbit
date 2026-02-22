@@ -6,7 +6,7 @@
 //! Protocol: JSON-RPC 2.0 over stdio with Content-Length headers
 //! Transport: stdin/stdout (protocol), stderr (debug logging)
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::io::{self, BufRead, Write as IoWrite};
@@ -49,14 +49,13 @@ fn get_config_dir() -> PathBuf {
 
 // ─── Site Store Types ────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct SiteStore {
-    #[allow(dead_code)]
     version: String,
     sites: Vec<SiteMetadata>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 struct SiteMetadata {
     domain: String,
     path: String,
@@ -564,6 +563,204 @@ fn find_mariadb_client(bin_dir: &PathBuf) -> Result<PathBuf, String> {
     Err("MariaDB client not found".to_string())
 }
 
+fn find_psql_client(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let pg_root = bin_dir.join("postgresql");
+    let paths = [
+        pg_root.join("bin").join("psql.exe"),
+        pg_root.join("pgsql").join("bin").join("psql.exe"),
+    ];
+    for path in paths {
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+    Err("PostgreSQL client (psql) not found".to_string())
+}
+
+fn find_redis_cli(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let path = bin_dir.join("redis").join("redis-cli.exe");
+    if path.exists() {
+        return Ok(path);
+    }
+    Err("Redis CLI not found".to_string())
+}
+
+fn find_php_exe(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let php_root = bin_dir.join("php");
+    if php_root.exists() {
+        if let Ok(entries) = fs::read_dir(&php_root) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    let exe = entry.path().join("php.exe");
+                    if exe.exists() {
+                        return Ok(exe);
+                    }
+                }
+            }
+        }
+    }
+    Err("PHP executable not found".to_string())
+}
+
+fn find_composer_phar(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let path = bin_dir.join("composer").join("composer.phar");
+    if path.exists() {
+        return Ok(path);
+    }
+    Err("Composer not found".to_string())
+}
+
+fn find_mkcert(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let path = bin_dir.join("mkcert").join("mkcert.exe");
+    if path.exists() {
+        return Ok(path);
+    }
+    Err("mkcert not found".to_string())
+}
+
+fn find_nginx_exe(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let path = bin_dir.join("nginx").join("nginx.exe");
+    if path.exists() {
+        return Ok(path);
+    }
+    Err("Nginx not found".to_string())
+}
+
+fn nginx_test_and_reload(bin_dir: &PathBuf) -> Result<(), String> {
+    let nginx = find_nginx_exe(bin_dir)?;
+
+    // Test config
+    let test_output = hidden_command(&nginx)
+        .arg("-t")
+        .output()
+        .map_err(|e| format!("Failed to test nginx config: {}", e))?;
+
+    if !test_output.status.success() {
+        let stderr = String::from_utf8_lossy(&test_output.stderr);
+        return Err(format!("Nginx config test failed: {}", stderr.trim()));
+    }
+
+    // Reload
+    let reload_output = hidden_command(&nginx)
+        .args(["-s", "reload"])
+        .output()
+        .map_err(|e| format!("Failed to reload nginx: {}", e))?;
+
+    if !reload_output.status.success() {
+        let stderr = String::from_utf8_lossy(&reload_output.stderr);
+        return Err(format!("Nginx reload failed: {}", stderr.trim()));
+    }
+
+    Ok(())
+}
+
+fn backup_file(path: &PathBuf) -> Result<(), String> {
+    if path.exists() {
+        let bak = path.with_extension(
+            format!("{}.bak",
+                path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default()
+            )
+        );
+        fs::copy(path, &bak)
+            .map_err(|e| format!("Failed to create backup: {}", e))?;
+    }
+    Ok(())
+}
+
+fn write_sites_store(store: &SiteStore) -> Result<(), String> {
+    let store_path = get_config_dir().join("sites.json");
+    fs::create_dir_all(get_config_dir())
+        .map_err(|e| format!("Failed to create config dir: {}", e))?;
+    let content = serde_json::to_string_pretty(store)
+        .map_err(|e| format!("Failed to serialize sites: {}", e))?;
+    fs::write(&store_path, content)
+        .map_err(|e| format!("Failed to write sites.json: {}", e))
+}
+
+fn add_hosts_entry(domain: &str) -> Result<(), String> {
+    let hosts_path = PathBuf::from(r"C:\Windows\System32\drivers\etc\hosts");
+    let content = fs::read_to_string(&hosts_path)
+        .map_err(|e| format!("Failed to read hosts file: {}", e))?;
+
+    let entry = format!("127.0.0.1 {}", domain);
+    if content.contains(&entry) {
+        return Ok(());
+    }
+
+    let new_content = format!("{}\n{}\n", content.trim_end(), entry);
+    fs::write(&hosts_path, new_content)
+        .map_err(|e| format!("Failed to write hosts file (run as admin?): {}", e))
+}
+
+fn remove_hosts_entry(domain: &str) -> Result<(), String> {
+    let hosts_path = PathBuf::from(r"C:\Windows\System32\drivers\etc\hosts");
+    let content = fs::read_to_string(&hosts_path)
+        .map_err(|e| format!("Failed to read hosts file: {}", e))?;
+
+    let entry = format!("127.0.0.1 {}", domain);
+    let new_content: String = content.lines()
+        .filter(|line| line.trim() != entry)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    fs::write(&hosts_path, format!("{}\n", new_content.trim_end()))
+        .map_err(|e| format!("Failed to write hosts file (run as admin?): {}", e))
+}
+
+fn generate_site_nginx_config(
+    domain: &str,
+    doc_root: &str,
+    php_version: Option<&str>,
+    ssl: bool,
+    bin_dir: &PathBuf,
+) -> String {
+    let listen = if ssl {
+        format!("    listen 443 ssl;\n    ssl_certificate {ssl_dir}/{domain}.pem;\n    ssl_certificate_key {ssl_dir}/{domain}-key.pem;",
+            ssl_dir = bin_dir.join("nginx").join("ssl").display(),
+            domain = domain)
+    } else {
+        "    listen 80;".to_string()
+    };
+
+    let php_block = if let Some(ver) = php_version {
+        let cleaned: String = ver.chars().filter(|c| c.is_ascii_digit()).collect();
+        let port_num: u32 = cleaned.parse().unwrap_or(84);
+        let php_port = 9000 + port_num;
+        format!(r#"
+    location ~ \.php$ {{
+        fastcgi_pass 127.0.0.1:{php_port};
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }}"#)
+    } else {
+        String::new()
+    };
+
+    let index = if php_version.is_some() {
+        "index.php index.html index.htm"
+    } else {
+        "index.html index.htm"
+    };
+
+    format!(r#"server {{
+{listen}
+    server_name {domain};
+    root {doc_root};
+    index {index};
+
+    location / {{
+        try_files $uri $uri/ /index.php?$query_string;
+    }}
+{php_block}
+
+    location ~ /\.ht {{
+        deny all;
+    }}
+}}
+"#)
+}
+
 // ─── Log File Discovery ─────────────────────────────────────────
 
 struct LogFile {
@@ -677,44 +874,61 @@ fn resolve_service_name(name: &str) -> String {
 // ─── MCP Protocol Layer ─────────────────────────────────────────
 
 fn read_message(reader: &mut impl BufRead) -> Result<Value, String> {
-    // Read headers until empty line
-    let mut content_length: usize = 0;
+    // Support both Content-Length framing and newline-delimited JSON
+    // Claude Code sends raw JSON without Content-Length headers
+    let mut line = String::new();
     loop {
-        let mut header = String::new();
-        reader.read_line(&mut header).map_err(|e| format!("Read error: {}", e))?;
-        let header = header.trim().to_string();
-
-        if header.is_empty() {
-            break;
+        line.clear();
+        let bytes = reader.read_line(&mut line).map_err(|e| format!("Read error: {}", e))?;
+        if bytes == 0 {
+            return Err("EOF".to_string());
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
         }
 
-        if let Some(len_str) = header.strip_prefix("Content-Length: ") {
-            content_length = len_str.parse().map_err(|e| format!("Invalid Content-Length: {}", e))?;
+        // Check if this line starts with Content-Length header (standard MCP framing)
+        if trimmed.starts_with("Content-Length:") {
+            let len_str = trimmed.strip_prefix("Content-Length:").unwrap().trim();
+            let content_length: usize = len_str.parse().map_err(|e| format!("Invalid Content-Length: {}", e))?;
+
+            // Skip remaining headers until empty line
+            loop {
+                let mut header = String::new();
+                reader.read_line(&mut header).map_err(|e| format!("Read error: {}", e))?;
+                if header.trim().is_empty() {
+                    break;
+                }
+            }
+
+            // Read body
+            let mut body = vec![0u8; content_length];
+            reader.read_exact(&mut body).map_err(|e| format!("Body read error: {}", e))?;
+            let body_str = String::from_utf8(body).map_err(|e| format!("UTF-8 error: {}", e))?;
+            eprintln!("[orbit-mcp] << {}", body_str);
+            return serde_json::from_str(&body_str).map_err(|e| format!("JSON parse error: {}", e));
         }
+
+        // Raw JSON line (newline-delimited mode, used by Claude Code)
+        if trimmed.starts_with('{') {
+            eprintln!("[orbit-mcp] << {}", trimmed);
+            return serde_json::from_str(trimmed).map_err(|e| format!("JSON parse error: {}", e));
+        }
+
+        // Unknown line, skip
+        eprintln!("[orbit-mcp] Skipping unknown line: {}", trimmed);
     }
-
-    if content_length == 0 {
-        return Err("No Content-Length header".to_string());
-    }
-
-    // Read body
-    let mut body = vec![0u8; content_length];
-    reader.read_exact(&mut body).map_err(|e| format!("Body read error: {}", e))?;
-
-    let body_str = String::from_utf8(body).map_err(|e| format!("UTF-8 error: {}", e))?;
-    eprintln!("[orbit-mcp] << {}", body_str);
-
-    serde_json::from_str(&body_str).map_err(|e| format!("JSON parse error: {}", e))
 }
 
 fn write_message(msg: &Value) {
     let body = serde_json::to_string(msg).unwrap();
     eprintln!("[orbit-mcp] >> {}", body);
-    let header = format!("Content-Length: {}\r\n\r\n", body.len());
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    out.write_all(header.as_bytes()).unwrap();
+    // Write as newline-delimited JSON (compatible with Claude Code)
     out.write_all(body.as_bytes()).unwrap();
+    out.write_all(b"\n").unwrap();
     out.flush().unwrap();
 }
 
@@ -905,6 +1119,345 @@ fn handle_tools_list(id: &Value) -> Value {
                 },
                 "required": ["command"]
             }
+        },
+        // ─── MariaDB Extended ────────────────────────────
+        {
+            "name": "list_tables",
+            "description": "List all tables in a MariaDB database. Requires MariaDB to be running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" }
+                },
+                "required": ["database"]
+            }
+        },
+        {
+            "name": "describe_table",
+            "description": "Show column definitions for a MariaDB table.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "table": { "type": "string", "description": "Table name" }
+                },
+                "required": ["database", "table"]
+            }
+        },
+        {
+            "name": "execute_query",
+            "description": "Execute a SQL query on a MariaDB database. Returns results in tab-separated format.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "query": { "type": "string", "description": "SQL query to execute" }
+                },
+                "required": ["database", "query"]
+            }
+        },
+        {
+            "name": "drop_database",
+            "description": "Drop a MariaDB database. This is irreversible!",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Database name to drop" }
+                },
+                "required": ["name"]
+            }
+        },
+        // ─── PostgreSQL ──────────────────────────────────
+        {
+            "name": "pg_list_databases",
+            "description": "List all PostgreSQL databases. Requires PostgreSQL to be running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "pg_list_tables",
+            "description": "List all tables in a PostgreSQL database.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" }
+                },
+                "required": ["database"]
+            }
+        },
+        {
+            "name": "pg_describe_table",
+            "description": "Show column definitions for a PostgreSQL table.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "table": { "type": "string", "description": "Table name" }
+                },
+                "required": ["database", "table"]
+            }
+        },
+        {
+            "name": "pg_execute_query",
+            "description": "Execute a SQL query on a PostgreSQL database.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "query": { "type": "string", "description": "SQL query to execute" }
+                },
+                "required": ["database", "query"]
+            }
+        },
+        // ─── Site Management ─────────────────────────────
+        {
+            "name": "create_site",
+            "description": "Create a new local development site. Adds to sites.json, generates nginx config, adds hosts entry, and reloads nginx.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Domain name (e.g., myapp.test)" },
+                    "path": { "type": "string", "description": "Document root path" },
+                    "template": { "type": "string", "description": "Site template: static, php, laravel (default: php)" },
+                    "php_version": { "type": "string", "description": "PHP version (e.g., 8.4)" },
+                    "ssl": { "type": "boolean", "description": "Enable SSL (default: false)" }
+                },
+                "required": ["domain", "path"]
+            }
+        },
+        {
+            "name": "delete_site",
+            "description": "Delete a local development site. Removes from sites.json, deletes nginx config, removes hosts entry, and reloads nginx.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Domain to delete" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "get_site_config",
+            "description": "Read the nginx config file for a specific site.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain" }
+                },
+                "required": ["domain"]
+            }
+        },
+        // ─── SSL ─────────────────────────────────────────
+        {
+            "name": "generate_ssl",
+            "description": "Generate a self-signed SSL certificate for a domain using mkcert.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Domain name (e.g., myapp.test)" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "list_ssl_certs",
+            "description": "List all SSL certificates in the nginx ssl directory.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        // ─── PHP Config ──────────────────────────────────
+        {
+            "name": "list_php_extensions",
+            "description": "List PHP extensions and their enabled/disabled status for a specific PHP version.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "version": { "type": "string", "description": "PHP version (e.g., 8.4)" }
+                },
+                "required": ["version"]
+            }
+        },
+        {
+            "name": "toggle_php_extension",
+            "description": "Enable or disable a PHP extension by toggling the semicolon prefix in php.ini.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "version": { "type": "string", "description": "PHP version (e.g., 8.4)" },
+                    "extension": { "type": "string", "description": "Extension name (e.g., gd, curl, pdo_mysql)" },
+                    "enabled": { "type": "boolean", "description": "true to enable, false to disable" }
+                },
+                "required": ["version", "extension", "enabled"]
+            }
+        },
+        {
+            "name": "get_php_config",
+            "description": "Get key PHP configuration values (memory_limit, upload_max_filesize, etc.) from php.ini.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "version": { "type": "string", "description": "PHP version (e.g., 8.4)" }
+                },
+                "required": ["version"]
+            }
+        },
+        {
+            "name": "set_php_config",
+            "description": "Set a PHP configuration value in php.ini.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "version": { "type": "string", "description": "PHP version (e.g., 8.4)" },
+                    "key": { "type": "string", "description": "Config key (e.g., memory_limit, upload_max_filesize)" },
+                    "value": { "type": "string", "description": "Config value (e.g., 256M, 64M)" }
+                },
+                "required": ["version", "key", "value"]
+            }
+        },
+        // ─── Composer ────────────────────────────────────
+        {
+            "name": "composer_require",
+            "description": "Install a Composer package in a project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_path": { "type": "string", "description": "Path to the project directory" },
+                    "package": { "type": "string", "description": "Package name (e.g., laravel/framework)" },
+                    "dev": { "type": "boolean", "description": "Install as dev dependency (default: false)" }
+                },
+                "required": ["project_path", "package"]
+            }
+        },
+        {
+            "name": "composer_install",
+            "description": "Run composer install in a project directory.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_path": { "type": "string", "description": "Path to the project directory" }
+                },
+                "required": ["project_path"]
+            }
+        },
+        {
+            "name": "composer_run",
+            "description": "Run a Composer script defined in composer.json.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_path": { "type": "string", "description": "Path to the project directory" },
+                    "script": { "type": "string", "description": "Script name to run" }
+                },
+                "required": ["project_path", "script"]
+            }
+        },
+        // ─── Redis ───────────────────────────────────────
+        {
+            "name": "redis_command",
+            "description": "Execute a Redis command via redis-cli.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "command": { "type": "string", "description": "Redis command (e.g., PING, GET key, SET key value, KEYS *)" }
+                },
+                "required": ["command"]
+            }
+        },
+        {
+            "name": "redis_info",
+            "description": "Get Redis server information (INFO command).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        // ─── Mailpit ────────────────────────────────────
+        {
+            "name": "list_emails",
+            "description": "List emails captured by Mailpit. Requires Mailpit to be running on port 8025.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": { "type": "number", "description": "Max emails to return (default: 50)" }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "get_email",
+            "description": "Get a specific email from Mailpit by ID.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Email message ID" }
+                },
+                "required": ["id"]
+            }
+        },
+        {
+            "name": "delete_emails",
+            "description": "Delete all emails in Mailpit.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        // ─── Config Files ────────────────────────────────
+        {
+            "name": "read_config",
+            "description": "Read a service configuration file. Types: nginx, apache, mariadb, php.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "description": "Config type: nginx, apache, mariadb, php" },
+                    "php_version": { "type": "string", "description": "PHP version (required when type is php)" }
+                },
+                "required": ["type"]
+            }
+        },
+        {
+            "name": "write_config",
+            "description": "Write a service configuration file. Creates a .bak backup first. Types: nginx, apache, mariadb, php.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "description": "Config type: nginx, apache, mariadb, php" },
+                    "content": { "type": "string", "description": "New config file content" },
+                    "php_version": { "type": "string", "description": "PHP version (required when type is php)" }
+                },
+                "required": ["type", "content"]
+            }
+        },
+        {
+            "name": "read_site_config",
+            "description": "Read the nginx or apache vhost config for a specific site domain.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "write_site_config",
+            "description": "Write a site's nginx config. Runs nginx -t to validate, rolls back on failure.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain" },
+                    "content": { "type": "string", "description": "New nginx config content" }
+                },
+                "required": ["domain", "content"]
+            }
         }
     ]);
 
@@ -950,6 +1503,138 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
             tool_run_orbit_command(command, &cmd_args)
+        }
+        // MariaDB extended
+        "list_tables" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            tool_list_tables(db)
+        }
+        "describe_table" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let table = args.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            tool_describe_table(db, table)
+        }
+        "execute_query" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            tool_execute_query(db, query)
+        }
+        "drop_database" => {
+            let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_drop_database(name)
+        }
+        // PostgreSQL
+        "pg_list_databases" => tool_pg_list_databases(),
+        "pg_list_tables" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            tool_pg_list_tables(db)
+        }
+        "pg_describe_table" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let table = args.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            tool_pg_describe_table(db, table)
+        }
+        "pg_execute_query" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            tool_pg_execute_query(db, query)
+        }
+        // Site management
+        "create_site" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let template = args.get("template").and_then(|v| v.as_str());
+            let php_version = args.get("php_version").and_then(|v| v.as_str());
+            let ssl = args.get("ssl").and_then(|v| v.as_bool()).unwrap_or(false);
+            tool_create_site(domain, path, template, php_version, ssl)
+        }
+        "delete_site" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_delete_site(domain)
+        }
+        "get_site_config" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_get_site_config(domain)
+        }
+        // SSL
+        "generate_ssl" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_generate_ssl(domain)
+        }
+        "list_ssl_certs" => tool_list_ssl_certs(),
+        // PHP config
+        "list_php_extensions" => {
+            let version = args.get("version").and_then(|v| v.as_str()).unwrap_or("");
+            tool_list_php_extensions(version)
+        }
+        "toggle_php_extension" => {
+            let version = args.get("version").and_then(|v| v.as_str()).unwrap_or("");
+            let ext = args.get("extension").and_then(|v| v.as_str()).unwrap_or("");
+            let enabled = args.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+            tool_toggle_php_extension(version, ext, enabled)
+        }
+        "get_php_config" => {
+            let version = args.get("version").and_then(|v| v.as_str()).unwrap_or("");
+            tool_get_php_config(version)
+        }
+        "set_php_config" => {
+            let version = args.get("version").and_then(|v| v.as_str()).unwrap_or("");
+            let key = args.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let value = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            tool_set_php_config(version, key, value)
+        }
+        // Composer
+        "composer_require" => {
+            let project = args.get("project_path").and_then(|v| v.as_str()).unwrap_or("");
+            let package = args.get("package").and_then(|v| v.as_str()).unwrap_or("");
+            let dev = args.get("dev").and_then(|v| v.as_bool()).unwrap_or(false);
+            tool_composer_require(project, package, dev)
+        }
+        "composer_install" => {
+            let project = args.get("project_path").and_then(|v| v.as_str()).unwrap_or("");
+            tool_composer_install(project)
+        }
+        "composer_run" => {
+            let project = args.get("project_path").and_then(|v| v.as_str()).unwrap_or("");
+            let script = args.get("script").and_then(|v| v.as_str()).unwrap_or("");
+            tool_composer_run(project, script)
+        }
+        // Redis
+        "redis_command" => {
+            let cmd = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
+            tool_redis_command(cmd)
+        }
+        "redis_info" => tool_redis_info(),
+        // Mailpit
+        "list_emails" => {
+            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+            tool_list_emails(limit)
+        }
+        "get_email" => {
+            let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            tool_get_email(id)
+        }
+        "delete_emails" => tool_delete_emails(),
+        // Config files
+        "read_config" => {
+            let config_type = args.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let php_version = args.get("php_version").and_then(|v| v.as_str());
+            tool_read_config(config_type, php_version)
+        }
+        "write_config" => {
+            let config_type = args.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let php_version = args.get("php_version").and_then(|v| v.as_str());
+            tool_write_config(config_type, content, php_version)
+        }
+        "read_site_config" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_read_site_config(domain)
+        }
+        "write_site_config" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            tool_write_site_config(domain, content)
         }
         _ => Err(format!("Unknown tool: {}", name)),
     };
@@ -1343,11 +2028,872 @@ fn tool_run_orbit_command(command: &str, args: &[String]) -> Result<String, Stri
     }
 }
 
+// ─── MariaDB Extended Tools ──────────────────────────────────────
+
+fn run_mariadb_query(sql: &str) -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let client = find_mariadb_client(&bin_dir)?;
+
+    let output = hidden_command(&client)
+        .arg("--host=127.0.0.1").arg("--port=3306")
+        .arg("-u").arg("root").arg("-proot")
+        .arg("--batch")
+        .arg("-e").arg(sql)
+        .output()
+        .map_err(|e| format!("Failed to run MariaDB client: {}. Is MariaDB running?", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("MariaDB error: {}", stderr.trim()));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn tool_list_tables(database: &str) -> Result<String, String> {
+    if database.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+    let sql = format!("SHOW TABLES FROM `{}`", database);
+    let output = run_mariadb_query(&sql)?;
+
+    let tables: Vec<&str> = output.lines().skip(1).collect(); // skip header
+    let result: Vec<Value> = tables.iter()
+        .filter(|t| !t.trim().is_empty())
+        .map(|t| json!({ "table": t.trim() }))
+        .collect();
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+fn tool_describe_table(database: &str, table: &str) -> Result<String, String> {
+    if database.is_empty() || table.is_empty() {
+        return Err("Database and table name are required".to_string());
+    }
+    let sql = format!("SHOW COLUMNS FROM `{}`.`{}`", database, table);
+    run_mariadb_query(&sql)
+}
+
+fn tool_execute_query(database: &str, query: &str) -> Result<String, String> {
+    if database.is_empty() || query.is_empty() {
+        return Err("Database and query are required".to_string());
+    }
+    let sql = format!("USE `{}`; {}", database, query);
+    run_mariadb_query(&sql)
+}
+
+fn tool_drop_database(name: &str) -> Result<String, String> {
+    if name.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+
+    let system_dbs = ["information_schema", "performance_schema", "mysql", "sys"];
+    if system_dbs.contains(&name) {
+        return Err(format!("Cannot drop system database: {}", name));
+    }
+
+    let sql = format!("DROP DATABASE IF EXISTS `{}`", name);
+    run_mariadb_query(&sql)?;
+    Ok(format!("Database '{}' dropped successfully", name))
+}
+
+// ─── PostgreSQL Tools ────────────────────────────────────────────
+
+fn run_psql_query(database: Option<&str>, command: &str) -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let psql = find_psql_client(&bin_dir)?;
+
+    let mut cmd = hidden_command(&psql);
+    cmd.arg("-U").arg("postgres")
+       .arg("-h").arg("127.0.0.1")
+       .arg("-p").arg("5432");
+
+    if let Some(db) = database {
+        cmd.arg("-d").arg(db);
+    }
+
+    cmd.arg("-c").arg(command);
+
+    // Set PGPASSWORD if needed
+    cmd.env("PGPASSWORD", "postgres");
+
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to run psql: {}. Is PostgreSQL running?", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("PostgreSQL error: {}", stderr.trim()));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn tool_pg_list_databases() -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let psql = find_psql_client(&bin_dir)?;
+
+    let output = hidden_command(&psql)
+        .arg("-U").arg("postgres")
+        .arg("-h").arg("127.0.0.1")
+        .arg("-p").arg("5432")
+        .arg("-l").arg("--csv")
+        .env("PGPASSWORD", "postgres")
+        .output()
+        .map_err(|e| format!("Failed to run psql: {}. Is PostgreSQL running?", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("PostgreSQL error: {}", stderr.trim()));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn tool_pg_list_tables(database: &str) -> Result<String, String> {
+    if database.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+    run_psql_query(Some(database), "\\dt")
+}
+
+fn tool_pg_describe_table(database: &str, table: &str) -> Result<String, String> {
+    if database.is_empty() || table.is_empty() {
+        return Err("Database and table name are required".to_string());
+    }
+    run_psql_query(Some(database), &format!("\\d {}", table))
+}
+
+fn tool_pg_execute_query(database: &str, query: &str) -> Result<String, String> {
+    if database.is_empty() || query.is_empty() {
+        return Err("Database and query are required".to_string());
+    }
+    run_psql_query(Some(database), query)
+}
+
+// ─── Site Management Tools ───────────────────────────────────────
+
+fn tool_create_site(
+    domain: &str,
+    path: &str,
+    template: Option<&str>,
+    php_version: Option<&str>,
+    ssl: bool,
+) -> Result<String, String> {
+    if domain.is_empty() || path.is_empty() {
+        return Err("Domain and path are required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let mut store = read_sites_store()?;
+
+    // Check if domain already exists
+    if store.sites.iter().any(|s| s.domain == domain) {
+        return Err(format!("Site '{}' already exists", domain));
+    }
+
+    let _template = template.unwrap_or("php");
+    let php_ver = match _template {
+        "static" => None,
+        _ => Some(php_version.unwrap_or("8.4").to_string()),
+    };
+
+    // Add to sites.json
+    let site = SiteMetadata {
+        domain: domain.to_string(),
+        path: path.to_string(),
+        port: if ssl { 443 } else { 80 },
+        php_version: php_ver.clone(),
+        ssl_enabled: ssl,
+        web_server: "nginx".to_string(),
+        created_at: chrono_now(),
+    };
+    store.sites.push(site);
+    write_sites_store(&store)?;
+
+    // Generate nginx config
+    let config = generate_site_nginx_config(
+        domain,
+        path,
+        php_ver.as_deref(),
+        ssl,
+        &bin_dir,
+    );
+
+    let sites_dir = bin_dir.join("nginx").join("conf").join("sites-enabled");
+    fs::create_dir_all(&sites_dir)
+        .map_err(|e| format!("Failed to create sites-enabled dir: {}", e))?;
+    let conf_path = sites_dir.join(format!("{}.conf", domain));
+    fs::write(&conf_path, &config)
+        .map_err(|e| format!("Failed to write nginx config: {}", e))?;
+
+    // Add hosts entry
+    add_hosts_entry(domain).ok(); // Don't fail if hosts write fails
+
+    // Reload nginx if running
+    if is_service_running("nginx") {
+        nginx_test_and_reload(&bin_dir).ok();
+    }
+
+    Ok(format!("Site '{}' created successfully\nDocument root: {}\nNginx config: {}",
+        domain, path, conf_path.display()))
+}
+
+fn tool_delete_site(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let mut store = read_sites_store()?;
+
+    let initial_len = store.sites.len();
+    store.sites.retain(|s| s.domain != domain);
+    if store.sites.len() == initial_len {
+        return Err(format!("Site '{}' not found", domain));
+    }
+
+    write_sites_store(&store)?;
+
+    // Remove nginx config
+    let conf_path = bin_dir.join("nginx").join("conf").join("sites-enabled").join(format!("{}.conf", domain));
+    if conf_path.exists() {
+        fs::remove_file(&conf_path).ok();
+    }
+
+    // Remove hosts entry
+    remove_hosts_entry(domain).ok();
+
+    // Reload nginx if running
+    if is_service_running("nginx") {
+        nginx_test_and_reload(&bin_dir).ok();
+    }
+
+    Ok(format!("Site '{}' deleted successfully", domain))
+}
+
+fn tool_get_site_config(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let conf_path = bin_dir.join("nginx").join("conf").join("sites-enabled").join(format!("{}.conf", domain));
+
+    if !conf_path.exists() {
+        return Err(format!("No nginx config found for '{}'", domain));
+    }
+
+    fs::read_to_string(&conf_path)
+        .map_err(|e| format!("Failed to read config: {}", e))
+}
+
+// ─── SSL Tools ───────────────────────────────────────────────────
+
+fn tool_generate_ssl(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let mkcert = find_mkcert(&bin_dir)?;
+
+    let ssl_dir = bin_dir.join("nginx").join("ssl");
+    fs::create_dir_all(&ssl_dir)
+        .map_err(|e| format!("Failed to create ssl dir: {}", e))?;
+
+    let cert_file = ssl_dir.join(format!("{}.pem", domain));
+    let key_file = ssl_dir.join(format!("{}-key.pem", domain));
+
+    let output = hidden_command(&mkcert)
+        .arg("-cert-file").arg(&cert_file)
+        .arg("-key-file").arg(&key_file)
+        .arg(domain)
+        .arg(format!("*.{}", domain))
+        .arg("localhost")
+        .arg("127.0.0.1")
+        .arg("::1")
+        .output()
+        .map_err(|e| format!("Failed to run mkcert: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("mkcert error: {}", stderr.trim()));
+    }
+
+    Ok(format!("SSL certificate generated:\n  cert: {}\n  key: {}",
+        cert_file.display(), key_file.display()))
+}
+
+fn tool_list_ssl_certs() -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let ssl_dir = bin_dir.join("nginx").join("ssl");
+
+    if !ssl_dir.exists() {
+        return Ok("No SSL certificates found. SSL directory does not exist.".to_string());
+    }
+
+    let mut certs = Vec::new();
+    if let Ok(entries) = fs::read_dir(&ssl_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            if fname.ends_with(".pem") && !fname.ends_with("-key.pem") {
+                let domain = fname.trim_end_matches(".pem");
+                let has_key = ssl_dir.join(format!("{}-key.pem", domain)).exists();
+                certs.push(json!({
+                    "domain": domain,
+                    "cert": path.display().to_string(),
+                    "has_key": has_key
+                }));
+            }
+        }
+    }
+
+    if certs.is_empty() {
+        return Ok("No SSL certificates found.".to_string());
+    }
+
+    Ok(serde_json::to_string_pretty(&certs).unwrap())
+}
+
+// ─── PHP Config Tools ────────────────────────────────────────────
+
+fn get_php_ini_path(bin_dir: &PathBuf, version: &str) -> Result<PathBuf, String> {
+    let ini_path = bin_dir.join("php").join(version).join("php.ini");
+    if ini_path.exists() {
+        Ok(ini_path)
+    } else {
+        Err(format!("php.ini not found for PHP {}", version))
+    }
+}
+
+fn tool_list_php_extensions(version: &str) -> Result<String, String> {
+    if version.is_empty() {
+        return Err("PHP version is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let ini_path = get_php_ini_path(&bin_dir, version)?;
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    let mut extensions = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("extension=") {
+            let ext = trimmed.strip_prefix("extension=").unwrap().trim();
+            extensions.push(json!({ "name": ext, "enabled": true }));
+        } else if trimmed.starts_with(";extension=") {
+            let ext = trimmed.strip_prefix(";extension=").unwrap().trim();
+            extensions.push(json!({ "name": ext, "enabled": false }));
+        }
+    }
+
+    // Also scan ext/ directory for available extensions
+    let ext_dir = bin_dir.join("php").join(version).join("ext");
+    if ext_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&ext_dir) {
+            let known_names: Vec<String> = extensions.iter()
+                .filter_map(|e| e.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect();
+
+            for entry in entries.flatten() {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if fname.starts_with("php_") && fname.ends_with(".dll") {
+                    let ext_name = fname.trim_start_matches("php_").trim_end_matches(".dll");
+                    if !known_names.contains(&ext_name.to_string()) {
+                        extensions.push(json!({ "name": ext_name, "enabled": false, "available": true }));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::to_string_pretty(&extensions).unwrap())
+}
+
+fn tool_toggle_php_extension(version: &str, extension: &str, enabled: bool) -> Result<String, String> {
+    if version.is_empty() || extension.is_empty() {
+        return Err("Version and extension are required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let ini_path = get_php_ini_path(&bin_dir, version)?;
+    backup_file(&ini_path)?;
+
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    let enabled_line = format!("extension={}", extension);
+    let disabled_line = format!(";extension={}", extension);
+
+    let mut found = false;
+    let new_content: String = content.lines().map(|line| {
+        let trimmed = line.trim();
+        if enabled && trimmed == disabled_line {
+            found = true;
+            enabled_line.clone()
+        } else if !enabled && trimmed == enabled_line {
+            found = true;
+            disabled_line.clone()
+        } else {
+            line.to_string()
+        }
+    }).collect::<Vec<_>>().join("\n");
+
+    if !found && enabled {
+        // Add the extension line if not found
+        let new_content = format!("{}\n{}\n", new_content.trim_end(), enabled_line);
+        fs::write(&ini_path, new_content)
+            .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+        return Ok(format!("Extension '{}' added and enabled for PHP {}", extension, version));
+    }
+
+    if !found {
+        return Err(format!("Extension '{}' not found in php.ini for PHP {}", extension, version));
+    }
+
+    fs::write(&ini_path, new_content)
+        .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+
+    let action = if enabled { "enabled" } else { "disabled" };
+    Ok(format!("Extension '{}' {} for PHP {}", extension, action, version))
+}
+
+fn tool_get_php_config(version: &str) -> Result<String, String> {
+    if version.is_empty() {
+        return Err("PHP version is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let ini_path = get_php_ini_path(&bin_dir, version)?;
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    let keys = [
+        "memory_limit", "upload_max_filesize", "post_max_size",
+        "max_execution_time", "max_input_time", "display_errors",
+        "error_reporting", "date.timezone", "max_file_uploads",
+        "session.save_handler", "session.save_path",
+    ];
+
+    let mut config = serde_json::Map::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(';') || trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            if keys.contains(&key) {
+                config.insert(key.to_string(), json!(value.trim()));
+            }
+        }
+    }
+
+    config.insert("php_ini_path".to_string(), json!(ini_path.display().to_string()));
+    Ok(serde_json::to_string_pretty(&config).unwrap())
+}
+
+fn tool_set_php_config(version: &str, key: &str, value: &str) -> Result<String, String> {
+    if version.is_empty() || key.is_empty() || value.is_empty() {
+        return Err("Version, key, and value are required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let ini_path = get_php_ini_path(&bin_dir, version)?;
+    backup_file(&ini_path)?;
+
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+
+    let target_prefix = format!("{} =", key);
+    let target_prefix_nospace = format!("{}=", key);
+    let new_line = format!("{} = {}", key, value);
+
+    let mut found = false;
+    let new_content: String = content.lines().map(|line| {
+        let trimmed = line.trim();
+        if !trimmed.starts_with(';') &&
+           (trimmed.starts_with(&target_prefix) || trimmed.starts_with(&target_prefix_nospace)) {
+            found = true;
+            new_line.clone()
+        } else {
+            line.to_string()
+        }
+    }).collect::<Vec<_>>().join("\n");
+
+    if !found {
+        let new_content = format!("{}\n{}\n", new_content.trim_end(), new_line);
+        fs::write(&ini_path, new_content)
+            .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+        return Ok(format!("Added {} = {} to PHP {} config", key, value, version));
+    }
+
+    fs::write(&ini_path, new_content)
+        .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+
+    Ok(format!("Set {} = {} for PHP {}", key, value, version))
+}
+
+// ─── Composer Tools ──────────────────────────────────────────────
+
+fn tool_composer_require(project_path: &str, package: &str, dev: bool) -> Result<String, String> {
+    if project_path.is_empty() || package.is_empty() {
+        return Err("Project path and package are required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let php = find_php_exe(&bin_dir)?;
+    let composer = find_composer_phar(&bin_dir)?;
+
+    let mut cmd = hidden_command(&php);
+    cmd.arg(&composer).arg("require");
+    if dev {
+        cmd.arg("--dev");
+    }
+    cmd.arg(package).arg("--no-interaction");
+    cmd.current_dir(project_path);
+
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to run composer: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if output.status.success() {
+        Ok(format!("{}{}", stdout, stderr))
+    } else {
+        Err(format!("Composer error:\n{}{}", stdout, stderr))
+    }
+}
+
+fn tool_composer_install(project_path: &str) -> Result<String, String> {
+    if project_path.is_empty() {
+        return Err("Project path is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let php = find_php_exe(&bin_dir)?;
+    let composer = find_composer_phar(&bin_dir)?;
+
+    let output = hidden_command(&php)
+        .arg(&composer).arg("install").arg("--no-interaction")
+        .current_dir(project_path)
+        .output()
+        .map_err(|e| format!("Failed to run composer: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if output.status.success() {
+        Ok(format!("{}{}", stdout, stderr))
+    } else {
+        Err(format!("Composer error:\n{}{}", stdout, stderr))
+    }
+}
+
+fn tool_composer_run(project_path: &str, script: &str) -> Result<String, String> {
+    if project_path.is_empty() || script.is_empty() {
+        return Err("Project path and script are required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let php = find_php_exe(&bin_dir)?;
+    let composer = find_composer_phar(&bin_dir)?;
+
+    let output = hidden_command(&php)
+        .arg(&composer).arg("run-script").arg(script).arg("--no-interaction")
+        .current_dir(project_path)
+        .output()
+        .map_err(|e| format!("Failed to run composer: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if output.status.success() {
+        Ok(format!("{}{}", stdout, stderr))
+    } else {
+        Err(format!("Composer error:\n{}{}", stdout, stderr))
+    }
+}
+
+// ─── Redis Tools ─────────────────────────────────────────────────
+
+fn tool_redis_command(command: &str) -> Result<String, String> {
+    if command.is_empty() {
+        return Err("Command is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let redis_cli = find_redis_cli(&bin_dir)?;
+
+    // Split command into args
+    let parts: Vec<&str> = command.split_whitespace().collect();
+
+    let output = hidden_command(&redis_cli)
+        .arg("-h").arg("127.0.0.1")
+        .arg("-p").arg("6379")
+        .args(&parts)
+        .output()
+        .map_err(|e| format!("Failed to run redis-cli: {}. Is Redis running?", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if !stderr.trim().is_empty() && !output.status.success() {
+        return Err(format!("Redis error: {}", stderr.trim()));
+    }
+
+    Ok(stdout.to_string())
+}
+
+fn tool_redis_info() -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let redis_cli = find_redis_cli(&bin_dir)?;
+
+    let output = hidden_command(&redis_cli)
+        .arg("-h").arg("127.0.0.1")
+        .arg("-p").arg("6379")
+        .arg("INFO")
+        .output()
+        .map_err(|e| format!("Failed to run redis-cli: {}. Is Redis running?", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Redis error: {}", stderr.trim()));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+// ─── Mailpit Tools ───────────────────────────────────────────────
+
+fn mailpit_http(method: &str, path: &str) -> Result<String, String> {
+    use std::io::{Read as IoRead, Write as StreamWrite};
+    use std::net::TcpStream;
+
+    let mut stream = TcpStream::connect("127.0.0.1:8025")
+        .map_err(|e| format!("Failed to connect to Mailpit: {}. Is Mailpit running?", e))?;
+
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).ok();
+
+    let request = format!(
+        "{} {} HTTP/1.1\r\nHost: 127.0.0.1:8025\r\nAccept: application/json\r\nConnection: close\r\n\r\n",
+        method, path
+    );
+
+    stream.write_all(request.as_bytes())
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response)
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let response_str = String::from_utf8_lossy(&response);
+
+    // Extract body after \r\n\r\n
+    if let Some(body_start) = response_str.find("\r\n\r\n") {
+        let body = &response_str[body_start + 4..];
+        // Handle chunked transfer encoding
+        if response_str.contains("Transfer-Encoding: chunked") {
+            // Simple chunked decoder: skip chunk sizes
+            let mut decoded = String::new();
+            let mut remaining = body;
+            loop {
+                let remaining_trimmed = remaining.trim_start();
+                if let Some(newline_pos) = remaining_trimmed.find("\r\n") {
+                    let size_str = &remaining_trimmed[..newline_pos];
+                    let chunk_size = usize::from_str_radix(size_str.trim(), 16).unwrap_or(0);
+                    if chunk_size == 0 {
+                        break;
+                    }
+                    let data_start = newline_pos + 2;
+                    let data_end = data_start + chunk_size;
+                    if data_end <= remaining_trimmed.len() {
+                        decoded.push_str(&remaining_trimmed[data_start..data_end]);
+                        remaining = &remaining_trimmed[data_end..];
+                    } else {
+                        decoded.push_str(&remaining_trimmed[data_start..]);
+                        break;
+                    }
+                } else {
+                    decoded.push_str(remaining_trimmed);
+                    break;
+                }
+            }
+            Ok(decoded)
+        } else {
+            Ok(body.to_string())
+        }
+    } else {
+        Ok(response_str.to_string())
+    }
+}
+
+fn tool_list_emails(limit: usize) -> Result<String, String> {
+    let response = mailpit_http("GET", &format!("/api/v1/messages?limit={}", limit))?;
+
+    // Try to pretty-print JSON
+    if let Ok(parsed) = serde_json::from_str::<Value>(&response) {
+        Ok(serde_json::to_string_pretty(&parsed).unwrap())
+    } else {
+        Ok(response)
+    }
+}
+
+fn tool_get_email(id: &str) -> Result<String, String> {
+    if id.is_empty() {
+        return Err("Email ID is required".to_string());
+    }
+
+    let response = mailpit_http("GET", &format!("/api/v1/message/{}", id))?;
+
+    if let Ok(parsed) = serde_json::from_str::<Value>(&response) {
+        Ok(serde_json::to_string_pretty(&parsed).unwrap())
+    } else {
+        Ok(response)
+    }
+}
+
+fn tool_delete_emails() -> Result<String, String> {
+    mailpit_http("DELETE", "/api/v1/messages")?;
+    Ok("All emails deleted from Mailpit".to_string())
+}
+
+// ─── Config File Tools ───────────────────────────────────────────
+
+fn get_config_file_path(config_type: &str, php_version: Option<&str>) -> Result<PathBuf, String> {
+    let bin_dir = get_bin_dir();
+    match config_type {
+        "nginx" => Ok(bin_dir.join("nginx").join("conf").join("nginx.conf")),
+        "apache" => Ok(bin_dir.join("apache").join("conf").join("httpd.conf")),
+        "mariadb" => Ok(bin_dir.join("data").join("mariadb").join("my.ini")),
+        "php" => {
+            let version = php_version.ok_or("php_version is required when type is php")?;
+            Ok(bin_dir.join("php").join(version).join("php.ini"))
+        }
+        _ => Err(format!("Unknown config type: {}. Use: nginx, apache, mariadb, php", config_type)),
+    }
+}
+
+fn tool_read_config(config_type: &str, php_version: Option<&str>) -> Result<String, String> {
+    if config_type.is_empty() {
+        return Err("Config type is required".to_string());
+    }
+
+    let path = get_config_file_path(config_type, php_version)?;
+    if !path.exists() {
+        return Err(format!("Config file not found: {}", path.display()));
+    }
+
+    fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read config: {}", e))
+}
+
+fn tool_write_config(config_type: &str, content: &str, php_version: Option<&str>) -> Result<String, String> {
+    if config_type.is_empty() || content.is_empty() {
+        return Err("Config type and content are required".to_string());
+    }
+
+    let path = get_config_file_path(config_type, php_version)?;
+    backup_file(&path)?;
+
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    Ok(format!("Config written to {} (backup saved as .bak)", path.display()))
+}
+
+fn tool_read_site_config(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+
+    // Try nginx first
+    let nginx_conf = bin_dir.join("nginx").join("conf").join("sites-enabled").join(format!("{}.conf", domain));
+    if nginx_conf.exists() {
+        return fs::read_to_string(&nginx_conf)
+            .map_err(|e| format!("Failed to read config: {}", e));
+    }
+
+    // Try apache
+    let apache_conf = bin_dir.join("apache").join("conf").join("vhosts").join(format!("{}.conf", domain));
+    if apache_conf.exists() {
+        return fs::read_to_string(&apache_conf)
+            .map_err(|e| format!("Failed to read config: {}", e));
+    }
+
+    Err(format!("No site config found for '{}'. Looked in nginx/conf/sites-enabled/ and apache/conf/vhosts/", domain))
+}
+
+fn tool_write_site_config(domain: &str, content: &str) -> Result<String, String> {
+    if domain.is_empty() || content.is_empty() {
+        return Err("Domain and content are required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let conf_path = bin_dir.join("nginx").join("conf").join("sites-enabled").join(format!("{}.conf", domain));
+
+    backup_file(&conf_path)?;
+
+    fs::write(&conf_path, content)
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    // Test nginx config
+    if is_service_running("nginx") {
+        let nginx = find_nginx_exe(&bin_dir)?;
+        let test = hidden_command(&nginx)
+            .arg("-t")
+            .output()
+            .map_err(|e| format!("Failed to test nginx config: {}", e))?;
+
+        if !test.status.success() {
+            // Rollback
+            let bak_path = conf_path.with_extension("conf.bak");
+            if bak_path.exists() {
+                fs::copy(&bak_path, &conf_path).ok();
+            }
+            let stderr = String::from_utf8_lossy(&test.stderr);
+            return Err(format!("Nginx config test failed (rolled back): {}", stderr.trim()));
+        }
+
+        // Reload
+        hidden_command(&nginx)
+            .args(["-s", "reload"])
+            .output()
+            .ok();
+    }
+
+    Ok(format!("Site config for '{}' updated and nginx reloaded", domain))
+}
+
+// ─── Utilities ───────────────────────────────────────────────────
+
+fn chrono_now() -> String {
+    // Simple timestamp without chrono dependency
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    format!("{}", now.as_secs())
+}
+
 // ─── Entry Point ─────────────────────────────────────────────────
 
 fn main() {
     eprintln!("[orbit-mcp] Orbit MCP Server v1.0.0 starting...");
     eprintln!("[orbit-mcp] Data dir: {}", get_orbit_data_dir().display());
+
+    // Standby mode: process stays alive without reading stdin
+    // Used when started from Orbit GUI (not by an AI tool)
+    if std::env::args().any(|a| a == "--standby") {
+        eprintln!("[orbit-mcp] Running in standby mode");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+    }
 
     let stdin = io::stdin();
     let mut reader = io::BufReader::new(stdin.lock());
