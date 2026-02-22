@@ -56,6 +56,7 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
         "rust" => bin_path.join("rust"),
         "mailpit" => bin_path.join("mailpit"),
         "mcp" => bin_path.join("mcp"),
+        "cli" => bin_path.join("cli"),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -127,6 +128,7 @@ pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<
         "rust" => bin_path.join("rust").to_string_lossy().to_string(),
         "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
         "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
+        "cli" => bin_path.join("cli").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -219,6 +221,7 @@ pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result
         "rust" => bin_path.join("rust").to_string_lossy().to_string(),
         "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
         "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
+        "cli" => bin_path.join("cli").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 
@@ -320,6 +323,12 @@ pub fn add_to_path(app: AppHandle) -> Result<String, String> {
     let deno_path = bin_path.join("deno");
     if deno_path.exists() {
         paths_to_add.push(deno_path.to_string_lossy().to_string());
+    }
+
+    // 9. CLI
+    let cli_path = bin_path.join("cli");
+    if cli_path.exists() {
+        paths_to_add.push(cli_path.to_string_lossy().to_string());
     }
 
     if paths_to_add.is_empty() {

@@ -247,6 +247,10 @@ pub fn run() {
         commands::mcp::start_mcp,
         commands::mcp::stop_mcp,
         commands::mcp::get_mcp_binary_path,
+        // CLI
+        commands::cli::get_cli_status,
+        commands::cli::install_cli,
+        commands::cli::uninstall_cli,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

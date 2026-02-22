@@ -8,6 +8,7 @@ import { ServiceOverview } from './ServiceOverview';
 import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
 import { McpManager } from './McpManager';
+import { CliManager } from './CliManager';
 import { getServiceIcon } from '../lib/serviceIcons';
 import { ask } from '@tauri-apps/plugin-dialog';
 
@@ -324,8 +325,8 @@ export function ServiceManager() {
             <button
               onClick={() => setSubTab('overview')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'overview'
-                  ? 'bg-surface-inset text-content shadow'
-                  : 'text-content-secondary hover:text-content'
+                ? 'bg-surface-inset text-content shadow'
+                : 'text-content-secondary hover:text-content'
                 }`}
             >
               Overview
@@ -333,8 +334,8 @@ export function ServiceManager() {
             <button
               onClick={() => setSubTab('manage')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'manage'
-                  ? 'bg-surface-inset text-content shadow'
-                  : 'text-content-secondary hover:text-content'
+                ? 'bg-surface-inset text-content shadow'
+                : 'text-content-secondary hover:text-content'
                 }`}
             >
               Manage ({services.length})
@@ -342,8 +343,8 @@ export function ServiceManager() {
             <button
               onClick={() => setSubTab('install')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'install'
-                  ? 'bg-surface-inset text-content shadow'
-                  : 'text-content-secondary hover:text-content'
+                ? 'bg-surface-inset text-content shadow'
+                : 'text-content-secondary hover:text-content'
                 }`}
             >
               Install
@@ -351,8 +352,8 @@ export function ServiceManager() {
             <button
               onClick={() => setSubTab('tools')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'tools'
-                  ? 'bg-surface-inset text-content shadow'
-                  : 'text-content-secondary hover:text-content'
+                ? 'bg-surface-inset text-content shadow'
+                : 'text-content-secondary hover:text-content'
                 }`}
             >
               Tools
@@ -405,16 +406,16 @@ export function ServiceManager() {
                   <div className="flex items-center gap-2">
                     {/* Status indicator */}
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${service.status === 'running'
-                        ? 'bg-emerald-500/10 text-emerald-500'
-                        : service.status === 'starting' || service.status === 'stopping'
-                          ? 'bg-amber-500/10 text-amber-500'
-                          : 'bg-surface-inset text-content-secondary'
+                      ? 'bg-emerald-500/10 text-emerald-500'
+                      : service.status === 'starting' || service.status === 'stopping'
+                        ? 'bg-amber-500/10 text-amber-500'
+                        : 'bg-surface-inset text-content-secondary'
                       }`}>
                       <div className={`w-2 h-2 rounded-full ${service.status === 'running'
-                          ? 'bg-emerald-500'
-                          : service.status === 'starting' || service.status === 'stopping'
-                            ? 'bg-amber-500 animate-pulse'
-                            : 'bg-content-muted'
+                        ? 'bg-emerald-500'
+                        : service.status === 'starting' || service.status === 'stopping'
+                          ? 'bg-amber-500 animate-pulse'
+                          : 'bg-content-muted'
                         }`} />
                       {service.status.toUpperCase()}
                       {service.port && <span className="font-mono">:{service.port}</span>}
@@ -449,8 +450,8 @@ export function ServiceManager() {
                           onClick={() => handleTogglePath(service.name, pathServiceType, !!isInPath)}
                           disabled={isProcessingPath}
                           className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${isInPath
-                              ? 'bg-emerald-500/10 text-emerald-500 hover:bg-red-500/10 hover:text-red-500'
-                              : 'bg-surface-inset hover:bg-hover text-content-secondary hover:text-content'
+                            ? 'bg-emerald-500/10 text-emerald-500 hover:bg-red-500/10 hover:text-red-500'
+                            : 'bg-surface-inset hover:bg-hover text-content-secondary hover:text-content'
                             }`}
                           title={isInPath ? 'Remove from PATH' : 'Add to PATH'}
                         >
@@ -470,8 +471,8 @@ export function ServiceManager() {
                       <button
                         onClick={() => handleToggleAutostart(service.name)}
                         className={`p-2 rounded-lg transition-colors ${isAutostart(service.name)
-                            ? 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
-                            : 'bg-surface-inset hover:bg-hover text-content-secondary hover:text-content'
+                          ? 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
+                          : 'bg-surface-inset hover:bg-hover text-content-secondary hover:text-content'
                           }`}
                         title={isAutostart(service.name) ? 'Disable autostart' : 'Autostart on launch'}
                       >
@@ -500,8 +501,8 @@ export function ServiceManager() {
                       onClick={() => handleToggleService(service.name, service.status)}
                       disabled={processing === service.name || service.status === 'starting' || service.status === 'stopping'}
                       className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${service.status === 'running'
-                          ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500'
-                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
+                        ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500'
+                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
                         }`}
                       title={service.status === 'running' ? 'Stop' : 'Start'}
                     >
@@ -583,6 +584,7 @@ export function ServiceManager() {
             <ComposerManager />
             <MailManager />
             <McpManager />
+            <CliManager />
           </div>
         )}
       </div>
@@ -667,8 +669,8 @@ function ServiceGroup({
             <div
               key={v.version}
               className={`bg-surface border p-3 rounded-lg flex justify-between items-center transition-colors ${installed
-                  ? 'border-emerald-500/30 bg-emerald-500/5'
-                  : 'border-edge hover:border-edge'
+                ? 'border-emerald-500/30 bg-emerald-500/5'
+                : 'border-edge hover:border-edge'
                 }`}
             >
               <div>
@@ -691,8 +693,8 @@ function ServiceGroup({
                   onClick={() => onInstall(type, v)}
                   disabled={processing !== null}
                   className={`p-2 rounded-md transition-colors ${isProcessing
-                      ? 'bg-surface-raised text-content-secondary'
-                      : 'bg-surface-raised hover:bg-emerald-600 hover:text-content text-content-secondary'
+                    ? 'bg-surface-raised text-content-secondary'
+                    : 'bg-surface-raised hover:bg-emerald-600 hover:text-content text-content-secondary'
                     }`}
                 >
                   {isProcessing ? (

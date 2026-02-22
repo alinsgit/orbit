@@ -26,6 +26,7 @@ pub mod versions;
 pub mod tunnel;
 pub mod terminal;
 pub mod mcp;
+pub mod cli;
 
 use std::process::Command;
 
