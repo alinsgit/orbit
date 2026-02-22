@@ -1544,6 +1544,42 @@ export const getMcpBinaryPath = async (): Promise<string> => {
   }
 };
 
+// --- CLI ---
+
+export interface CliStatus {
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+  binary_exists: boolean;
+}
+
+export const getCliStatus = async (): Promise<CliStatus> => {
+  try {
+    return await invoke('get_cli_status');
+  } catch (error) {
+    console.error('Failed to get CLI status:', error);
+    throw error;
+  }
+};
+
+export const installCli = async (): Promise<string> => {
+  try {
+    return await invoke('install_cli');
+  } catch (error) {
+    console.error('Failed to install CLI:', error);
+    throw error;
+  }
+};
+
+export const uninstallCli = async (): Promise<string> => {
+  try {
+    return await invoke('uninstall_cli');
+  } catch (error) {
+    console.error('Failed to uninstall CLI:', error);
+    throw error;
+  }
+};
+
 // --- Tunneling ---
 
 export interface TunnelResponse {

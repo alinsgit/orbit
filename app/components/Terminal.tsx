@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
+import { Unicode11Addon } from 'xterm-addon-unicode11';
 import { listen } from '@tauri-apps/api/event';
 import { spawnTerminal, writeTerminal, resizeTerminal, closeTerminal, getWorkspacePath, getSites, SiteWithStatus } from '../lib/api';
 import { useApp } from '../lib/AppContext';
@@ -88,12 +89,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
     getSites().then(setSites).catch(() => setSites([]));
   }, []);
 
-  // Create initial tab on mount
-  useEffect(() => {
-    if (tabs.length === 0) {
-      createTab();
-    }
-  }, []);
+  // No auto-created tab — user opens tabs via "+" or site buttons
 
   // Handle pending terminal site from context
   useEffect(() => {
@@ -154,11 +150,15 @@ export function Terminal({ className, onClose }: TerminalProps) {
       theme: XTERM_THEME,
       cursorBlink: true,
       cursorStyle: 'block',
+      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
+    const unicode11 = new Unicode11Addon();
     term.loadAddon(fitAddon);
     term.loadAddon(new WebLinksAddon());
+    term.loadAddon(unicode11);
+    term.unicode.activeVersion = '11';
     term.open(container);
     fitAddon.fit();
 
@@ -254,7 +254,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       try {
         entry.fitAddon.fit();
         resizeTerminal(activeTabId, entry.term.cols, entry.term.rows).catch(console.error);
-      } catch {}
+      } catch { }
     }, 50);
     return () => clearTimeout(timer);
   }, [activeTabId, isExpanded]);
@@ -269,7 +269,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       try {
         entry.fitAddon.fit();
         resizeTerminal(activeTabId, entry.term.cols, entry.term.rows).catch(console.error);
-      } catch {}
+      } catch { }
     });
 
     observer.observe(wrapperRef.current);
@@ -284,7 +284,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       try {
         entry.fitAddon.fit();
         resizeTerminal(activeTabId, entry.term.cols, entry.term.rows).catch(console.error);
-      } catch {}
+      } catch { }
     };
 
     window.addEventListener('resize', handleResize);
@@ -437,6 +437,12 @@ export function Terminal({ className, onClose }: TerminalProps) {
       <div className="flex flex-1 min-h-0 overflow-hidden" ref={wrapperRef}>
         {/* Terminal Containers — one per tab, only active is visible */}
         <div className="flex-1 min-h-0 relative">
+          {tabs.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-content-muted gap-3">
+              <TerminalIcon className="w-8 h-8 opacity-30" />
+              <p className="text-sm">Click <span className="text-emerald-500 font-medium">+</span> or a site to open a terminal</p>
+            </div>
+          )}
           {tabs.map((tab) => (
             <div
               key={tab.id}
@@ -466,8 +472,8 @@ export function Terminal({ className, onClose }: TerminalProps) {
                       <span className={clsx(
                         "w-1.5 h-1.5 rounded-full shrink-0",
                         svc.status === 'running' ? "bg-emerald-500" :
-                        svc.status === 'starting' || svc.status === 'stopping' ? "bg-amber-500 animate-pulse" :
-                        "bg-zinc-500"
+                          svc.status === 'starting' || svc.status === 'stopping' ? "bg-amber-500 animate-pulse" :
+                            "bg-zinc-500"
                       )} />
                       <span className="text-xs text-content-secondary truncate">{svc.name}</span>
                     </div>
@@ -521,20 +527,20 @@ export function Terminal({ className, onClose }: TerminalProps) {
                       {item.label}
                     </button>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button
-                         onClick={() => handleCommandRun(item.cmd)}
-                         className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded"
-                         title="Run instantly"
-                       >
-                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                       </button>
-                       <button
-                         onClick={() => handleCommandPaste(item.cmd)}
-                         className="p-1 text-content-muted hover:text-content hover:bg-surface-raised rounded"
-                         title="Paste"
-                       >
-                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                       </button>
+                      <button
+                        onClick={() => handleCommandRun(item.cmd)}
+                        className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded"
+                        title="Run instantly"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                      </button>
+                      <button
+                        onClick={() => handleCommandPaste(item.cmd)}
+                        className="p-1 text-content-muted hover:text-content hover:bg-surface-raised rounded"
+                        title="Paste"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
                     </div>
                   </div>
                 ))}
