@@ -404,6 +404,7 @@ fn scan_services(bin_path: &PathBuf) -> Vec<ServiceInfo> {
 
 fn is_port_in_use(port: u16) -> bool {
     std::net::TcpListener::bind(format!("127.0.0.1:{}", port)).is_err()
+        || std::net::TcpListener::bind(format!("0.0.0.0:{}", port)).is_err()
 }
 
 fn get_service_port(name: &str) -> Option<u16> {
@@ -416,10 +417,15 @@ fn get_service_port(name: &str) -> Option<u16> {
     } else if name.contains("redis") {
         Some(6379)
     } else if name.contains("php") {
+        // php-8.4 → minor=4 → 9000+4=9004 (matches GUI logic)
         let version_str = name.strip_prefix("php-").unwrap_or("8.4");
-        let cleaned: String = version_str.chars().filter(|c| c.is_ascii_digit()).collect();
-        let version_num: u32 = cleaned.parse().unwrap_or(84);
-        Some(9000 + version_num as u16)
+        let parts: Vec<&str> = version_str.split('.').collect();
+        if parts.len() >= 2 {
+            let minor: u16 = parts[1].parse().unwrap_or(4);
+            Some(9000 + minor)
+        } else {
+            Some(9004)
+        }
     } else if name.contains("mailpit") {
         Some(8025)
     } else if name.contains("postgresql") {
