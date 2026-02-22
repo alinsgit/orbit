@@ -4,6 +4,7 @@ import {
   getServiceStatus,
   startService,
   stopService,
+  autoStartServices,
   InstalledService
 } from './api';
 import { settingsStore, Settings } from './store';
@@ -61,7 +62,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>({
     ports: { nginx: 80, php_start: 9000, mariadb: 3306 },
     paths: { bin_dir: '', data_dir: '' },
-    services: { auto_start: false, default_php: '8.3' }
+    services: { auto_start: false, autostart_list: [], default_php: '8.3' }
   });
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -217,11 +218,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Load services after settings (first load — show loader)
   const initialLoadDone = useRef(false);
+  const autostartRan = useRef(false);
   useEffect(() => {
     refreshServices(!initialLoadDone.current).then(() => {
       initialLoadDone.current = true;
     });
   }, [refreshServices]);
+
+  // Autostart services on first load
+  useEffect(() => {
+    if (!initialLoadDone.current || autostartRan.current) return;
+    if (services.length === 0) return;
+
+    const list = settings.services.autostart_list;
+    if (!list || list.length === 0) return;
+
+    // Only autostart services that are currently stopped
+    const toStart = list.filter(name =>
+      services.some(s => s.name === name && s.status === 'stopped')
+    );
+    if (toStart.length === 0) return;
+
+    autostartRan.current = true;
+    autoStartServices(toStart).then(() => {
+      addToast({ type: 'info', message: `Autostarted ${toStart.length} service(s)` });
+      // Refresh to get updated statuses
+      refreshServices();
+    }).catch(err => {
+      console.error('Autostart failed:', err);
+    });
+  }, [services, settings]);
 
   // Refresh services when switching to dashboard tab (silent)
   useEffect(() => {
