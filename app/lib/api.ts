@@ -1425,6 +1425,15 @@ export const resizeTerminal = async (id: string, cols: number, rows: number): Pr
   }
 };
 
+export const closeTerminal = async (id: string): Promise<void> => {
+  try {
+    await invoke('close_terminal', { id });
+  } catch (error) {
+    console.error('Failed to close terminal:', error);
+    throw error;
+  }
+};
+
 // --- Workspace Settings ---
 
 import { load } from '@tauri-apps/plugin-store';

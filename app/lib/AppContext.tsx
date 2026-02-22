@@ -53,6 +53,11 @@ interface AppContextType {
   // Terminal state
   isTerminalOpen: boolean;
   setIsTerminalOpen: (open: boolean) => void;
+
+  // Open terminal for a specific site (cross-component communication)
+  pendingTerminalSite: { domain: string; path: string; command?: string } | null;
+  openTerminalForSite: (domain: string, path: string, command?: string) => void;
+  clearPendingTerminalSite: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -68,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [activeTab, setActiveTab] = useState('services');
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [pendingTerminalSite, setPendingTerminalSite] = useState<{ domain: string; path: string; command?: string } | null>(null);
 
   // Generate unique ID for toasts
   const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -211,6 +217,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsLoading(loading);
   }, []);
 
+  // Open terminal for a specific site
+  const openTerminalForSite = useCallback((domain: string, path: string, command?: string) => {
+    setPendingTerminalSite({ domain, path, command });
+    setIsTerminalOpen(true);
+  }, []);
+
+  const clearPendingTerminalSite = useCallback(() => {
+    setPendingTerminalSite(null);
+  }, []);
+
   // Initial load
   useEffect(() => {
     refreshSettings();
@@ -276,6 +292,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveTab,
       isTerminalOpen,
       setIsTerminalOpen,
+      pendingTerminalSite,
+      openTerminalForSite,
+      clearPendingTerminalSite,
     }}>
       {children}
 

@@ -9,6 +9,7 @@ import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
 import { McpManager } from './McpManager';
 import { getServiceIcon } from '../lib/serviceIcons';
+import { ask } from '@tauri-apps/plugin-dialog';
 
 export function ServiceManager() {
   const {
@@ -254,9 +255,8 @@ export function ServiceManager() {
   };
 
   const handleUninstall = async (name: string, serviceType: string, path: string) => {
-    if (!confirm(`Are you sure you want to uninstall ${name}? This will remove all files.`)) {
-      return;
-    }
+    const confirmed = await ask(`Are you sure you want to uninstall ${name}? This will remove all files.`, { title: 'Confirm Uninstall', kind: 'warning' });
+    if (!confirmed) return;
 
     setProcessing(name);
     try {

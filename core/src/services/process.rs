@@ -328,13 +328,8 @@ impl ServiceManager {
         false
     }
 
-    #[allow(dead_code)]
-    pub fn start_all(&self) -> Result<Vec<String>, String> {
-        let results = Vec::new();
-        Ok(results)
-    }
-
     pub fn stop_all(&self) -> Result<(), String> {
+        // Phase 1: Kill tracked processes from HashMap
         let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
         let service_names: Vec<String> = processes.keys().cloned().collect();
 
@@ -356,42 +351,59 @@ impl ServiceManager {
                 let _ = child.wait();
             }
         }
+        drop(processes); // Release lock before phase 2
+
+        // Phase 2: Kill any orphaned Orbit processes by checking known service executables
+        // This catches processes from previous sessions or started externally
+        let orbit_bin_dir = crate::services::paths::get_bin_dir();
+        let clean_bin_dir: String = orbit_bin_dir.to_string_lossy()
+            .chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+
+        let known_executables: &[&str] = &[
+            "nginx.exe", "php-cgi.exe", "mariadbd.exe", "mysqld.exe",
+            "postgres.exe", "mongod.exe", "httpd.exe", "redis-server.exe",
+            "mailpit.exe",
+        ];
+
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes();
+
+        for process in sys.processes().values() {
+            let exe_path = format!("{:?}", process.exe());
+            let clean_exe: String = exe_path.chars()
+                .filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+
+            // Only kill processes running from Orbit's bin directory
+            if !clean_exe.contains(&clean_bin_dir) {
+                continue;
+            }
+
+            let proc_name = format!("{:?}", process.name());
+            let clean_name: String = proc_name.chars()
+                .filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+
+            let is_orbit_service = known_executables.iter().any(|&exe| {
+                let clean_known: String = exe.chars()
+                    .filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+                clean_name.contains(&clean_known)
+            });
+
+            if is_orbit_service {
+                let pid = process.pid();
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = hidden_command("taskkill")
+                        .args(&["/F", "/PID", &pid.to_string(), "/T"])
+                        .output();
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = Command::new("kill").arg(pid.to_string()).output();
+                }
+            }
+        }
+
         Ok(())
     }
 
-    /// Calculate PHP port based on version (e.g., PHP 8.2 = 9082, PHP 8.3 = 9083)
-    fn get_php_port(version: u32) -> u16 {
-        9000 + version as u16
-    }
-
-    pub fn start_auto(&self, name: String) -> Result<u32, String> {
-        let service_type = if name.contains("nginx") {
-            ServiceType::Nginx
-        } else if name.contains("php") {
-            let version: u32 = name
-                .split('-')
-                .nth(1)
-                .map(|v| v.replace(".", ""))
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(82);
-            ServiceType::Php(version)
-        } else {
-            ServiceType::MariaDB
-        };
-
-        let _args: Vec<String> = match service_type {
-            ServiceType::Nginx => vec![],
-            ServiceType::Php(version) => {
-                let port = Self::get_php_port(version);
-                vec!["-b".to_string(), format!("127.0.0.1:{}", port)]
-            }
-            ServiceType::MariaDB => vec![],
-            ServiceType::PostgreSQL | ServiceType::MongoDB => vec![],
-            ServiceType::Apache => vec![],
-            ServiceType::Redis => vec![],
-            ServiceType::NodeJs | ServiceType::Python | ServiceType::Bun | ServiceType::Go | ServiceType::Deno => vec![],
-        };
-
-        Err("Service path not found".to_string())
-    }
 }

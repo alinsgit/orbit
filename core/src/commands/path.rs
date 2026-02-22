@@ -26,9 +26,7 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
             }
         }
         s if s.starts_with("php") => {
-            // Handle "php-8.4" format - extract version part
             let version = s.strip_prefix("php-").unwrap_or("8.4");
-            // PHP is installed in bin/php/{version} (e.g., bin/php/8.4)
             bin_path.join("php").join(version)
         }
         "apache" => {
@@ -39,11 +37,24 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
                 bin_path.join("apache")
             }
         }
+        "redis" => bin_path.join("redis"),
+        "postgresql" => {
+            let pg_base = bin_path.join("postgresql");
+            let pg_bin = pg_base.join("pgsql").join("bin");
+            if pg_bin.exists() { pg_bin } else { pg_base.join("bin") }
+        }
+        "mongodb" => {
+            let mongo_bin = bin_path.join("mongodb").join("bin");
+            if mongo_bin.exists() { mongo_bin } else { bin_path.join("mongodb") }
+        }
         "nodejs" => bin_path.join("nodejs"),
         "python" => bin_path.join("python"),
         "bun" => bin_path.join("bun"),
         "go" => bin_path.join("go").join("bin"),
         "deno" => bin_path.join("deno"),
+        "composer" => bin_path.join("composer"),
+        "rust" => bin_path.join("rust"),
+        "mailpit" => bin_path.join("mailpit"),
         "mcp" => bin_path.join("mcp"),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
@@ -100,16 +111,21 @@ pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<
         "nginx" => bin_path.join("nginx").to_string_lossy().to_string(),
         "mariadb" => bin_path.join("mariadb").to_string_lossy().to_string(),
         s if s.starts_with("php") => {
-            // Handle "php-8.4" format - extract version part
             let version = s.strip_prefix("php-").unwrap_or("8.4");
             bin_path.join("php").join(version).to_string_lossy().to_string()
         }
         "apache" => bin_path.join("apache").to_string_lossy().to_string(),
+        "redis" => bin_path.join("redis").to_string_lossy().to_string(),
+        "postgresql" => bin_path.join("postgresql").to_string_lossy().to_string(),
+        "mongodb" => bin_path.join("mongodb").to_string_lossy().to_string(),
         "nodejs" => bin_path.join("nodejs").to_string_lossy().to_string(),
         "python" => bin_path.join("python").to_string_lossy().to_string(),
         "bun" => bin_path.join("bun").to_string_lossy().to_string(),
         "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
         "deno" => bin_path.join("deno").to_string_lossy().to_string(),
+        "composer" => bin_path.join("composer").to_string_lossy().to_string(),
+        "rust" => bin_path.join("rust").to_string_lossy().to_string(),
+        "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
         "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
@@ -173,7 +189,6 @@ pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result
             }
         }
         s if s.starts_with("php") => {
-            // Handle "php-8.4" format - extract version part
             let version = s.strip_prefix("php-").unwrap_or("8.4");
             bin_path.join("php").join(version).to_string_lossy().to_string()
         }
@@ -185,11 +200,25 @@ pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result
                 bin_path.join("apache").to_string_lossy().to_string()
             }
         }
+        "redis" => bin_path.join("redis").to_string_lossy().to_string(),
+        "postgresql" => {
+            let pg_base = bin_path.join("postgresql");
+            let pg_bin = pg_base.join("pgsql").join("bin");
+            if pg_bin.exists() { pg_bin.to_string_lossy().to_string() } else { pg_base.join("bin").to_string_lossy().to_string() }
+        }
+        "mongodb" => {
+            let mongo_bin = bin_path.join("mongodb").join("bin");
+            if mongo_bin.exists() { mongo_bin.to_string_lossy().to_string() } else { bin_path.join("mongodb").to_string_lossy().to_string() }
+        }
         "nodejs" => bin_path.join("nodejs").to_string_lossy().to_string(),
         "python" => bin_path.join("python").to_string_lossy().to_string(),
         "bun" => bin_path.join("bun").to_string_lossy().to_string(),
         "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
         "deno" => bin_path.join("deno").to_string_lossy().to_string(),
+        "composer" => bin_path.join("composer").to_string_lossy().to_string(),
+        "rust" => bin_path.join("rust").to_string_lossy().to_string(),
+        "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
+        "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
         _ => return Err(format!("Unknown service type: {}", service_type)),
     };
 

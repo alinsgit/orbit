@@ -18,7 +18,7 @@ import {
   Upload,
   Pencil,
 } from 'lucide-react';
-import { save, open } from '@tauri-apps/plugin-dialog';
+import { save, open, ask } from '@tauri-apps/plugin-dialog';
 import {
   dbConnect,
   dbDisconnect,
@@ -192,7 +192,8 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
   };
 
   const handleDropDatabase = async (name: string) => {
-    if (!confirm(`Are you sure you want to delete the database '${name}'? This action cannot be undone.`)) return;
+    const confirmed = await ask(`Are you sure you want to delete the database '${name}'? This action cannot be undone.`, { title: 'Confirm Delete', kind: 'warning' });
+    if (!confirmed) return;
     try {
       setActionLoading(`dropDb-${name}`);
       await dropDatabase(name);
@@ -221,7 +222,8 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
   };
 
   const handleDropUser = async (user: UserInfo) => {
-    if (!confirm(`Are you sure you want to delete the user '${user.user}'?`)) return;
+    const confirmed = await ask(`Are you sure you want to delete the user '${user.user}'?`, { title: 'Confirm Delete', kind: 'warning' });
+    if (!confirmed) return;
     try {
       setActionLoading(`dropUser-${user.user}@${user.host}`);
       await dropUser(user.user, user.host);

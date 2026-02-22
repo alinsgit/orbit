@@ -38,26 +38,35 @@ const LOG_LEVEL_CONFIG: Record<string, { color: string; bgColor: string; icon: R
 
 // Service badge config
 const SERVICE_BADGE: Record<string, { label: string; color: string; iconColor: string }> = {
-  error:   { label: 'nginx-error', color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
-  access:  { label: 'access',      color: 'bg-blue-500/20 text-blue-400',     iconColor: 'text-blue-400' },
-  php:     { label: 'php',         color: 'bg-purple-500/20 text-purple-400', iconColor: 'text-purple-400' },
-  mariadb: { label: 'mariadb',     color: 'bg-sky-500/20 text-sky-400',       iconColor: 'text-sky-400' },
-  mailpit: { label: 'mailpit',     color: 'bg-pink-500/20 text-pink-400',     iconColor: 'text-pink-400' },
-  redis:   { label: 'redis',       color: 'bg-red-500/20 text-red-400',       iconColor: 'text-red-400' },
-  other:   { label: 'other',       color: 'bg-surface-inset text-content-secondary', iconColor: 'text-content-secondary' },
+  error:            { label: 'nginx-error', color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
+  access:           { label: 'access',      color: 'bg-blue-500/20 text-blue-400',     iconColor: 'text-blue-400' },
+  php:              { label: 'php',         color: 'bg-purple-500/20 text-purple-400', iconColor: 'text-purple-400' },
+  mariadb:          { label: 'mariadb',     color: 'bg-sky-500/20 text-sky-400',       iconColor: 'text-sky-400' },
+  mailpit:          { label: 'mailpit',     color: 'bg-pink-500/20 text-pink-400',     iconColor: 'text-pink-400' },
+  redis:            { label: 'redis',       color: 'bg-red-500/20 text-red-400',       iconColor: 'text-red-400' },
+  'apache-error':   { label: 'apache-error',  color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
+  'apache-access':  { label: 'apache-access', color: 'bg-blue-500/20 text-blue-400',     iconColor: 'text-blue-400' },
+  apache:           { label: 'apache',      color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
+  postgresql:       { label: 'postgresql',  color: 'bg-indigo-500/20 text-indigo-400', iconColor: 'text-indigo-400' },
+  mongodb:          { label: 'mongodb',     color: 'bg-green-500/20 text-green-400',   iconColor: 'text-green-400' },
+  other:            { label: 'other',       color: 'bg-surface-inset text-content-secondary', iconColor: 'text-content-secondary' },
 };
 
 // Map log_type to service group (for filtering)
 const getServiceGroup = (logType: string): string => {
   if (logType === 'error' || logType === 'access') return 'nginx';
+  if (logType === 'apache-error' || logType === 'apache-access') return 'apache';
   return logType;
 };
 
 // Service filter labels
 const SERVICE_LABELS: Record<string, string> = {
   nginx: 'Nginx',
+  apache: 'Apache',
   php: 'PHP',
   mariadb: 'MariaDB',
+  postgresql: 'PostgreSQL',
+  mongodb: 'MongoDB',
   mailpit: 'Mailpit',
   redis: 'Redis',
   other: 'Other',

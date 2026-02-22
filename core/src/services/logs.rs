@@ -110,8 +110,8 @@ impl LogManager {
             }
         }
 
-        // MariaDB error log
-        let mariadb_log = bin_path.join("mariadb").join("data").join("mysql.err");
+        // MariaDB error log (data lives in bin/data/mariadb/, not bin/mariadb/data/)
+        let mariadb_log = bin_path.join("data").join("mariadb").join("mysql.err");
         if mariadb_log.exists() {
             let metadata = fs::metadata(&mariadb_log).ok();
             logs.push(LogFile {
@@ -181,6 +181,105 @@ impl LogManager {
                     .unwrap_or_default(),
                 log_type: "redis".to_string(),
             });
+        }
+
+        // Apache logs
+        let apache_logs = bin_path.join("apache").join("logs");
+        if apache_logs.exists() {
+            if let Ok(entries) = fs::read_dir(&apache_logs) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "log").unwrap_or(false) {
+                        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        let metadata = fs::metadata(&path).ok();
+
+                        let log_type = if name.contains("error") {
+                            "apache-error"
+                        } else if name.contains("access") {
+                            "apache-access"
+                        } else {
+                            "apache"
+                        };
+
+                        logs.push(LogFile {
+                            name: format!("apache-{}", name),
+                            path: path.to_string_lossy().to_string(),
+                            size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+                            modified: metadata
+                                .and_then(|m| m.modified().ok())
+                                .map(|t| {
+                                    chrono::DateTime::<chrono::Utc>::from(t)
+                                        .format("%Y-%m-%d %H:%M:%S")
+                                        .to_string()
+                                })
+                                .unwrap_or_default(),
+                            log_type: log_type.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // PostgreSQL log (stderr log in data directory)
+        let pg_data = bin_path.join("data").join("postgres");
+        if pg_data.exists() {
+            // PostgreSQL on Windows logs to pg_log/ or log/ directory if configured
+            for log_subdir in &["pg_log", "log"] {
+                let pg_log_dir = pg_data.join(log_subdir);
+                if pg_log_dir.exists() {
+                    if let Ok(entries) = fs::read_dir(&pg_log_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            let ext = path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default();
+                            if ext == "log" || ext == "csv" {
+                                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                                let metadata = fs::metadata(&path).ok();
+                                logs.push(LogFile {
+                                    name: format!("postgresql-{}", name),
+                                    path: path.to_string_lossy().to_string(),
+                                    size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+                                    modified: metadata
+                                        .and_then(|m| m.modified().ok())
+                                        .map(|t| {
+                                            chrono::DateTime::<chrono::Utc>::from(t)
+                                                .format("%Y-%m-%d %H:%M:%S")
+                                                .to_string()
+                                        })
+                                        .unwrap_or_default(),
+                                    log_type: "postgresql".to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // MongoDB log
+        let mongodb_data = bin_path.join("data").join("mongodb");
+        if mongodb_data.exists() {
+            // Check for mongod.log in data dir or bin dir
+            for log_dir in &[&mongodb_data, &bin_path.join("mongodb")] {
+                let mongo_log = log_dir.join("mongod.log");
+                if mongo_log.exists() {
+                    let metadata = fs::metadata(&mongo_log).ok();
+                    logs.push(LogFile {
+                        name: "mongodb.log".to_string(),
+                        path: mongo_log.to_string_lossy().to_string(),
+                        size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+                        modified: metadata
+                            .and_then(|m| m.modified().ok())
+                            .map(|t| {
+                                chrono::DateTime::<chrono::Utc>::from(t)
+                                    .format("%Y-%m-%d %H:%M:%S")
+                                    .to_string()
+                            })
+                            .unwrap_or_default(),
+                        log_type: "mongodb".to_string(),
+                    });
+                    break;
+                }
+            }
         }
 
         // Sort by modified date (newest first)
@@ -336,6 +435,37 @@ impl LogManager {
         // Redis log: symbols after timestamp indicate level
         // # = warning, * = info/notice, - = verbose
         if line.contains(" # ") {
+            return "warning";
+        }
+
+        // PostgreSQL log: LOG, ERROR, FATAL, PANIC, WARNING, NOTICE
+        if line.contains("FATAL:") || line.contains("PANIC:") {
+            return "error";
+        }
+        if line.contains("ERROR:") && !line.contains("[ERROR]") {
+            // Avoid double-matching MariaDB [ERROR]
+            return "error";
+        }
+        if line.contains("WARNING:") && !line.contains("[Warning]") {
+            return "warning";
+        }
+
+        // Apache error log: [level:severity] format (Apache 2.4+)
+        if line.contains("[error]") || line.contains("[crit]") || line.contains("[alert]") || line.contains("[emerg]") {
+            // Already caught above by nginx pattern (same bracket format)
+        }
+        if line.contains(":error]") || line.contains(":crit]") || line.contains(":alert]") || line.contains(":emerg]") {
+            return "error";
+        }
+        if line.contains(":warn]") {
+            return "warning";
+        }
+
+        // MongoDB log: severity codes S (fatal), E (error), W (warning), I (info)
+        if line.contains(" E ") || line.contains(" F ") {
+            return "error";
+        }
+        if line.contains(" W ") {
             return "warning";
         }
 

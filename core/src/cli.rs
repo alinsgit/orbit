@@ -487,11 +487,13 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
             (exe_path.clone(), args)
         }
         "redis" => {
+            // Pass config as relative path — Cygwin-based Redis misinterprets
+            // absolute Windows paths by prepending /cygdrive/...
             let mut args = Vec::new();
             if let Some(parent) = exe_path.parent() {
                 let config = parent.join("redis.conf");
                 if config.exists() {
-                    args.push(config.to_string_lossy().to_string());
+                    args.push("redis.conf".to_string());
                 }
             }
             (exe_path.clone(), args)
@@ -688,6 +690,67 @@ fn scan_log_files(bin_dir: &PathBuf) -> Vec<LogFile> {
             path: mailpit_log,
             size,
         });
+    }
+
+    // Apache logs
+    let apache_log_dir = bin_dir.join("apache").join("logs");
+    if apache_log_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&apache_log_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map(|e| e == "log").unwrap_or(false) {
+                    let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                    let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    logs.push(LogFile {
+                        name: format!("apache/{}", fname),
+                        path,
+                        size,
+                    });
+                }
+            }
+        }
+    }
+
+    // PostgreSQL logs
+    let pg_data = bin_dir.join("data").join("postgres");
+    if pg_data.exists() {
+        for log_subdir in &["pg_log", "log"] {
+            let pg_log_dir = pg_data.join(log_subdir);
+            if pg_log_dir.exists() {
+                if let Ok(entries) = fs::read_dir(&pg_log_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let ext = path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default();
+                        if ext == "log" || ext == "csv" {
+                            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                            logs.push(LogFile {
+                                name: format!("postgresql/{}", fname),
+                                path,
+                                size,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MongoDB log
+    let mongodb_data = bin_dir.join("data").join("mongodb");
+    if mongodb_data.exists() {
+        for log_dir_path in [&mongodb_data, &bin_dir.join("mongodb")] {
+            let mongo_log = log_dir_path.join("mongod.log");
+            if mongo_log.exists() {
+                let size = fs::metadata(&mongo_log).map(|m| m.len()).unwrap_or(0);
+                logs.push(LogFile {
+                    name: "mongodb/mongod.log".to_string(),
+                    path: mongo_log,
+                    size,
+                });
+                break;
+            }
+        }
     }
 
     logs
