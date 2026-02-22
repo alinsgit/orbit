@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Loader2, ToggleLeft, ToggleRight, Save, Cpu, Server, Gauge, RefreshCw, ChevronDown, ChevronRight, FileCode, RotateCcw, Trash2, Plus, Download, Search, Package, FileText, Mail, Database } from 'lucide-react';
+import { ask } from '@tauri-apps/plugin-dialog';
 import {
   getPhpConfig, setPhpExtension, setPhpSetting, PhpConfig,
   getOpcacheConfig, setOpcacheConfig as updateOpcacheConfig, OpcacheConfig,
@@ -570,7 +571,8 @@ server {
   };
 
   const handleUninstallPecl = async (extName: string) => {
-    if (!confirm(`Are you sure you want to uninstall ${extName}?`)) return;
+    const confirmed = await ask(`Are you sure you want to uninstall ${extName}?`, { title: 'Confirm Uninstall', kind: 'warning' });
+    if (!confirmed) return;
     setPeclInstalling(extName);
     try {
       await uninstallPeclExtension(serviceVersion, extName);

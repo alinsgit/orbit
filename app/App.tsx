@@ -1,3 +1,4 @@
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Server, Settings, Minus, Square, X, ScrollText, Database, Globe, TerminalSquare, Loader2 } from 'lucide-react'
 import { useApp } from './lib/AppContext'
 import { ServiceManager } from './components/ServiceManager'
@@ -10,6 +11,11 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const appWindow = getCurrentWindow()
 
+const TERMINAL_HEIGHT_KEY = 'orbit-terminal-height'
+const DEFAULT_TERMINAL_HEIGHT = 300
+const MIN_TERMINAL_HEIGHT = 150
+const MAX_TERMINAL_RATIO = 0.8
+
 function App() {
   const {
     activeTab,
@@ -18,6 +24,45 @@ function App() {
     setIsTerminalOpen,
     isLoading
   } = useApp()
+
+  // Drag resize state
+  const [terminalHeight, setTerminalHeight] = useState(() => {
+    const saved = localStorage.getItem(TERMINAL_HEIGHT_KEY)
+    return saved ? parseInt(saved, 10) : DEFAULT_TERMINAL_HEIGHT
+  })
+  const isDragging = useRef(false)
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Persist terminal height
+  useEffect(() => {
+    localStorage.setItem(TERMINAL_HEIGHT_KEY, String(terminalHeight))
+  }, [terminalHeight])
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !mainRef.current) return
+      const mainRect = mainRef.current.getBoundingClientRect()
+      const maxH = mainRect.height * MAX_TERMINAL_RATIO
+      const newHeight = mainRect.bottom - e.clientY
+      setTerminalHeight(Math.max(MIN_TERMINAL_HEIGHT, Math.min(maxH, newHeight)))
+    }
+
+    const onMouseUp = () => {
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [])
 
   return (
     <div className="app-container text-content font-sans select-none relative">
@@ -120,7 +165,7 @@ function App() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-h-0 relative flex flex-col bg-surface-alt overflow-hidden">
+        <main ref={mainRef} className="flex-1 min-h-0 relative flex flex-col bg-surface-alt overflow-hidden">
           <div className="flex-1 min-h-0 overflow-auto">
             {activeTab === 'services' && <ServiceManager />}
             {activeTab === 'sites' && <SitesManager />}
@@ -128,12 +173,18 @@ function App() {
             {activeTab === 'database' && <DatabaseViewer />}
             {activeTab === 'settings' && <SettingsManager />}
           </div>
-          
-          {/* Docked Terminal */}
+
+          {/* Docked Terminal with Drag Handle */}
           {isTerminalOpen && (
-             <div className="h-2/5 min-h-[250px] border-t border-edge bg-[#0a0a0a] relative z-40 flex flex-col">
+            <>
+              <div
+                className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors"
+                onMouseDown={handleDragStart}
+              />
+              <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0a0a0a] relative z-40 flex flex-col">
                 <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
-             </div>
+              </div>
+            </>
           )}
         </main>
       </div>
