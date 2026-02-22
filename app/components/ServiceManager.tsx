@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Download, Loader2, Trash2, RefreshCw, Play, Square, CheckCircle, Terminal, CheckCircle2, RotateCw, Settings2 } from 'lucide-react';
+import { Download, Loader2, Trash2, RefreshCw, Play, Square, CheckCircle, Terminal, CheckCircle2, RotateCw, Settings2, Zap } from 'lucide-react';
 import { getAvailableVersions, downloadService, uninstallService, refreshAllVersions, ServiceVersion, addServiceToPath, removeServiceFromPath, checkServicePathStatus, ServicePathStatus, reloadService } from '../lib/api';
 import { useApp } from '../lib/AppContext';
+import { settingsStore } from '../lib/store';
 import { ServiceConfigDrawer } from './ServiceConfigDrawer';
 import { ServiceOverview } from './ServiceOverview';
 import { ComposerManager } from './ComposerManager';
@@ -15,6 +16,8 @@ export function ServiceManager() {
     refreshServices,
     startServiceByName,
     stopServiceByName,
+    settings,
+    refreshSettings,
     addToast
   } = useApp();
 
@@ -52,6 +55,32 @@ export function ServiceManager() {
     serviceType: string;
     serviceVersion: string;
   }>({ isOpen: false, serviceName: '', serviceType: '', serviceVersion: '' });
+
+  // Services that support autostart (have a server process)
+  const STARTABLE_TYPES = ['nginx', 'php', 'mariadb', 'redis', 'apache', 'mailpit', 'postgresql', 'mongodb'];
+
+  const isStartable = (serviceType: string) => STARTABLE_TYPES.includes(serviceType);
+
+  const isAutostart = (serviceName: string) =>
+    settings.services.autostart_list?.includes(serviceName) ?? false;
+
+  const handleToggleAutostart = async (serviceName: string) => {
+    const current = settings.services.autostart_list || [];
+    const newList = current.includes(serviceName)
+      ? current.filter(n => n !== serviceName)
+      : [...current, serviceName];
+
+    await settingsStore.saveSettings({
+      services: { ...settings.services, autostart_list: newList },
+    });
+    await refreshSettings();
+
+    const enabled = newList.includes(serviceName);
+    addToast({
+      type: 'success',
+      message: enabled ? `${serviceName} will start on launch` : `${serviceName} autostart disabled`,
+    });
+  };
 
   // Services that have configuration
   const hasConfiguration = (serviceType: string) => {
@@ -435,6 +464,20 @@ export function ServiceManager() {
                         </button>
                       );
                     })()}
+
+                    {/* Autostart toggle */}
+                    {isStartable(service.service_type) && (
+                      <button
+                        onClick={() => handleToggleAutostart(service.name)}
+                        className={`p-2 rounded-lg transition-colors ${isAutostart(service.name)
+                            ? 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
+                            : 'bg-surface-inset hover:bg-hover text-content-secondary hover:text-content'
+                          }`}
+                        title={isAutostart(service.name) ? 'Disable autostart' : 'Autostart on launch'}
+                      >
+                        <Zap size={16} />
+                      </button>
+                    )}
 
                     {/* Reload button (for services that support it, when running) */}
                     {supportsReload(service.service_type) && service.status === 'running' && (

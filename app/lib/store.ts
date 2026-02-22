@@ -14,6 +14,7 @@ export interface Settings {
   };
   services: {
     auto_start: boolean;
+    autostart_list: string[];
     default_php: string;
   };
 }
@@ -30,6 +31,7 @@ const defaultSettings: Settings = {
   },
   services: {
     auto_start: false,
+    autostart_list: [],
     default_php: '8.3',
   },
 };
@@ -47,7 +49,11 @@ class SettingsStore {
     }
 
     const saved = await this.store?.get<Settings>('settings');
-    return { ...defaultSettings, ...saved };
+    return {
+      ...defaultSettings,
+      ...saved,
+      services: { ...defaultSettings.services, ...saved?.services },
+    };
   }
 
   async saveSettings(settings: Partial<Settings>): Promise<void> {

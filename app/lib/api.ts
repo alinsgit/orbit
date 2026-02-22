@@ -1578,6 +1578,17 @@ export const getTunnelUrl = async (): Promise<string> => {
   }
 };
 
+// --- Autostart ---
+
+export const autoStartServices = async (installedServices: string[]): Promise<string[]> => {
+  try {
+    return await invoke('auto_start_services', { installedServices });
+  } catch (error) {
+    console.error('Failed to auto-start services:', error);
+    throw error;
+  }
+};
+
 // --- Host & PATH Management ---
 
 export const getHostsFile = async (): Promise<string> => {

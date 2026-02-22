@@ -6,6 +6,8 @@
 //! Protocol: JSON-RPC 2.0 over stdio with Content-Length headers
 //! Transport: stdin/stdout (protocol), stderr (debug logging)
 
+#![recursion_limit = "512"]
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
@@ -1103,7 +1105,7 @@ fn handle_tools_list(id: &Value) -> Value {
         },
         {
             "name": "run_orbit_command",
-            "description": "Run an orbit-cli command directly. Use this for operations not covered by other tools (e.g., 'sites --json', 'php list', 'hosts list', 'db export mydb').",
+            "description": "Run an orbit-cli command directly. Most operations now have dedicated tools — use this for less common commands (e.g., 'scan', 'open', 'trust-ssl').",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1158,7 +1160,7 @@ fn handle_tools_list(id: &Value) -> Value {
         },
         {
             "name": "drop_database",
-            "description": "Drop a MariaDB database. This is irreversible!",
+            "description": "Drop a MariaDB database. This action is irreversible.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1458,6 +1460,118 @@ fn handle_tools_list(id: &Value) -> Value {
                 },
                 "required": ["domain", "content"]
             }
+        },
+        // ─── Batch Operations ────────────────────────────
+        {
+            "name": "start_all_services",
+            "description": "Start all installed server services (nginx, php, mariadb, redis, apache, mailpit, postgresql, mongodb).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "stop_all_services",
+            "description": "Stop all running server services.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        // ─── Hosts File ──────────────────────────────────
+        {
+            "name": "hosts_list",
+            "description": "List all entries in the system hosts file. Shows IP and domain mappings.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "hosts_add",
+            "description": "Add a domain to the hosts file pointing to 127.0.0.1. Requires admin/elevated privileges.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Domain to add (e.g., myapp.test)" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "hosts_remove",
+            "description": "Remove a domain from the hosts file. Requires admin/elevated privileges.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Domain to remove" }
+                },
+                "required": ["domain"]
+            }
+        },
+        // ─── Database Export/Import ──────────────────────
+        {
+            "name": "db_export",
+            "description": "Export a MariaDB database to a SQL file using mysqldump. Returns the output file path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name to export" },
+                    "output": { "type": "string", "description": "Output file path (default: <database>.sql in current dir)" }
+                },
+                "required": ["database"]
+            }
+        },
+        {
+            "name": "db_import",
+            "description": "Import a SQL file into a MariaDB database.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Target database name" },
+                    "file": { "type": "string", "description": "Path to the SQL file to import" }
+                },
+                "required": ["database", "file"]
+            }
+        },
+        // ─── Log Management ─────────────────────────────
+        {
+            "name": "clear_log",
+            "description": "Clear a log file (truncate to empty).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Log name (e.g., nginx/access.log, php-8.4/php_errors.log)" }
+                },
+                "required": ["name"]
+            }
+        },
+        // ─── Service Install/Uninstall ──────────────────
+        {
+            "name": "install_service",
+            "description": "Install a service from the Orbit registry. Downloads and extracts the service binary. Supported: nginx, php, mariadb, postgresql, mongodb, redis, nodejs, python, bun, deno, go, apache, mailpit, composer, rust.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "service": { "type": "string", "description": "Service to install (e.g., nginx, php, mariadb, redis)" },
+                    "version": { "type": "string", "description": "Version to install (e.g., 8.4 for PHP). Uses latest if omitted." }
+                },
+                "required": ["service"]
+            }
+        },
+        {
+            "name": "uninstall_service",
+            "description": "Uninstall a service by removing its directory. Stops the service first if running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "service": { "type": "string", "description": "Service to uninstall (e.g., nginx, mariadb, php-8.4)" }
+                },
+                "required": ["service"]
+            }
         }
     ]);
 
@@ -1635,6 +1749,45 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
             let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
             let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
             tool_write_site_config(domain, content)
+        }
+        // Batch operations
+        "start_all_services" => tool_start_all_services(),
+        "stop_all_services" => tool_stop_all_services(),
+        // Hosts
+        "hosts_list" => tool_hosts_list(),
+        "hosts_add" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_hosts_add(domain)
+        }
+        "hosts_remove" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_hosts_remove(domain)
+        }
+        // DB export/import
+        "db_export" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let output = args.get("output").and_then(|v| v.as_str());
+            tool_db_export(db, output)
+        }
+        "db_import" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let file = args.get("file").and_then(|v| v.as_str()).unwrap_or("");
+            tool_db_import(db, file)
+        }
+        // Log management
+        "clear_log" => {
+            let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_clear_log(name)
+        }
+        // Service install/uninstall
+        "install_service" => {
+            let service = args.get("service").and_then(|v| v.as_str()).unwrap_or("");
+            let version = args.get("version").and_then(|v| v.as_str());
+            tool_install_service(service, version)
+        }
+        "uninstall_service" => {
+            let service = args.get("service").and_then(|v| v.as_str()).unwrap_or("");
+            tool_uninstall_service(service)
         }
         _ => Err(format!("Unknown tool: {}", name)),
     };
@@ -2868,6 +3021,341 @@ fn tool_write_site_config(domain: &str, content: &str) -> Result<String, String>
     }
 
     Ok(format!("Site config for '{}' updated and nginx reloaded", domain))
+}
+
+// ─── Batch Operations ────────────────────────────────────────────
+
+fn tool_start_all_services() -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let services = scan_services(&bin_dir);
+    let startable = ["nginx", "php", "mariadb", "redis", "apache", "mailpit", "postgresql", "mongodb"];
+
+    let targets: Vec<&ServiceInfo> = services.iter()
+        .filter(|s| startable.contains(&s.service_type.as_str()))
+        .collect();
+
+    if targets.is_empty() {
+        return Ok("No startable services installed.".to_string());
+    }
+
+    let mut results = Vec::new();
+    for svc in &targets {
+        if is_service_running(&svc.name) {
+            results.push(format!("{}: already running", svc.name));
+            continue;
+        }
+        match start_service_process(svc) {
+            Ok(pid) => {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                results.push(format!("{}: started (PID {})", svc.name, pid));
+            }
+            Err(e) => results.push(format!("{}: failed — {}", svc.name, e)),
+        }
+    }
+
+    Ok(results.join("\n"))
+}
+
+fn tool_stop_all_services() -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let services = scan_services(&bin_dir);
+    let startable = ["nginx", "php", "mariadb", "redis", "apache", "mailpit", "postgresql", "mongodb"];
+
+    let targets: Vec<&ServiceInfo> = services.iter()
+        .filter(|s| startable.contains(&s.service_type.as_str()) && is_service_running(&s.name))
+        .collect();
+
+    if targets.is_empty() {
+        return Ok("No running services to stop.".to_string());
+    }
+
+    let mut results = Vec::new();
+    for svc in &targets {
+        match stop_service_process(&svc.name) {
+            Ok(_) => results.push(format!("{}: stopped", svc.name)),
+            Err(e) => results.push(format!("{}: failed — {}", svc.name, e)),
+        }
+    }
+
+    Ok(results.join("\n"))
+}
+
+// ─── Hosts File ──────────────────────────────────────────────────
+
+fn get_hosts_path() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    { PathBuf::from(r"C:\Windows\System32\drivers\etc\hosts") }
+    #[cfg(not(target_os = "windows"))]
+    { PathBuf::from("/etc/hosts") }
+}
+
+fn tool_hosts_list() -> Result<String, String> {
+    let hosts_path = get_hosts_path();
+    let content = fs::read_to_string(&hosts_path)
+        .map_err(|e| format!("Failed to read hosts file: {}", e))?;
+
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() >= 2 {
+            entries.push(json!({
+                "ip": parts[0],
+                "domain": parts[1],
+                "local": parts[0] == "127.0.0.1" || parts[0] == "::1"
+            }));
+        }
+    }
+
+    Ok(serde_json::to_string_pretty(&entries).unwrap())
+}
+
+fn tool_hosts_add(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+    add_hosts_entry(domain)?;
+    Ok(format!("Added '{}' → 127.0.0.1 to hosts file", domain))
+}
+
+fn tool_hosts_remove(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+    remove_hosts_entry(domain)?;
+    Ok(format!("Removed '{}' from hosts file", domain))
+}
+
+// ─── Database Export/Import ──────────────────────────────────────
+
+fn find_mariadb_dump(bin_dir: &PathBuf) -> Result<PathBuf, String> {
+    let mariadb_root = bin_dir.join("mariadb");
+    let paths = [
+        mariadb_root.join("mariadb-dump.exe"),
+        mariadb_root.join("mysqldump.exe"),
+        mariadb_root.join("bin").join("mariadb-dump.exe"),
+        mariadb_root.join("bin").join("mysqldump.exe"),
+    ];
+    for path in paths {
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+    Err("MariaDB dump not found (mysqldump.exe / mariadb-dump.exe)".to_string())
+}
+
+fn tool_db_export(database: &str, output: Option<&str>) -> Result<String, String> {
+    if database.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let dump_exe = find_mariadb_dump(&bin_dir)?;
+    let out_file = output.map(|s| s.to_string()).unwrap_or_else(|| format!("{}.sql", database));
+
+    let result = hidden_command(&dump_exe)
+        .arg("--host=127.0.0.1").arg("--port=3306")
+        .arg("-u").arg("root").arg("-proot")
+        .arg("--routines").arg("--triggers").arg("--single-transaction")
+        .arg(database)
+        .output()
+        .map_err(|e| format!("Failed to run mysqldump: {}", e))?;
+
+    if !result.status.success() {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        return Err(format!("Export failed: {}", stderr.trim()));
+    }
+
+    fs::write(&out_file, &result.stdout)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let size = result.stdout.len();
+    Ok(format!("Exported '{}' to {} ({} bytes)", database, out_file, size))
+}
+
+fn tool_db_import(database: &str, file: &str) -> Result<String, String> {
+    if database.is_empty() || file.is_empty() {
+        return Err("Database name and file path are required".to_string());
+    }
+
+    let file_path = std::path::Path::new(file);
+    if !file_path.exists() {
+        return Err(format!("SQL file not found: {}", file));
+    }
+
+    let bin_dir = get_bin_dir();
+    let client = find_mariadb_client(&bin_dir)?;
+    let sql_content = fs::read(file)
+        .map_err(|e| format!("Failed to read SQL file: {}", e))?;
+    let file_size = sql_content.len();
+
+    let mut child = hidden_command(&client)
+        .arg("--host=127.0.0.1").arg("--port=3306")
+        .arg("-u").arg("root").arg("-proot")
+        .arg(database)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to start mysql client: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin.write_all(&sql_content)
+            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    }
+
+    let output = child.wait_with_output()
+        .map_err(|e| format!("Failed to wait for import: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Import failed: {}", stderr.trim()));
+    }
+
+    Ok(format!("Imported {} ({} bytes) into '{}'", file, file_size, database))
+}
+
+// ─── Log Management ─────────────────────────────────────────────
+
+fn tool_clear_log(name: &str) -> Result<String, String> {
+    if name.is_empty() {
+        return Err("Log name is required".to_string());
+    }
+
+    // Prevent path traversal
+    if name.contains("..") {
+        return Err("Invalid log name".to_string());
+    }
+
+    let log_dir = get_orbit_data_dir().join("logs");
+    let log_path = log_dir.join(name);
+
+    if !log_path.exists() {
+        return Err(format!("Log file not found: {}", name));
+    }
+
+    // Verify it's inside the logs directory
+    if !log_path.starts_with(&log_dir) {
+        return Err("Invalid log path".to_string());
+    }
+
+    fs::write(&log_path, "")
+        .map_err(|e| format!("Failed to clear log: {}", e))?;
+
+    Ok(format!("Cleared log file: {}", name))
+}
+
+// ─── Service Install/Uninstall ──────────────────────────────────
+
+fn tool_install_service(service: &str, version: Option<&str>) -> Result<String, String> {
+    if service.is_empty() {
+        return Err("Service name is required".to_string());
+    }
+
+    // Use orbit-cli to handle the install (it has registry, download, extraction logic)
+    let cli_exe = find_orbit_cli();
+
+    let mut cmd_args = vec!["install".to_string(), service.to_string()];
+    if let Some(ver) = version {
+        cmd_args.push("--version".to_string());
+        cmd_args.push(ver.to_string());
+    }
+
+    let result = hidden_command(&cli_exe)
+        .args(&cmd_args)
+        .output()
+        .map_err(|e| format!("Failed to run orbit-cli install: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let stderr = String::from_utf8_lossy(&result.stderr);
+
+    if !result.status.success() && stdout.is_empty() {
+        return Err(format!("Install failed: {}", stderr.trim()));
+    }
+
+    // Strip ANSI codes from output
+    let clean_output = strip_ansi_codes(&stdout);
+    Ok(clean_output.trim().to_string())
+}
+
+fn tool_uninstall_service(service: &str) -> Result<String, String> {
+    if service.is_empty() {
+        return Err("Service name is required".to_string());
+    }
+
+    let resolved = resolve_service_name(service);
+    let bin_dir = get_bin_dir();
+
+    // Stop the service first if running
+    if is_service_running(&resolved) {
+        stop_service_process(&resolved).ok();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    // Determine the service directory
+    let service_dir = if resolved.starts_with("php-") {
+        let ver = resolved.strip_prefix("php-").unwrap_or("8.4");
+        bin_dir.join("php").join(ver)
+    } else {
+        bin_dir.join(&resolved)
+    };
+
+    if !service_dir.exists() {
+        return Err(format!("Service '{}' is not installed", service));
+    }
+
+    fs::remove_dir_all(&service_dir)
+        .map_err(|e| format!("Failed to remove {}: {}", resolved, e))?;
+
+    Ok(format!("Uninstalled '{}' (removed {})", resolved, service_dir.display()))
+}
+
+fn find_orbit_cli() -> PathBuf {
+    // Check common locations for orbit-cli
+    let bin_dir = get_bin_dir();
+
+    // Same directory as MCP binary
+    let mcp_dir = bin_dir.join("mcp");
+    let cli_in_mcp = mcp_dir.join("orbit-cli.exe");
+    if cli_in_mcp.exists() {
+        return cli_in_mcp;
+    }
+
+    // Parent bin directory
+    let cli_in_bin = bin_dir.join("orbit-cli.exe");
+    if cli_in_bin.exists() {
+        return cli_in_bin;
+    }
+
+    // Try PATH
+    PathBuf::from("orbit-cli")
+}
+
+fn strip_ansi_codes(s: &str) -> String {
+    // Simple ANSI escape code stripper
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
 }
 
 // ─── Utilities ───────────────────────────────────────────────────
