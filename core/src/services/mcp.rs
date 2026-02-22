@@ -136,6 +136,9 @@ impl McpManager {
 
         crate::services::download::download_file(&url, &exe_path).await?;
 
+        // Add MCP directory to user PATH so AI tools can use just "orbit-mcp"
+        crate::commands::path::add_service_to_path(app.clone(), "mcp".to_string()).ok();
+
         Ok(())
     }
 
@@ -148,6 +151,9 @@ impl McpManager {
                 .map_err(|e| format!("Failed to remove MCP: {}", e))?;
         }
 
+        // Clean up PATH entry
+        crate::commands::path::remove_service_from_path(app.clone(), "mcp".to_string()).ok();
+
         Ok(())
     }
 
@@ -159,13 +165,13 @@ impl McpManager {
         }
         // Fallback to a known version
         #[cfg(target_os = "windows")]
-        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-windows-x64.exe".to_string();
+        return "https://github.com/alinsgit/orbit/releases/latest/download/orbit-mcp-windows-x64.exe".to_string();
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-macos-arm64".to_string();
+        return "https://github.com/alinsgit/orbit/releases/latest/download/orbit-mcp-macos-arm64".to_string();
         #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-macos-x64".to_string();
+        return "https://github.com/alinsgit/orbit/releases/latest/download/orbit-mcp-macos-x64".to_string();
         #[cfg(target_os = "linux")]
-        return "https://github.com/AliNisarAhmed/orbit/releases/latest/download/orbit-mcp-linux-x64".to_string();
+        return "https://github.com/alinsgit/orbit/releases/latest/download/orbit-mcp-linux-x64".to_string();
     }
 
     /// Try to fetch the latest release download URL from GitHub API
@@ -231,7 +237,8 @@ impl McpManager {
             .map_err(|e| format!("Failed to clone log handle: {}", e))?;
 
         hidden_command(&exe_path)
-            .stdin(std::process::Stdio::piped())
+            .arg("--standby")
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::from(log_file))
             .stderr(std::process::Stdio::from(log_err))
             .spawn()

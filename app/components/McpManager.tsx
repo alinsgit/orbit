@@ -5,7 +5,6 @@ import {
   uninstallMcp,
   startMcp,
   stopMcp,
-  getMcpBinaryPath,
   McpStatus
 } from '../lib/api'
 import {
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react'
 import { useApp } from '../lib/AppContext'
 import { InfoTooltip } from './InfoTooltip'
-import { load } from '@tauri-apps/plugin-store'
 
 type ConfigTab = 'claude' | 'cursor' | 'windsurf'
 
@@ -29,20 +27,14 @@ export function McpManager() {
   const [status, setStatus] = useState<McpStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [binaryPath, setBinaryPath] = useState<string>('')
   const [activeConfig, setActiveConfig] = useState<ConfigTab>('claude')
   const [copied, setCopied] = useState(false)
-  const [autostart, setAutostart] = useState(false)
 
   const loadStatus = async () => {
     try {
       setLoading(true)
       const result = await getMcpStatus()
       setStatus(result)
-      if (result.installed) {
-        const path = await getMcpBinaryPath()
-        setBinaryPath(path)
-      }
     } catch (err) {
       addToast({ type: 'error', message: 'Failed to load MCP status' })
       console.error(err)
@@ -51,27 +43,9 @@ export function McpManager() {
     }
   }
 
-  const loadAutostart = async () => {
-    try {
-      const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '' } })
-      const saved = await store.get<boolean>('mcpAutostart')
-      if (saved) setAutostart(true)
-    } catch (e) {
-      console.error('Failed to load MCP autostart setting:', e)
-    }
-  }
-
   useEffect(() => {
     loadStatus()
-    loadAutostart()
   }, [])
-
-  // Autostart MCP when component mounts if setting is enabled
-  useEffect(() => {
-    if (autostart && status?.installed && !status?.running) {
-      startMcp().then(() => loadStatus()).catch(() => {})
-    }
-  }, [autostart, status?.installed])
 
   const handleInstall = async () => {
     try {
@@ -126,36 +100,40 @@ export function McpManager() {
     }
   }
 
-  const handleToggleAutostart = async () => {
-    try {
-      const newValue = !autostart
-      setAutostart(newValue)
-      const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '' } })
-      await store.set('mcpAutostart', newValue)
-      await store.save()
-      addToast({ type: 'success', message: newValue ? 'MCP autostart enabled' : 'MCP autostart disabled' })
-    } catch (e) {
-      addToast({ type: 'error', message: 'Failed to save autostart setting' })
-    }
-  }
-
   const getConfigSnippet = (): string => {
-    const escapedPath = binaryPath.replace(/\\/g, '\\\\')
-    return JSON.stringify({
-      mcpServers: {
-        orbit: {
-          command: escapedPath
-        }
-      }
-    }, null, 2)
+    const serverConfig = {
+      command: "orbit-mcp",
+      args: [] as string[]
+    }
+
+    switch (activeConfig) {
+      case 'claude':
+        return JSON.stringify({
+          mcpServers: {
+            orbit: serverConfig
+          }
+        }, null, 2)
+      case 'cursor':
+        return JSON.stringify({
+          mcpServers: {
+            orbit: serverConfig
+          }
+        }, null, 2)
+      case 'windsurf':
+        return JSON.stringify({
+          mcpServers: {
+            orbit: serverConfig
+          }
+        }, null, 2)
+    }
   }
 
   const getConfigInfo = (): { file: string; description: string } => {
     switch (activeConfig) {
       case 'claude':
         return {
-          file: '.mcp.json or claude_desktop_config.json',
-          description: 'Add to your project root or Claude Desktop config'
+          file: '~/.claude.json',
+          description: 'Add to your global Claude Code config'
         }
       case 'cursor':
         return {
@@ -165,7 +143,7 @@ export function McpManager() {
       case 'windsurf':
         return {
           file: '~/.codeium/windsurf/mcp_config.json',
-          description: 'Add to your Windsurf config directory'
+          description: 'Add to your Windsurf global config'
         }
     }
   }
@@ -218,7 +196,7 @@ export function McpManager() {
               ? 'bg-emerald-500/20 text-emerald-400'
               : 'bg-yellow-500/20 text-yellow-400'
             }`}>
-              {status.running ? `Running${status.pid ? ` (PID: ${status.pid})` : ''}` : 'Stopped'}
+              {status.running ? 'Running' : 'Stopped'}
             </span>
           ) : (
             <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs font-medium">
@@ -237,17 +215,6 @@ export function McpManager() {
               <span className="font-mono text-xs truncate max-w-[300px]">{status.path}</span>
             </div>
           </div>
-
-          {/* Autostart toggle */}
-          <label className="flex items-center gap-3 mb-4 cursor-pointer select-none">
-            <div
-              onClick={handleToggleAutostart}
-              className={`relative w-9 h-5 rounded-full transition-colors ${autostart ? 'bg-emerald-500' : 'bg-neutral-600'}`}
-            >
-              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${autostart ? 'translate-x-4' : ''}`} />
-            </div>
-            <span className="text-sm text-content-secondary">Start MCP server with Orbit</span>
-          </label>
 
           {/* Config snippets */}
           <div className="mb-4">
