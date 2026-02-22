@@ -2,6 +2,9 @@
 node_modules/
 bun.lockb
 
+# MCP config (local paths)
+.mcp.json
+
 # Build outputs
 dist/
 !core/dist/
