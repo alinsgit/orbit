@@ -440,6 +440,20 @@ fn is_service_running(name: &str) -> bool {
     }
 }
 
+fn require_service(name: &str) -> Result<(), String> {
+    let display = match name {
+        "mariadb" => "MariaDB",
+        "postgresql" => "PostgreSQL",
+        "redis" => "Redis",
+        "mailpit" => "Mailpit",
+        _ => name,
+    };
+    if !is_service_running(name) {
+        return Err(format!("{} is not running. Start it first: start_service {{ \"name\": \"{}\" }}", display, name));
+    }
+    Ok(())
+}
+
 fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
     let exe_path = PathBuf::from(&service.path);
     let bin_dir = get_bin_dir();
@@ -466,11 +480,13 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
             (exe_path.clone(), args)
         }
         "redis" => {
+            // Pass config as relative path — Cygwin-based Redis misinterprets
+            // absolute Windows paths by prepending /cygdrive/...
             let mut args = Vec::new();
             if let Some(parent) = exe_path.parent() {
                 let config = parent.join("redis.conf");
                 if config.exists() {
-                    args.push(config.to_string_lossy().to_string());
+                    args.push("redis.conf".to_string());
                 }
             }
             (exe_path.clone(), args)
@@ -845,6 +861,67 @@ fn scan_log_files(bin_dir: &PathBuf) -> Vec<LogFile> {
             path: mailpit_log,
             size,
         });
+    }
+
+    // Apache logs
+    let apache_log_dir = bin_dir.join("apache").join("logs");
+    if apache_log_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&apache_log_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map(|e| e == "log").unwrap_or(false) {
+                    let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                    let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    logs.push(LogFile {
+                        name: format!("apache/{}", fname),
+                        path,
+                        size,
+                    });
+                }
+            }
+        }
+    }
+
+    // PostgreSQL logs
+    let pg_data = bin_dir.join("data").join("postgres");
+    if pg_data.exists() {
+        for log_subdir in &["pg_log", "log"] {
+            let pg_log_dir = pg_data.join(log_subdir);
+            if pg_log_dir.exists() {
+                if let Ok(entries) = fs::read_dir(&pg_log_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let ext = path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default();
+                        if ext == "log" || ext == "csv" {
+                            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                            logs.push(LogFile {
+                                name: format!("postgresql/{}", fname),
+                                path,
+                                size,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MongoDB log
+    let mongodb_data = bin_dir.join("data").join("mongodb");
+    if mongodb_data.exists() {
+        for log_dir_path in &[&mongodb_data as &std::path::Path, bin_dir.join("mongodb").as_path()] {
+            let mongo_log = log_dir_path.join("mongod.log");
+            if mongo_log.exists() {
+                let size = fs::metadata(&mongo_log).map(|m| m.len()).unwrap_or(0);
+                logs.push(LogFile {
+                    name: "mongodb/mongod.log".to_string(),
+                    path: mongo_log,
+                    size,
+                });
+                break;
+            }
+        }
     }
 
     logs
@@ -2039,6 +2116,7 @@ fn tool_read_log(name: &str, lines: usize) -> Result<String, String> {
 }
 
 fn tool_list_databases() -> Result<String, String> {
+    require_service("mariadb")?;
     let bin_dir = get_bin_dir();
     let client = find_mariadb_client(&bin_dir)?;
 
@@ -2074,6 +2152,7 @@ fn tool_list_databases() -> Result<String, String> {
 }
 
 fn tool_create_database(name: &str) -> Result<String, String> {
+    require_service("mariadb")?;
     if name.is_empty() {
         return Err("Database name is required".to_string());
     }
@@ -2204,6 +2283,7 @@ fn run_mariadb_query(sql: &str) -> Result<String, String> {
 }
 
 fn tool_list_tables(database: &str) -> Result<String, String> {
+    require_service("mariadb")?;
     if database.is_empty() {
         return Err("Database name is required".to_string());
     }
@@ -2220,6 +2300,7 @@ fn tool_list_tables(database: &str) -> Result<String, String> {
 }
 
 fn tool_describe_table(database: &str, table: &str) -> Result<String, String> {
+    require_service("mariadb")?;
     if database.is_empty() || table.is_empty() {
         return Err("Database and table name are required".to_string());
     }
@@ -2228,6 +2309,7 @@ fn tool_describe_table(database: &str, table: &str) -> Result<String, String> {
 }
 
 fn tool_execute_query(database: &str, query: &str) -> Result<String, String> {
+    require_service("mariadb")?;
     if database.is_empty() || query.is_empty() {
         return Err("Database and query are required".to_string());
     }
@@ -2236,6 +2318,7 @@ fn tool_execute_query(database: &str, query: &str) -> Result<String, String> {
 }
 
 fn tool_drop_database(name: &str) -> Result<String, String> {
+    require_service("mariadb")?;
     if name.is_empty() {
         return Err("Database name is required".to_string());
     }
@@ -2282,6 +2365,7 @@ fn run_psql_query(database: Option<&str>, command: &str) -> Result<String, Strin
 }
 
 fn tool_pg_list_databases() -> Result<String, String> {
+    require_service("postgresql")?;
     let bin_dir = get_bin_dir();
     let psql = find_psql_client(&bin_dir)?;
 
@@ -2303,6 +2387,7 @@ fn tool_pg_list_databases() -> Result<String, String> {
 }
 
 fn tool_pg_list_tables(database: &str) -> Result<String, String> {
+    require_service("postgresql")?;
     if database.is_empty() {
         return Err("Database name is required".to_string());
     }
@@ -2310,6 +2395,7 @@ fn tool_pg_list_tables(database: &str) -> Result<String, String> {
 }
 
 fn tool_pg_describe_table(database: &str, table: &str) -> Result<String, String> {
+    require_service("postgresql")?;
     if database.is_empty() || table.is_empty() {
         return Err("Database and table name are required".to_string());
     }
@@ -2317,6 +2403,7 @@ fn tool_pg_describe_table(database: &str, table: &str) -> Result<String, String>
 }
 
 fn tool_pg_execute_query(database: &str, query: &str) -> Result<String, String> {
+    require_service("postgresql")?;
     if database.is_empty() || query.is_empty() {
         return Err("Database and query are required".to_string());
     }
@@ -2774,6 +2861,7 @@ fn tool_composer_run(project_path: &str, script: &str) -> Result<String, String>
 // ─── Redis Tools ─────────────────────────────────────────────────
 
 fn tool_redis_command(command: &str) -> Result<String, String> {
+    require_service("redis")?;
     if command.is_empty() {
         return Err("Command is required".to_string());
     }
@@ -2802,6 +2890,7 @@ fn tool_redis_command(command: &str) -> Result<String, String> {
 }
 
 fn tool_redis_info() -> Result<String, String> {
+    require_service("redis")?;
     let bin_dir = get_bin_dir();
     let redis_cli = find_redis_cli(&bin_dir)?;
 
@@ -2885,6 +2974,7 @@ fn mailpit_http(method: &str, path: &str) -> Result<String, String> {
 }
 
 fn tool_list_emails(limit: usize) -> Result<String, String> {
+    require_service("mailpit")?;
     let response = mailpit_http("GET", &format!("/api/v1/messages?limit={}", limit))?;
 
     // Try to pretty-print JSON
@@ -2896,6 +2986,7 @@ fn tool_list_emails(limit: usize) -> Result<String, String> {
 }
 
 fn tool_get_email(id: &str) -> Result<String, String> {
+    require_service("mailpit")?;
     if id.is_empty() {
         return Err("Email ID is required".to_string());
     }
@@ -2910,6 +3001,7 @@ fn tool_get_email(id: &str) -> Result<String, String> {
 }
 
 fn tool_delete_emails() -> Result<String, String> {
+    require_service("mailpit")?;
     mailpit_http("DELETE", "/api/v1/messages")?;
     Ok("All emails deleted from Mailpit".to_string())
 }
@@ -3148,6 +3240,7 @@ fn find_mariadb_dump(bin_dir: &PathBuf) -> Result<PathBuf, String> {
 }
 
 fn tool_db_export(database: &str, output: Option<&str>) -> Result<String, String> {
+    require_service("mariadb")?;
     if database.is_empty() {
         return Err("Database name is required".to_string());
     }
@@ -3177,6 +3270,7 @@ fn tool_db_export(database: &str, output: Option<&str>) -> Result<String, String
 }
 
 fn tool_db_import(database: &str, file: &str) -> Result<String, String> {
+    require_service("mariadb")?;
     if database.is_empty() || file.is_empty() {
         return Err("Database name and file path are required".to_string());
     }

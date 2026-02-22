@@ -233,6 +233,7 @@ pub fn run() {
         services::terminal::spawn_terminal,
         services::terminal::write_terminal,
         services::terminal::resize_terminal,
+        services::terminal::close_terminal,
         // Tunnel
         commands::tunnel::start_tunnel,
         commands::tunnel::stop_tunnel,

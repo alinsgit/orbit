@@ -185,3 +185,13 @@ pub async fn resize_terminal(
         Err("Terminal session not found".into())
     }
 }
+
+#[tauri::command]
+pub async fn close_terminal(
+    state: State<'_, TerminalState>,
+    id: String,
+) -> Result<(), String> {
+    state.writers.lock().await.remove(&id);
+    state.ptys.lock().await.remove(&id);
+    Ok(())
+}

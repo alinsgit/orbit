@@ -169,12 +169,15 @@ pub fn start_service(
             vec![]
         }
         ServiceType::Redis => {
-            // Use redis.conf if it exists
+            // Use redis.conf if it exists — pass as relative path because
+            // Cygwin-based Redis treats absolute Windows paths as relative,
+            // prepending /cygdrive/... to them. Since process.rs sets
+            // current_dir to the binary's parent, "redis.conf" resolves correctly.
             let mut args = Vec::new();
             if let Some(parent) = bin_path_buf.parent() {
                 let config_path = parent.join("redis.conf");
                 if config_path.exists() {
-                    args.push(config_path.to_string_lossy().to_string());
+                    args.push("redis.conf".to_string());
                 }
             }
             args

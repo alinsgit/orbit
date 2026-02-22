@@ -9,7 +9,7 @@ import {
   generateSslCert, nginxTestConfig, nginxReload, nginxStatus,
   addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
   getSslStatus, getWorkspacePath, startTunnel, stopTunnel, getTunnelUrl,
-  writeTerminal, installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus,
+  installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus,
   scaffoldBasicProject
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
@@ -75,7 +75,7 @@ const TEMPLATE_INFO: Record<SiteTemplate, { label: string; icon: React.ReactNode
 };
 
 export function SitesManager() {
-  const { getInstalledPhpVersions, services, addToast, setIsTerminalOpen } = useApp();
+  const { getInstalledPhpVersions, services, addToast, openTerminalForSite } = useApp();
 
   // Check which web servers are installed
   const nginxInstalled = services.some(s => s.service_type === 'nginx');
@@ -359,14 +359,9 @@ export function SitesManager() {
         return;
       }
 
-      // Open terminal for visibility
-      setIsTerminalOpen(true);
+      // Open terminal for site and run scaffold command
+      openTerminalForSite(newSite.domain || 'scaffold', wp, scaffoldCmd);
       addToast({ type: 'info', message: 'Executing scaffold in the Integrated Terminal...' });
-
-      // Run command recursively after a short delay for Terminal Mount
-      setTimeout(async () => {
-         await writeTerminal('main', `cd "${wp}" && ${scaffoldCmd}\r`);
-      }, 1200);
 
       // Auto-fill path — Laravel needs /public as nginx root
       setNewSite({ ...newSite, path: projectPath });
@@ -424,12 +419,9 @@ export function SitesManager() {
       setShowAddForm(false);
       await refreshSites();
 
-      // Open terminal and cd to the site path
+      // Open terminal in the new site's directory
       if (sitePath) {
-        setIsTerminalOpen(true);
-        setTimeout(async () => {
-          await writeTerminal('main', `cd "${sitePath}"\r`);
-        }, 1200);
+        openTerminalForSite(result.domain, sitePath);
       }
     } catch (e: any) {
       console.error(e);
