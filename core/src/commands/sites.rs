@@ -1,4 +1,6 @@
 use crate::services::nginx::NginxManager;
+use crate::services::site_process::SiteProcessManager;
+use crate::services::site_store::SiteStore;
 use crate::services::sites::{Site, SiteManager, SiteWithStatus};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -169,6 +171,7 @@ pub fn import_sites(app: AppHandle, import_data: SiteExport, skip_existing: bool
             template: entry.template,
             web_server: entry.web_server,
             dev_port: None,
+            dev_command: None,
         };
 
         match SiteManager::create_site(&app, site) {
@@ -189,4 +192,41 @@ pub struct ImportResult {
     pub imported: usize,
     pub skipped: usize,
     pub errors: Vec<String>,
+}
+
+// Site app process management commands
+
+#[command]
+pub fn start_site_app(
+    app: AppHandle,
+    state: tauri::State<SiteProcessManager>,
+    domain: String,
+) -> Result<u32, String> {
+    let store = SiteStore::load(&app)?;
+    let site = store
+        .get_site(&domain)
+        .ok_or_else(|| format!("Site {} not found", domain))?;
+
+    let dev_command = site
+        .dev_command
+        .as_ref()
+        .ok_or_else(|| format!("Site {} has no dev_command configured", domain))?;
+
+    state.start(&domain, dev_command, &site.path, site.dev_port)
+}
+
+#[command]
+pub fn stop_site_app(
+    state: tauri::State<SiteProcessManager>,
+    domain: String,
+) -> Result<(), String> {
+    state.stop(&domain)
+}
+
+#[command]
+pub fn get_site_app_status(
+    state: tauri::State<SiteProcessManager>,
+    domain: String,
+) -> Result<String, String> {
+    Ok(state.status(&domain))
 }

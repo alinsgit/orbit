@@ -942,6 +942,7 @@ pub const TEMPLATE_REMIX: &str = r#"server {
 "#;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum SiteTemplate {
     Http,
     Https,

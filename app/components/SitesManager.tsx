@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   FolderOpen, Plus, Trash2, Globe, ExternalLink, Loader2, Shield,
   AlertTriangle, RefreshCw, CheckCircle2, XCircle, Settings2,
-  FileCode, Layers, Database, ShoppingCart, Sparkles, CheckCircle, FileDown, FileUp
+  FileCode, Layers, Database, ShoppingCart, Sparkles, CheckCircle, FileDown, FileUp,
+  Play, Square
 } from 'lucide-react';
 import {
   getSites, createSite, deleteSite, updateSite, regenerateSiteConfig,
@@ -10,14 +11,14 @@ import {
   addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
   getSslStatus, getWorkspacePath, startTunnel, stopTunnel, getTunnelUrl,
   installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus,
-  scaffoldBasicProject
+  scaffoldBasicProject, startSiteApp, stopSiteApp, getSiteAppStatus
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { open } from '@tauri-apps/plugin-dialog';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { load } from '@tauri-apps/plugin-store';
 
-type SiteTemplate = 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue';
+type SiteTemplate = 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue' | 'django' | 'sveltekit' | 'remix';
 
 const WEB_SERVER_INFO: Record<WebServer, { label: string; icon: string; color: string }> = {
   nginx: { label: 'Nginx', icon: '🌐', color: 'bg-green-500/10 text-green-400' },
@@ -71,6 +72,21 @@ const TEMPLATE_INFO: Record<SiteTemplate, { label: string; icon: React.ReactNode
     label: 'Vue',
     icon: <Layers size={14} />,
     description: 'Vue.js Application'
+  },
+  django: {
+    label: 'Django',
+    icon: <Layers size={14} />,
+    description: 'Python Django application'
+  },
+  sveltekit: {
+    label: 'SvelteKit',
+    icon: <Layers size={14} />,
+    description: 'SvelteKit application'
+  },
+  remix: {
+    label: 'Remix',
+    icon: <Layers size={14} />,
+    description: 'Remix React framework'
   }
 };
 
@@ -124,6 +140,10 @@ export function SitesManager() {
   // Export/Import State
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // Site App Process State
+  const [appStatus, setAppStatus] = useState<Record<string, string>>({});
+  const [appProcessing, setAppProcessing] = useState<string | null>(null);
 
   // Tunnel State
   const [activeTunnel, setActiveTunnel] = useState<{ domain: string; url: string } | null>(null);
@@ -245,9 +265,61 @@ export function SitesManager() {
     }
   };
 
+  // Refresh app status for sites with dev_command
+  const refreshAppStatus = async (siteList: SiteWithStatus[]) => {
+    const withCommand = siteList.filter(s => s.dev_command);
+    if (withCommand.length === 0) return;
+    const statuses: Record<string, string> = {};
+    await Promise.all(
+      withCommand.map(async (s) => {
+        try {
+          statuses[s.domain] = await getSiteAppStatus(s.domain);
+        } catch {
+          statuses[s.domain] = 'stopped';
+        }
+      })
+    );
+    setAppStatus(statuses);
+  };
+
   useEffect(() => {
-    refreshSites();
+    refreshSites().then(() => {
+      // App status will be refreshed after sites load
+    });
   }, []);
+
+  // Poll app status when sites change
+  useEffect(() => {
+    if (sites.length > 0) {
+      refreshAppStatus(sites);
+    }
+  }, [sites.length]);
+
+  const handleStartApp = async (domain: string) => {
+    setAppProcessing(domain);
+    try {
+      await startSiteApp(domain);
+      setAppStatus(prev => ({ ...prev, [domain]: 'running' }));
+      addToast({ type: 'success', message: `App started for ${domain}` });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.toString() || 'Failed to start app' });
+    } finally {
+      setAppProcessing(null);
+    }
+  };
+
+  const handleStopApp = async (domain: string) => {
+    setAppProcessing(domain);
+    try {
+      await stopSiteApp(domain);
+      setAppStatus(prev => ({ ...prev, [domain]: 'stopped' }));
+      addToast({ type: 'success', message: `App stopped for ${domain}` });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.toString() || 'Failed to stop app' });
+    } finally {
+      setAppProcessing(null);
+    }
+  };
 
   // Handle nginx reload
   const handleNginxReload = async () => {
@@ -1163,8 +1235,35 @@ export function SitesManager() {
                         Local Admin
                       </button>
 
+                      {site.dev_command && (
+                        <>
+                          <div className="h-3 w-px bg-edge" />
+                          {appStatus[site.domain] === 'running' ? (
+                            <button
+                              onClick={() => handleStopApp(site.domain)}
+                              disabled={appProcessing === site.domain}
+                              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-50"
+                              title={`Stop: ${site.dev_command}`}
+                            >
+                              {appProcessing === site.domain ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} />}
+                              Stop App
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleStartApp(site.domain)}
+                              disabled={appProcessing === site.domain}
+                              className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-50"
+                              title={`Start: ${site.dev_command}`}
+                            >
+                              {appProcessing === site.domain ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                              Start App
+                            </button>
+                          )}
+                        </>
+                      )}
+
                       <div className="h-3 w-px bg-edge" />
-                      
+
                       {activeTunnel?.domain === site.domain ? (
                         <>
                           <button

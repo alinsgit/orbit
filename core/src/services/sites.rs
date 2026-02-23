@@ -26,6 +26,8 @@ pub struct Site {
     pub web_server: String, // "nginx" or "apache"
     #[serde(default)]
     pub dev_port: Option<u16>,
+    #[serde(default)]
+    pub dev_command: Option<String>,
 }
 
 fn default_web_server() -> String {
@@ -43,6 +45,7 @@ pub struct SiteWithStatus {
     pub template: Option<String>,
     pub web_server: String,
     pub dev_port: Option<u16>,
+    pub dev_command: Option<String>,
     pub created_at: Option<String>,
     pub config_valid: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -285,6 +288,7 @@ impl SiteManager {
             template: site.template.clone(),
             web_server: site.web_server.clone(),
             dev_port: stored_dev_port,
+            dev_command: site.dev_command.clone(),
             created_at: now.clone(),
             updated_at: now.clone(),
         };
@@ -310,6 +314,7 @@ impl SiteManager {
             template: site.template,
             web_server: site.web_server,
             dev_port: stored_dev_port,
+            dev_command: site.dev_command,
             created_at: Some(now),
             config_valid: true,
             warning: hosts_warning,
@@ -355,6 +360,7 @@ impl SiteManager {
                     template: s.template.clone(),
                     web_server: s.web_server.clone(),
                     dev_port: s.dev_port,
+                    dev_command: s.dev_command.clone(),
                     created_at: Some(s.created_at.clone()),
                     config_valid,
                     warning: None,
@@ -391,6 +397,7 @@ impl SiteManager {
                 template: s.template.clone(),
                 web_server: s.web_server.clone(),
                 dev_port: s.dev_port,
+                dev_command: s.dev_command.clone(),
                 created_at: Some(s.created_at.clone()),
                 config_valid,
                 warning: None,
@@ -466,6 +473,7 @@ impl SiteManager {
             template: updates.template,
             web_server: updates.web_server,
             dev_port: updates.dev_port,
+            dev_command: updates.dev_command,
         };
 
         Self::create_site(app, new_site)
@@ -542,6 +550,7 @@ impl SiteManager {
             template: site.template.clone(),
             web_server: site.web_server.clone(),
             dev_port: site.dev_port,
+            dev_command: site.dev_command.clone(),
         };
 
         // Delete old config from appropriate directory
