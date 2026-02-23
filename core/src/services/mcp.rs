@@ -296,17 +296,6 @@ impl McpManager {
             let ver = stdout.trim().to_string();
             if ver.is_empty() { None } else { Some(ver) }
         } else {
-            // Fallback: read stderr for version info
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // MCP prints version to stderr on startup
-            for line in stderr.lines() {
-                if line.contains("v") {
-                    if let Some(v) = line.split('v').nth(1) {
-                        let ver = v.split_whitespace().next().unwrap_or("").to_string();
-                        if !ver.is_empty() { return Some(ver); }
-                    }
-                }
-            }
             None
         }
     }

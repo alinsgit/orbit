@@ -5010,6 +5010,12 @@ fn chrono_now() -> String {
 // ─── Entry Point ─────────────────────────────────────────────────
 
 fn main() {
+    // Version flag — prints version and exits (used by auto-update check)
+    if std::env::args().any(|a| a == "--version") {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     eprintln!("[orbit-mcp] Orbit MCP Server v{} starting...", env!("CARGO_PKG_VERSION"));
     eprintln!("[orbit-mcp] Data dir: {}", get_orbit_data_dir().display());
 
