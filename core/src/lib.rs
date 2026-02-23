@@ -2,6 +2,7 @@ mod commands;
 mod services;
 
 use services::process::ServiceManager;
+use services::site_process::SiteProcessManager;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
@@ -9,6 +10,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let service_manager = ServiceManager::new();
+  let site_process_manager = SiteProcessManager::new();
 
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
@@ -18,6 +20,7 @@ pub fn run() {
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_sql::Builder::default().build())
     .manage(service_manager) // Register state
+    .manage(site_process_manager) // Register site app process state
     .manage(services::terminal::TerminalState::default()) // Register terminal state
     .setup(|app| {
         // System Tray Setup
@@ -35,7 +38,8 @@ pub fn run() {
             .menu(&menu)
             .on_menu_event(|app, event| match event.id.as_ref() {
                 "quit" => {
-                    // Stop all services before quitting
+                    // Stop all site apps and services before quitting
+                    let _ = app.state::<SiteProcessManager>().stop_all();
                     let _ = app.state::<ServiceManager>().stop_all();
                     app.exit(0);
                 }
@@ -107,6 +111,10 @@ pub fn run() {
         commands::sites::nginx_test_config,
         commands::sites::nginx_reload,
         commands::sites::nginx_status,
+        // Site app process management
+        commands::sites::start_site_app,
+        commands::sites::stop_site_app,
+        commands::sites::get_site_app_status,
         // Export/Import
         commands::sites::export_sites,
         commands::sites::import_sites,
@@ -247,10 +255,14 @@ pub fn run() {
         commands::mcp::start_mcp,
         commands::mcp::stop_mcp,
         commands::mcp::get_mcp_binary_path,
+        commands::mcp::check_mcp_update,
+        commands::mcp::update_mcp,
         // CLI
         commands::cli::get_cli_status,
         commands::cli::install_cli,
         commands::cli::uninstall_cli,
+        commands::cli::check_cli_update,
+        commands::cli::update_cli,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

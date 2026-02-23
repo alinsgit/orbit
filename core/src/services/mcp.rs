@@ -14,6 +14,13 @@ pub struct McpStatus {
     pub binary_exists: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BinaryUpdateInfo {
+    pub has_update: bool,
+    pub current_version: String,
+    pub latest_version: String,
+}
+
 pub struct McpManager;
 
 impl McpManager {
@@ -273,4 +280,98 @@ impl McpManager {
             .map_err(|e| format!("Failed to stop MCP server: {}", e))?;
         Ok(())
     }
+
+    /// Get installed MCP version by running orbit-mcp --version
+    fn get_version(app: &AppHandle) -> Option<String> {
+        let exe_path = Self::get_exe_path(app).ok()?;
+        if !exe_path.exists() {
+            return None;
+        }
+        let output = hidden_command(&exe_path)
+            .arg("--version")
+            .output()
+            .ok()?;
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let ver = stdout.trim().to_string();
+            if ver.is_empty() { None } else { Some(ver) }
+        } else {
+            // Fallback: read stderr for version info
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // MCP prints version to stderr on startup
+            for line in stderr.lines() {
+                if line.contains("v") {
+                    if let Some(v) = line.split('v').nth(1) {
+                        let ver = v.split_whitespace().next().unwrap_or("").to_string();
+                        if !ver.is_empty() { return Some(ver); }
+                    }
+                }
+            }
+            None
+        }
+    }
+
+    /// Fetch latest release tag from GitHub
+    async fn fetch_latest_version() -> Option<String> {
+        let client = reqwest::Client::builder()
+            .user_agent("Orbit")
+            .build()
+            .ok()?;
+
+        let response = client
+            .get("https://api.github.com/repos/alinsgit/orbit/releases/latest")
+            .send()
+            .await
+            .ok()?;
+
+        let release: serde_json::Value = response.json().await.ok()?;
+        let tag = release.get("tag_name")?.as_str()?;
+        Some(tag.trim_start_matches('v').to_string())
+    }
+
+    /// Check if an update is available
+    pub async fn check_for_update(app: &AppHandle) -> Result<BinaryUpdateInfo, String> {
+        let current = Self::get_version(app).unwrap_or_else(|| "0.0.0".to_string());
+        let latest = Self::fetch_latest_version().await
+            .ok_or_else(|| "Failed to fetch latest version from GitHub".to_string())?;
+
+        let has_update = is_newer_version(&current, &latest);
+
+        Ok(BinaryUpdateInfo {
+            has_update,
+            current_version: current,
+            latest_version: latest,
+        })
+    }
+
+    /// Update MCP binary: stop → uninstall → install
+    pub async fn update(app: &AppHandle) -> Result<(), String> {
+        // Stop if running
+        Self::stop().ok();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        // Uninstall old binary
+        Self::uninstall(app)?;
+        // Install new binary
+        Self::install(app).await?;
+        Ok(())
+    }
+}
+
+/// Compare two semver version strings. Returns true if `latest` is newer than `current`.
+fn is_newer_version(current: &str, latest: &str) -> bool {
+    let parse = |v: &str| -> Vec<u32> {
+        v.trim_start_matches('v')
+            .split('.')
+            .filter_map(|s| s.parse().ok())
+            .collect()
+    };
+    let current_parts = parse(current);
+    let latest_parts = parse(latest);
+    for i in 0..3 {
+        let c = current_parts.get(i).copied().unwrap_or(0);
+        let l = latest_parts.get(i).copied().unwrap_or(0);
+        if l > c { return true; }
+        if l < c { return false; }
+    }
+    false
 }

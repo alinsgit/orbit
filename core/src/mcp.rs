@@ -64,11 +64,25 @@ struct SiteMetadata {
     port: u16,
     php_version: Option<String>,
     #[serde(default)]
+    php_port: Option<u16>,
+    #[serde(default)]
     ssl_enabled: bool,
+    #[serde(default)]
+    ssl_cert_path: Option<String>,
+    #[serde(default)]
+    ssl_key_path: Option<String>,
+    #[serde(default)]
+    template: Option<String>,
     #[serde(default = "default_web_server")]
     web_server: String,
     #[serde(default)]
+    dev_port: Option<u16>,
+    #[serde(default)]
+    dev_command: Option<String>,
+    #[serde(default)]
     created_at: String,
+    #[serde(default)]
+    updated_at: String,
 }
 
 fn default_web_server() -> String {
@@ -99,7 +113,7 @@ struct ServiceInfo {
     service_type: String,
 }
 
-fn hidden_command(program: &PathBuf) -> Command {
+fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     let mut cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {
@@ -1047,7 +1061,7 @@ fn handle_initialize(id: &Value) -> Value {
         },
         "serverInfo": {
             "name": "orbit-mcp",
-            "version": "1.1.0"
+            "version": env!("CARGO_PKG_VERSION")
         }
     }))
 }
@@ -1219,8 +1233,20 @@ fn handle_tools_list(id: &Value) -> Value {
             }
         },
         {
+            "name": "filter_table_names",
+            "description": "Filter MariaDB table names using a LIKE pattern. Use '%' as wildcard (e.g., 'wp_%' for WordPress tables).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "pattern": { "type": "string", "description": "LIKE pattern (e.g., 'wp_%', '%user%')" }
+                },
+                "required": ["database", "pattern"]
+            }
+        },
+        {
             "name": "describe_table",
-            "description": "Show column definitions for a MariaDB table.",
+            "description": "Show detailed schema for a MariaDB table including columns, indexes, and foreign keys.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1232,7 +1258,7 @@ fn handle_tools_list(id: &Value) -> Value {
         },
         {
             "name": "execute_query",
-            "description": "Execute a SQL query on a MariaDB database. Returns results in tab-separated format.",
+            "description": "Execute a SQL query on a MariaDB database. Returns results in tab-separated format. Queries are executed directly via CLI — use caution with destructive statements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1275,8 +1301,20 @@ fn handle_tools_list(id: &Value) -> Value {
             }
         },
         {
+            "name": "pg_filter_table_names",
+            "description": "Filter PostgreSQL table names using a LIKE pattern. Use '%' as wildcard.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "pattern": { "type": "string", "description": "LIKE pattern (e.g., 'auth_%', '%user%')" }
+                },
+                "required": ["database", "pattern"]
+            }
+        },
+        {
             "name": "pg_describe_table",
-            "description": "Show column definitions for a PostgreSQL table.",
+            "description": "Show detailed schema for a PostgreSQL table including columns, indexes, and constraints.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1288,7 +1326,7 @@ fn handle_tools_list(id: &Value) -> Value {
         },
         {
             "name": "pg_execute_query",
-            "description": "Execute a SQL query on a PostgreSQL database.",
+            "description": "Execute a SQL query on a PostgreSQL database. Queries are executed directly via CLI — use caution with destructive statements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1736,6 +1774,61 @@ fn handle_tools_list(id: &Value) -> Value {
                 },
                 "required": ["blueprint", "domain", "path"]
             }
+        },
+        {
+            "name": "start_site_app",
+            "description": "Start a site's development server using its configured dev_command. Only works for sites that have a dev_command set (typically from blueprint creation). The process runs in the background.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain (e.g., myapp.test)" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "stop_site_app",
+            "description": "Stop a site's development server that was previously started with start_site_app.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain (e.g., myapp.test)" }
+                },
+                "required": ["domain"]
+            }
+        },
+        // ─── MongoDB ──────────────────────────────────────
+        {
+            "name": "mongo_list_databases",
+            "description": "List all MongoDB databases. Requires MongoDB to be running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "mongo_list_collections",
+            "description": "List all collections in a MongoDB database.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" }
+                },
+                "required": ["database"]
+            }
+        },
+        {
+            "name": "mongo_execute",
+            "description": "Execute a JavaScript command in a MongoDB database via mongosh. Queries are executed directly — use caution with destructive operations.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "database": { "type": "string", "description": "Database name" },
+                    "command": { "type": "string", "description": "JavaScript command to execute (e.g., 'db.users.find({})' or 'db.stats()')" }
+                },
+                "required": ["database", "command"]
+            }
         }
     ]);
 
@@ -1787,6 +1880,11 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
             let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
             tool_list_tables(db)
         }
+        "filter_table_names" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("%");
+            tool_filter_table_names(db, pattern)
+        }
         "describe_table" => {
             let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
             let table = args.get("table").and_then(|v| v.as_str()).unwrap_or("");
@@ -1806,6 +1904,11 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
         "pg_list_tables" => {
             let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
             tool_pg_list_tables(db)
+        }
+        "pg_filter_table_names" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("%");
+            tool_pg_filter_table_names(db, pattern)
         }
         "pg_describe_table" => {
             let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
@@ -1981,6 +2084,26 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
             let php_version = args.get("php_version").and_then(|v| v.as_str());
             tool_create_from_blueprint(blueprint, domain, path, php_version)
+        }
+        // Site app process management
+        "start_site_app" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_start_site_app(domain)
+        }
+        "stop_site_app" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_stop_site_app(domain)
+        }
+        // MongoDB
+        "mongo_list_databases" => tool_mongo_list_databases(),
+        "mongo_list_collections" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            tool_mongo_list_collections(db)
+        }
+        "mongo_execute" => {
+            let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
+            let cmd = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
+            tool_mongo_execute(db, cmd)
         }
         _ => Err(format!("Unknown tool: {}", name)),
     };
@@ -2308,7 +2431,7 @@ fn tool_get_system_info() -> Result<String, String> {
     let running_count = services.iter().filter(|s| is_service_running(&s.name)).count();
 
     let result = json!({
-        "orbit_version": "1.1.0",
+        "orbit_version": env!("CARGO_PKG_VERSION"),
         "data_directory": data_dir.to_string_lossy(),
         "bin_directory": bin_dir.to_string_lossy(),
         "config_directory": config_dir.to_string_lossy(),
@@ -2415,13 +2538,47 @@ fn tool_list_tables(database: &str) -> Result<String, String> {
     Ok(serde_json::to_string_pretty(&result).unwrap())
 }
 
+fn tool_filter_table_names(database: &str, pattern: &str) -> Result<String, String> {
+    require_service("mariadb")?;
+    if database.is_empty() || pattern.is_empty() {
+        return Err("Database and pattern are required".to_string());
+    }
+    let sql = format!("SHOW TABLES FROM `{}` LIKE '{}'", database, pattern.replace('\'', "\\'"));
+    let output = run_mariadb_query(&sql)?;
+
+    let tables: Vec<&str> = output.lines().skip(1).collect();
+    let result: Vec<Value> = tables.iter()
+        .filter(|t| !t.trim().is_empty())
+        .map(|t| json!({ "table": t.trim() }))
+        .collect();
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
 fn tool_describe_table(database: &str, table: &str) -> Result<String, String> {
     require_service("mariadb")?;
     if database.is_empty() || table.is_empty() {
         return Err("Database and table name are required".to_string());
     }
-    let sql = format!("SHOW COLUMNS FROM `{}`.`{}`", database, table);
-    run_mariadb_query(&sql)
+
+    // 1. Column definitions
+    let columns_sql = format!("SHOW COLUMNS FROM `{}`.`{}`", database, table);
+    let columns = run_mariadb_query(&columns_sql)?;
+
+    // 2. Indexes
+    let indexes_sql = format!("SHOW INDEX FROM `{}`.`{}`", database, table);
+    let indexes = run_mariadb_query(&indexes_sql).unwrap_or_else(|_| "No indexes found".to_string());
+
+    // 3. Foreign keys
+    let fk_sql = format!(
+        "SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME \
+         FROM information_schema.KEY_COLUMN_USAGE \
+         WHERE TABLE_SCHEMA='{}' AND TABLE_NAME='{}' AND REFERENCED_TABLE_NAME IS NOT NULL",
+        database.replace('\'', "\\'"), table.replace('\'', "\\'")
+    );
+    let fks = run_mariadb_query(&fk_sql).unwrap_or_else(|_| "No foreign keys".to_string());
+
+    Ok(format!("=== Columns ===\n{}\n\n=== Indexes ===\n{}\n\n=== Foreign Keys ===\n{}", columns, indexes, fks))
 }
 
 fn tool_execute_query(database: &str, query: &str) -> Result<String, String> {
@@ -2510,12 +2667,38 @@ fn tool_pg_list_tables(database: &str) -> Result<String, String> {
     run_psql_query(Some(database), "\\dt")
 }
 
+fn tool_pg_filter_table_names(database: &str, pattern: &str) -> Result<String, String> {
+    require_service("postgresql")?;
+    if database.is_empty() || pattern.is_empty() {
+        return Err("Database and pattern are required".to_string());
+    }
+    let sql = format!(
+        "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '{}'",
+        pattern.replace('\'', "''")
+    );
+    run_psql_query(Some(database), &sql)
+}
+
 fn tool_pg_describe_table(database: &str, table: &str) -> Result<String, String> {
     require_service("postgresql")?;
     if database.is_empty() || table.is_empty() {
         return Err("Database and table name are required".to_string());
     }
-    run_psql_query(Some(database), &format!("\\d {}", table))
+
+    // 1. Detailed table description (columns, types, defaults)
+    let columns = run_psql_query(Some(database), &format!("\\d+ {}", table))?;
+
+    // 2. Constraints (PK, FK, unique, check)
+    let constraints_sql = format!(
+        "SELECT conname, contype, pg_get_constraintdef(oid) \
+         FROM pg_constraint \
+         WHERE conrelid = '{}'::regclass",
+        table.replace('\'', "''")
+    );
+    let constraints = run_psql_query(Some(database), &constraints_sql)
+        .unwrap_or_else(|_| "No constraints found".to_string());
+
+    Ok(format!("=== Table Structure ===\n{}\n\n=== Constraints ===\n{}", columns, constraints))
 }
 
 fn tool_pg_execute_query(database: &str, query: &str) -> Result<String, String> {
@@ -2524,6 +2707,92 @@ fn tool_pg_execute_query(database: &str, query: &str) -> Result<String, String> 
         return Err("Database and query are required".to_string());
     }
     run_psql_query(Some(database), query)
+}
+
+// ─── MongoDB Tools ───────────────────────────────────────────────
+
+fn find_mongosh_client(bin_dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    // Try mongosh first (modern client)
+    let paths = [
+        bin_dir.join("mongodb").join("bin").join("mongosh.exe"),
+        bin_dir.join("mongodb").join("mongosh.exe"),
+        bin_dir.join("mongodb").join("bin").join("mongo.exe"),
+    ];
+
+    for p in &paths {
+        if p.exists() {
+            return Ok(p.clone());
+        }
+    }
+
+    // Try PATH
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = hidden_command("where").arg("mongosh").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout);
+                if let Some(line) = path.lines().next() {
+                    return Ok(std::path::PathBuf::from(line.trim()));
+                }
+            }
+        }
+        if let Ok(output) = hidden_command("where").arg("mongo").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout);
+                if let Some(line) = path.lines().next() {
+                    return Ok(std::path::PathBuf::from(line.trim()));
+                }
+            }
+        }
+    }
+
+    Err("mongosh/mongo client not found. Is MongoDB installed?".to_string())
+}
+
+fn run_mongosh_command(database: Option<&str>, js_command: &str) -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let mongosh = find_mongosh_client(&bin_dir)?;
+
+    let db = database.unwrap_or("admin");
+
+    let output = hidden_command(&mongosh)
+        .arg("--host").arg("127.0.0.1")
+        .arg("--port").arg("27017")
+        .arg("--quiet")
+        .arg(db)
+        .arg("--eval").arg(js_command)
+        .output()
+        .map_err(|e| format!("Failed to run mongosh: {}. Is MongoDB running?", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("MongoDB error: {}", stderr.trim()));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn tool_mongo_list_databases() -> Result<String, String> {
+    require_service("mongodb")?;
+    let result = run_mongosh_command(Some("admin"), "JSON.stringify(db.adminCommand('listDatabases').databases)")?;
+    Ok(result)
+}
+
+fn tool_mongo_list_collections(database: &str) -> Result<String, String> {
+    require_service("mongodb")?;
+    if database.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+    let result = run_mongosh_command(Some(database), "JSON.stringify(db.getCollectionNames())")?;
+    Ok(result)
+}
+
+fn tool_mongo_execute(database: &str, command: &str) -> Result<String, String> {
+    require_service("mongodb")?;
+    if database.is_empty() || command.is_empty() {
+        return Err("Database and command are required".to_string());
+    }
+    run_mongosh_command(Some(database), command)
 }
 
 // ─── Site Management Tools ───────────────────────────────────────
@@ -2554,14 +2823,22 @@ fn tool_create_site(
     };
 
     // Add to sites.json
+    let now = chrono_now();
     let site = SiteMetadata {
         domain: domain.to_string(),
         path: path.to_string(),
         port: if ssl { 443 } else { 80 },
         php_version: php_ver.clone(),
+        php_port: None,
         ssl_enabled: ssl,
+        ssl_cert_path: None,
+        ssl_key_path: None,
+        template: template.map(|t| t.to_string()),
         web_server: "nginx".to_string(),
-        created_at: chrono_now(),
+        dev_port: None,
+        dev_command: None,
+        created_at: now.clone(),
+        updated_at: now,
     };
     store.sites.push(site);
     write_sites_store(&store)?;
@@ -4166,6 +4443,7 @@ struct Blueprint {
     scaffold: &'static [&'static str],
     php_extensions: &'static [&'static str],
     env_template: Option<&'static str>,
+    dev_command: Option<&'static str>,
 }
 
 fn get_blueprints() -> Vec<Blueprint> {
@@ -4178,6 +4456,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["composer create-project laravel/laravel .", "npm install"],
             php_extensions: &["pdo_mysql", "mbstring", "openssl", "tokenizer", "xml", "ctype", "json", "bcmath", "redis"],
             env_template: Some("APP_NAME={{domain}}\nAPP_URL=http://{{domain}}\nDB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE={{db_name}}\nDB_USERNAME=root\nDB_PASSWORD=root\nCACHE_DRIVER=redis\nSESSION_DRIVER=redis\nREDIS_HOST=127.0.0.1\n"),
+            dev_command: Some("npm run dev"),
         },
         Blueprint {
             name: "wordpress-woocommerce",
@@ -4187,6 +4466,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["composer create-project johnpbloch/wordpress ."],
             php_extensions: &["pdo_mysql", "gd", "mbstring", "xml", "curl", "zip", "intl"],
             env_template: None,
+            dev_command: None, // WordPress runs via PHP-FPM, no app process needed
         },
         Blueprint {
             name: "nextjs-fullstack",
@@ -4196,6 +4476,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["npx create-next-app@latest . --yes"],
             php_extensions: &[],
             env_template: None,
+            dev_command: Some("npm run dev"),
         },
         Blueprint {
             name: "astro-static",
@@ -4205,6 +4486,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["npm create astro@latest . -- --yes"],
             php_extensions: &[],
             env_template: None,
+            dev_command: Some("npm run dev"),
         },
         Blueprint {
             name: "django",
@@ -4214,6 +4496,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["pip install django", "django-admin startproject app ."],
             php_extensions: &[],
             env_template: Some("DEBUG=True\nSECRET_KEY=change-me\nALLOWED_HOSTS={{domain}},localhost,127.0.0.1\nDATABASE_URL=sqlite:///db.sqlite3\n"),
+            dev_command: Some("python manage.py runserver"),
         },
         Blueprint {
             name: "flask",
@@ -4223,6 +4506,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["pip install flask"],
             php_extensions: &[],
             env_template: Some("FLASK_APP=app.py\nFLASK_ENV=development\nFLASK_DEBUG=1\n"),
+            dev_command: Some("python -m flask run"),
         },
         Blueprint {
             name: "sveltekit",
@@ -4232,6 +4516,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["npm create svelte@latest . -- --yes"],
             php_extensions: &[],
             env_template: None,
+            dev_command: Some("npm run dev"),
         },
         Blueprint {
             name: "remix",
@@ -4241,6 +4526,7 @@ fn get_blueprints() -> Vec<Blueprint> {
             scaffold: &["npx create-remix@latest . --yes"],
             php_extensions: &[],
             env_template: None,
+            dev_command: Some("npm run dev"),
         },
     ]
 }
@@ -4549,16 +4835,166 @@ fn tool_create_from_blueprint(
         }
     }
 
+    // Step 8: Set dev_command on the site metadata
+    if let Some(dev_cmd) = bp.dev_command {
+        match read_sites_store() {
+            Ok(mut store) => {
+                if let Some(site) = store.sites.iter_mut().find(|s| s.domain == domain) {
+                    site.dev_command = Some(dev_cmd.to_string());
+                    site.updated_at = chrono_now();
+                    if let Err(e) = write_sites_store(&store) {
+                        warnings.push(format!("Failed to save dev_command: {}", e));
+                    } else {
+                        steps.push(format!("Set dev_command: {}", dev_cmd));
+                    }
+                }
+            }
+            Err(e) => warnings.push(format!("Failed to update dev_command: {}", e)),
+        }
+    }
+
     let result = json!({
         "blueprint": bp.name,
         "domain": domain,
         "path": path,
+        "dev_command": bp.dev_command,
         "steps": steps,
         "warnings": warnings,
         "status": if warnings.is_empty() { "success" } else { "completed_with_warnings" }
     });
 
     Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+// ─── Site App Process Tools ──────────────────────────────────────
+
+fn get_site_app_pid_dir() -> std::path::PathBuf {
+    get_config_dir().join("site-pids")
+}
+
+fn tool_start_site_app(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let store = read_sites_store()?;
+    let site = store.sites.iter().find(|s| s.domain == domain)
+        .ok_or_else(|| format!("Site '{}' not found", domain))?;
+
+    let dev_command = site.dev_command.as_ref()
+        .ok_or_else(|| format!("Site '{}' has no dev_command configured", domain))?;
+
+    let working_dir = &site.path;
+    if !std::path::Path::new(working_dir).exists() {
+        return Err(format!("Site directory does not exist: {}", working_dir));
+    }
+
+    // Check if already running
+    let pid_dir = get_site_app_pid_dir();
+    let pid_file = pid_dir.join(format!("{}.pid", domain));
+    if pid_file.exists() {
+        if let Ok(pid_str) = fs::read_to_string(&pid_file) {
+            if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                // Check if process is still alive
+                let check = hidden_command("tasklist")
+                    .args(&["/FI", &format!("PID eq {}", pid), "/NH"])
+                    .output();
+                if let Ok(output) = check {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if stdout.contains(&pid.to_string()) {
+                        return Err(format!("Site app for '{}' is already running (PID: {})", domain, pid));
+                    }
+                }
+                // Process not running, clean up stale PID file
+                let _ = fs::remove_file(&pid_file);
+            }
+        }
+    }
+
+    // Parse command
+    let parts: Vec<&str> = dev_command.split_whitespace().collect();
+    if parts.is_empty() {
+        return Err("dev_command is empty".to_string());
+    }
+
+    // On Windows, use cmd.exe for npm/npx/bun/python etc.
+    let cmd_name = parts[0];
+    let needs_shell = matches!(
+        cmd_name.to_lowercase().as_str(),
+        "npm" | "npx" | "yarn" | "pnpm" | "bun" | "bunx"
+            | "python" | "python3" | "pip" | "pip3"
+            | "composer" | "php" | "deno" | "go" | "node"
+    );
+
+    let mut command = if needs_shell {
+        let mut cmd = hidden_command("cmd");
+        cmd.arg("/C");
+        cmd.arg(dev_command);
+        cmd
+    } else {
+        let mut cmd = hidden_command(cmd_name);
+        for arg in &parts[1..] {
+            cmd.arg(arg);
+        }
+        cmd
+    };
+
+    command.current_dir(working_dir);
+
+    // Set PORT env var if dev_port is set
+    if let Some(port) = site.dev_port {
+        command.env("PORT", port.to_string());
+    }
+
+    match command.spawn() {
+        Ok(child) => {
+            let pid = child.id();
+
+            // Save PID to file
+            fs::create_dir_all(&pid_dir).ok();
+            fs::write(&pid_file, pid.to_string()).ok();
+
+            Ok(serde_json::to_string_pretty(&json!({
+                "domain": domain,
+                "dev_command": dev_command,
+                "pid": pid,
+                "status": "started"
+            })).unwrap())
+        }
+        Err(e) => Err(format!("Failed to start site app: {}", e)),
+    }
+}
+
+fn tool_stop_site_app(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let pid_dir = get_site_app_pid_dir();
+    let pid_file = pid_dir.join(format!("{}.pid", domain));
+
+    if !pid_file.exists() {
+        return Err(format!("No running app process for site '{}'", domain));
+    }
+
+    let pid_str = fs::read_to_string(&pid_file)
+        .map_err(|e| format!("Failed to read PID file: {}", e))?;
+    let pid = pid_str.trim().parse::<u32>()
+        .map_err(|_| "Invalid PID in file".to_string())?;
+
+    // Kill the process tree
+    let _ = hidden_command("taskkill")
+        .args(&["/F", "/PID", &pid.to_string(), "/T"])
+        .output();
+
+    // Clean up PID file
+    let _ = fs::remove_file(&pid_file);
+
+    Ok(serde_json::to_string_pretty(&json!({
+        "domain": domain,
+        "pid": pid,
+        "status": "stopped"
+    })).unwrap())
 }
 
 // ─── Utilities ───────────────────────────────────────────────────
@@ -4574,7 +5010,7 @@ fn chrono_now() -> String {
 // ─── Entry Point ─────────────────────────────────────────────────
 
 fn main() {
-    eprintln!("[orbit-mcp] Orbit MCP Server v1.1.0 starting...");
+    eprintln!("[orbit-mcp] Orbit MCP Server v{} starting...", env!("CARGO_PKG_VERSION"));
     eprintln!("[orbit-mcp] Data dir: {}", get_orbit_data_dir().display());
 
     // Standby mode: process stays alive without reading stdin

@@ -565,6 +565,57 @@ body {
     color: var(--text-secondary);
 }
 
+/* ===== Why Orbit ===== */
+.why-section {
+    position: relative;
+    z-index: 1;
+    padding: 80px 0 100px;
+}
+
+.why-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+}
+
+.why-card {
+    padding: 36px 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 0.3s ease;
+}
+
+.why-card:hover {
+    border-color: var(--emerald);
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.08);
+    transform: translateY(-4px);
+}
+
+.why-icon {
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--emerald-glow);
+    color: var(--emerald-light);
+    margin-bottom: 20px;
+}
+
+.why-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.why-card p {
+    font-size: 14.5px;
+    line-height: 1.75;
+    color: var(--text-secondary);
+}
+
 /* ===== Services ===== */
 .services-section {
     position: relative;
@@ -859,6 +910,10 @@ body {
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
     .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .why-grid {
         grid-template-columns: 1fr;
     }
 

@@ -5,7 +5,10 @@ import {
   uninstallMcp,
   startMcp,
   stopMcp,
-  McpStatus
+  checkMcpUpdate,
+  updateMcp,
+  McpStatus,
+  BinaryUpdateInfo
 } from '../lib/api'
 import {
   Download,
@@ -15,7 +18,8 @@ import {
   RefreshCw,
   Sparkles,
   Copy,
-  Check
+  Check,
+  ArrowUpCircle
 } from 'lucide-react'
 import { useApp } from '../lib/AppContext'
 import { InfoTooltip } from './InfoTooltip'
@@ -29,12 +33,17 @@ export function McpManager() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [activeConfig, setActiveConfig] = useState<ConfigTab>('claude')
   const [copied, setCopied] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<BinaryUpdateInfo | null>(null)
 
   const loadStatus = async () => {
     try {
       setLoading(true)
       const result = await getMcpStatus()
       setStatus(result)
+      // Check for updates if installed
+      if (result.installed) {
+        checkMcpUpdate().then(setUpdateInfo).catch(() => {})
+      }
     } catch (err) {
       addToast({ type: 'error', message: 'Failed to load MCP status' })
       console.error(err)
@@ -95,6 +104,20 @@ export function McpManager() {
       await loadStatus()
     } catch (err) {
       addToast({ type: 'error', message: 'Failed to stop MCP server' })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleUpdate = async () => {
+    try {
+      setActionLoading('update')
+      await updateMcp()
+      addToast({ type: 'success', message: 'MCP server updated successfully' })
+      setUpdateInfo(null)
+      await loadStatus()
+    } catch (err) {
+      addToast({ type: 'error', message: 'Failed to update MCP server' })
     } finally {
       setActionLoading(null)
     }
@@ -190,7 +213,12 @@ export function McpManager() {
             </div>
           }
         />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {updateInfo?.has_update && (
+            <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs font-medium">
+              Update Available (v{updateInfo.latest_version})
+            </span>
+          )}
           {status?.installed ? (
             <span className={`px-2 py-1 rounded text-xs font-medium ${status.running
               ? 'bg-emerald-500/20 text-emerald-400'
@@ -294,6 +322,20 @@ export function McpManager() {
                   <Play size={16} />
                 )}
                 Start
+              </button>
+            )}
+            {updateInfo?.has_update && (
+              <button
+                onClick={handleUpdate}
+                disabled={actionLoading !== null}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {actionLoading === 'update' ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <ArrowUpCircle size={16} />
+                )}
+                Update
               </button>
             )}
             <button

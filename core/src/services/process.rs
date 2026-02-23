@@ -20,6 +20,7 @@ pub enum ServiceType {
     Redis,
     Go,
     Deno,
+    Mailpit,
 }
 
 use super::hidden_command;
@@ -58,6 +59,8 @@ fn get_service_port(service_name: &str) -> Option<u16> {
         }
     } else if service_name.contains("redis") {
         Some(6379)
+    } else if service_name.contains("mailpit") {
+        Some(8025)
     } else {
         None
     }
@@ -79,6 +82,8 @@ fn get_process_names(service_name: &str) -> Vec<&'static str> {
         vec!["php-cgi.exe"]
     } else if service_name.contains("redis") {
         vec!["redis-server.exe"]
+    } else if service_name.contains("mailpit") {
+        vec!["mailpit.exe"]
     } else {
         vec![]
     }

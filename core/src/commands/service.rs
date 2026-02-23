@@ -75,6 +75,8 @@ pub fn start_service(
         ServiceType::Go
     } else if name.contains("deno") {
         ServiceType::Deno
+    } else if name.contains("mailpit") {
+        ServiceType::Mailpit
     } else {
         ServiceType::MariaDB
     };
@@ -181,6 +183,10 @@ pub fn start_service(
                 }
             }
             args
+        }
+        ServiceType::Mailpit => {
+            // Mailpit runs with no special args
+            vec![]
         }
         ServiceType::NodeJs | ServiceType::Python | ServiceType::Bun | ServiceType::Go | ServiceType::Deno => {
             // These are typically not background services

@@ -95,13 +95,15 @@ export interface Site {
   php_version?: string;
   php_port?: number;
   ssl_enabled?: boolean;
-  template?: 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue';
+  template?: 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue' | 'django' | 'sveltekit' | 'remix';
   web_server?: WebServer;
   dev_port?: number;
+  dev_command?: string;
 }
 
 export interface SiteWithStatus extends Site {
   dev_port?: number;
+  dev_command?: string;
   created_at?: string;
   config_valid: boolean;
   warning?: string;
@@ -161,6 +163,19 @@ export const regenerateSiteConfig = async (domain: string): Promise<string> => {
     console.error('Failed to regenerate config:', error);
     throw error;
   }
+};
+
+// Site app process management
+export const startSiteApp = async (domain: string): Promise<number> => {
+  return await invoke('start_site_app', { domain });
+};
+
+export const stopSiteApp = async (domain: string): Promise<void> => {
+  return await invoke('stop_site_app', { domain });
+};
+
+export const getSiteAppStatus = async (domain: string): Promise<string> => {
+  return await invoke('get_site_app_status', { domain });
 };
 
 // Export/Import Sites
@@ -1544,6 +1559,30 @@ export const getMcpBinaryPath = async (): Promise<string> => {
   }
 };
 
+export interface BinaryUpdateInfo {
+  has_update: boolean;
+  current_version: string;
+  latest_version: string;
+}
+
+export const checkMcpUpdate = async (): Promise<BinaryUpdateInfo> => {
+  try {
+    return await invoke('check_mcp_update');
+  } catch (error) {
+    console.error('Failed to check MCP update:', error);
+    throw error;
+  }
+};
+
+export const updateMcp = async (): Promise<string> => {
+  try {
+    return await invoke('update_mcp');
+  } catch (error) {
+    console.error('Failed to update MCP:', error);
+    throw error;
+  }
+};
+
 // --- CLI ---
 
 export interface CliStatus {
@@ -1576,6 +1615,24 @@ export const uninstallCli = async (): Promise<string> => {
     return await invoke('uninstall_cli');
   } catch (error) {
     console.error('Failed to uninstall CLI:', error);
+    throw error;
+  }
+};
+
+export const checkCliUpdate = async (): Promise<BinaryUpdateInfo> => {
+  try {
+    return await invoke('check_cli_update');
+  } catch (error) {
+    console.error('Failed to check CLI update:', error);
+    throw error;
+  }
+};
+
+export const updateCli = async (): Promise<string> => {
+  try {
+    return await invoke('update_cli');
+  } catch (error) {
+    console.error('Failed to update CLI:', error);
     throw error;
   }
 };
