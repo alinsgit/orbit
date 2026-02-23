@@ -2308,7 +2308,7 @@ fn tool_get_system_info() -> Result<String, String> {
     let running_count = services.iter().filter(|s| is_service_running(&s.name)).count();
 
     let result = json!({
-        "orbit_version": "1.0.0",
+        "orbit_version": "1.1.0",
         "data_directory": data_dir.to_string_lossy(),
         "bin_directory": bin_dir.to_string_lossy(),
         "config_directory": config_dir.to_string_lossy(),
