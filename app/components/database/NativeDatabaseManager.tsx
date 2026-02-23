@@ -23,6 +23,7 @@ import {
   dbConnect,
   dbDisconnect,
   isConnected,
+  getConnectedEngine,
   getServerInfo,
   listDatabases,
   createDatabase,
@@ -89,6 +90,14 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
   });
 
   useEffect(() => {
+    // Disconnect when engine changes to prevent cross-engine data leaks
+    if (connected) {
+      dbDisconnect().catch(() => {});
+      setConnected(false);
+      setServerInfo(null);
+      setDatabases([]);
+      setUsers([]);
+    }
     setConfig(c => ({
       ...c,
       engine: dbEngine,
@@ -123,9 +132,14 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
 
   useEffect(() => {
     const alreadyConnected = isConnected();
-    setConnected(alreadyConnected);
-    if (alreadyConnected) {
+    const connectedEngine = getConnectedEngine();
+    // Only show as connected if the engine matches
+    if (alreadyConnected && connectedEngine === dbEngine) {
+      setConnected(true);
       loadData();
+    } else if (alreadyConnected && connectedEngine !== dbEngine) {
+      // Connected to a different engine — don't show this engine's data
+      setConnected(false);
     }
   }, []);
 
@@ -393,7 +407,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
             <Database className="w-8 h-8 text-emerald-500" />
             <div>
               <h2 className="text-xl font-semibold text-content">Database Manager</h2>
-              <p className="text-sm text-content-muted">Connect to MariaDB</p>
+              <p className="text-sm text-content-muted">Connect to {dbEngine === 'postgresql' ? 'PostgreSQL' : 'MariaDB'}</p>
             </div>
           </div>
 
@@ -762,7 +776,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                   >
                     <Shield className="w-4 h-4" />
                   </button>
-                  {user.user.toLowerCase() !== 'root' && (
+                  {user.user.toLowerCase() !== 'root' && user.user.toLowerCase() !== 'postgres' && (
                     <button
                       onClick={() => handleDropUser(user)}
                       disabled={actionLoading === `dropUser-${user.user}@${user.host}`}
@@ -798,18 +812,23 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                 autoFocus
               />
             </div>
-            <div>
-              <label className="block text-sm text-content-muted mb-1">Character Set</label>
-              <select
-                value={newDbCharset}
-                onChange={e => setNewDbCharset(e.target.value)}
-                className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
-              >
-                <option value="utf8mb4">utf8mb4 (Recommended)</option>
-                <option value="utf8">utf8</option>
-                <option value="latin1">latin1</option>
-              </select>
-            </div>
+            {dbEngine === 'mariadb' && (
+              <div>
+                <label className="block text-sm text-content-muted mb-1">Character Set</label>
+                <select
+                  value={newDbCharset}
+                  onChange={e => setNewDbCharset(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="utf8mb4">utf8mb4 (Recommended)</option>
+                  <option value="utf8">utf8</option>
+                  <option value="latin1">latin1</option>
+                </select>
+              </div>
+            )}
+            {dbEngine === 'postgresql' && (
+              <p className="text-xs text-content-muted">PostgreSQL databases use UTF8 encoding by default.</p>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setDialog({ type: null })}
@@ -953,7 +972,12 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
               >
                 <option value="">Select a database...</option>
                 {databases
-                  .filter(db => !['mysql', 'information_schema', 'performance_schema', 'sys'].includes(db.name.toLowerCase()))
+                  .filter(db => {
+                    const systemDbs = dbEngine === 'postgresql'
+                      ? ['postgres', 'template0', 'template1']
+                      : ['mysql', 'information_schema', 'performance_schema', 'sys'];
+                    return !systemDbs.includes(db.name.toLowerCase());
+                  })
                   .map(db => (
                     <option key={db.name} value={db.name}>{db.name}</option>
                   ))
@@ -999,37 +1023,48 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
             </div>
           ) : (
             <div className="space-y-5">
-              {/* Charset */}
-              <div>
-                <label className="block text-sm text-content-muted mb-1">Character Set</label>
-                <select
-                  value={editDb.charset}
-                  onChange={e => {
-                    const newCharset = e.target.value;
-                    const collations = CHARSET_COLLATIONS[newCharset] || [];
-                    setEditDb({ ...editDb, charset: newCharset, collation: collations[0] || '' });
-                  }}
-                  className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
-                >
-                  {Object.keys(CHARSET_COLLATIONS).map(cs => (
-                    <option key={cs} value={cs}>{cs}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Charset & Collation — MariaDB only */}
+              {dbEngine === 'mariadb' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-content-muted mb-1">Character Set</label>
+                    <select
+                      value={editDb.charset}
+                      onChange={e => {
+                        const newCharset = e.target.value;
+                        const collations = CHARSET_COLLATIONS[newCharset] || [];
+                        setEditDb({ ...editDb, charset: newCharset, collation: collations[0] || '' });
+                      }}
+                      className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
+                    >
+                      {Object.keys(CHARSET_COLLATIONS).map(cs => (
+                        <option key={cs} value={cs}>{cs}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* Collation */}
-              <div>
-                <label className="block text-sm text-content-muted mb-1">Collation</label>
-                <select
-                  value={editDb.collation}
-                  onChange={e => setEditDb({ ...editDb, collation: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
-                >
-                  {(CHARSET_COLLATIONS[editDb.charset] || []).map(col => (
-                    <option key={col} value={col}>{col}</option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-sm text-content-muted mb-1">Collation</label>
+                    <select
+                      value={editDb.collation}
+                      onChange={e => setEditDb({ ...editDb, collation: e.target.value })}
+                      className="w-full px-3 py-2 bg-surface-inset border border-edge rounded-lg text-content text-sm focus:outline-none focus:border-emerald-500"
+                    >
+                      {(CHARSET_COLLATIONS[editDb.charset] || []).map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {dbEngine === 'postgresql' && (
+                <div className="p-3 bg-surface-inset border border-edge rounded-lg">
+                  <p className="text-sm text-content-muted">Encoding: <span className="text-content font-medium">{editDb.charset}</span></p>
+                  <p className="text-sm text-content-muted">Collation: <span className="text-content font-medium">{editDb.collation}</span></p>
+                  <p className="text-xs text-content-muted mt-1">PostgreSQL encoding cannot be changed after creation.</p>
+                </div>
+              )}
 
               {/* Authorized Users - Multiselect */}
               <div>

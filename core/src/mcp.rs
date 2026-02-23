@@ -1047,7 +1047,7 @@ fn handle_initialize(id: &Value) -> Value {
         },
         "serverInfo": {
             "name": "orbit-mcp",
-            "version": "1.0.0"
+            "version": "1.1.0"
         }
     }))
 }
@@ -1656,6 +1656,86 @@ fn handle_tools_list(id: &Value) -> Value {
                 },
                 "required": ["service"]
             }
+        },
+        // ─── AI Diagnostics ────────────────────────────────
+        {
+            "name": "diagnose_service",
+            "description": "Run a comprehensive health check on a service. Checks binary existence, port status, process state, config validation, and error logs. Returns status (healthy/degraded/down/not_installed), issues, suggestions, and details.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Service name (e.g., nginx, php-8.4, mariadb, redis, postgresql)" }
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "diagnose_site",
+            "description": "Run a health check on a local development site. Checks site config, web server status, PHP version, hosts entry, SSL certs, and reachability.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain (e.g., myapp.test)" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "analyze_logs",
+            "description": "Analyze log files for error patterns. Groups errors by frequency, provides known solutions for common issues (502 Bad Gateway, Permission denied, PHP Fatal, etc.).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "service": { "type": "string", "description": "Service name to analyze logs for. If omitted, analyzes all available logs." },
+                    "lines": { "type": "number", "description": "Number of lines to analyze from each log (default: 200)" },
+                    "severity": { "type": "string", "description": "Minimum severity: error, warning, all (default: error)" }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "get_health_report",
+            "description": "Generate a comprehensive system health report. Checks all services, port conflicts, disk usage, site issues, large log files, and calculates a health score (0-100).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        // ─── Blueprint System ──────────────────────────────
+        {
+            "name": "list_blueprints",
+            "description": "List all available project blueprints. Blueprints define a complete project setup: required services, site template, and scaffold commands.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "get_blueprint",
+            "description": "Get detailed information about a specific blueprint including required services, template, scaffold commands, and PHP extensions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Blueprint name (e.g., laravel-vite, nextjs-fullstack, django)" }
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "create_from_blueprint",
+            "description": "Create a complete project from a blueprint. Validates required services, starts them, creates a site with the correct template, runs scaffold commands, adds hosts entry, generates SSL if needed, and writes .env file. One-click project setup.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "blueprint": { "type": "string", "description": "Blueprint name (e.g., laravel-vite, django, nextjs-fullstack)" },
+                    "domain": { "type": "string", "description": "Domain name (e.g., myapp.test)" },
+                    "path": { "type": "string", "description": "Project directory path" },
+                    "php_version": { "type": "string", "description": "PHP version override (default: 8.4)" }
+                },
+                "required": ["blueprint", "domain", "path"]
+            }
         }
     ]);
 
@@ -1872,6 +1952,35 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
         "uninstall_service" => {
             let service = args.get("service").and_then(|v| v.as_str()).unwrap_or("");
             tool_uninstall_service(service)
+        }
+        // Diagnostics
+        "diagnose_service" => {
+            let svc_name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_diagnose_service(svc_name)
+        }
+        "diagnose_site" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_diagnose_site(domain)
+        }
+        "analyze_logs" => {
+            let service = args.get("service").and_then(|v| v.as_str());
+            let lines = args.get("lines").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+            let severity = args.get("severity").and_then(|v| v.as_str()).unwrap_or("error");
+            tool_analyze_logs(service, lines, severity)
+        }
+        "get_health_report" => tool_get_health_report(),
+        // Blueprints
+        "list_blueprints" => tool_list_blueprints(),
+        "get_blueprint" => {
+            let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_get_blueprint(name)
+        }
+        "create_from_blueprint" => {
+            let blueprint = args.get("blueprint").and_then(|v| v.as_str()).unwrap_or("");
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let php_version = args.get("php_version").and_then(|v| v.as_str());
+            tool_create_from_blueprint(blueprint, domain, path, php_version)
         }
         _ => Err(format!("Unknown tool: {}", name)),
     };
@@ -3459,6 +3568,999 @@ fn strip_ansi_codes(s: &str) -> String {
     result
 }
 
+// ─── AI Diagnostics Tools ────────────────────────────────────────
+
+fn tool_diagnose_service(name: &str) -> Result<String, String> {
+    if name.is_empty() {
+        return Err("Service name is required".to_string());
+    }
+
+    let resolved = resolve_service_name(name);
+    let bin_dir = get_bin_dir();
+    let services = scan_services(&bin_dir);
+
+    let service = services.iter().find(|s| {
+        s.name == resolved || s.name.starts_with(&resolved)
+    });
+
+    let svc = match service {
+        Some(s) => s,
+        None => {
+            return Ok(serde_json::to_string_pretty(&json!({
+                "service": resolved,
+                "status": "not_installed",
+                "issues": ["Service is not installed"],
+                "suggestions": ["Install the service using: install_service"],
+                "details": {}
+            })).unwrap());
+        }
+    };
+
+    let mut issues: Vec<String> = Vec::new();
+    let mut suggestions: Vec<String> = Vec::new();
+    let mut details = serde_json::Map::new();
+
+    // Check binary
+    let exe_exists = std::path::Path::new(&svc.path).exists();
+    details.insert("binary_exists".into(), json!(exe_exists));
+    if !exe_exists {
+        issues.push("Binary not found".into());
+        suggestions.push("Reinstall the service".into());
+    }
+
+    // Check port
+    let port = get_service_port(&svc.name);
+    let running = is_service_running(&svc.name);
+    details.insert("port".into(), json!(port));
+    details.insert("running".into(), json!(running));
+
+    if !running {
+        issues.push(format!("{} is not running", svc.name));
+        suggestions.push(format!("Start it: start_service {{ \"name\": \"{}\" }}", svc.name));
+    }
+
+    // Service-specific checks
+    match svc.service_type.as_str() {
+        "nginx" => {
+            // nginx -t
+            let nginx_exe = PathBuf::from(&svc.path);
+            if let Ok(output) = hidden_command(&nginx_exe).arg("-t").output() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let config_ok = output.status.success();
+                details.insert("config_test".into(), json!(if config_ok { "ok" } else { "failed" }));
+                if !config_ok {
+                    issues.push(format!("Nginx config test failed: {}", stderr.trim()));
+                    suggestions.push("Check nginx config: read_config {{ \"type\": \"nginx\" }}".into());
+                }
+            }
+            // Check error log
+            let err_log = bin_dir.join("nginx").join("logs").join("error.log");
+            if err_log.exists() {
+                let size = fs::metadata(&err_log).map(|m| m.len()).unwrap_or(0);
+                details.insert("error_log_size".into(), json!(format_size(size)));
+                if size > 100 * 1024 * 1024 {
+                    issues.push("Error log is very large (>100MB)".into());
+                    suggestions.push("Clear the error log: clear_log {{ \"name\": \"nginx/error.log\" }}".into());
+                }
+                // Read last few lines for recent errors
+                if let Ok(content) = fs::read_to_string(&err_log) {
+                    let lines: Vec<&str> = content.lines().collect();
+                    let recent: Vec<&str> = lines.iter().rev().take(5).copied().collect();
+                    if !recent.is_empty() {
+                        details.insert("recent_errors".into(), json!(recent));
+                    }
+                }
+            }
+        }
+        "php" => {
+            let version = svc.name.strip_prefix("php-").unwrap_or("8.4");
+            let ini_path = bin_dir.join("php").join(version).join("php.ini");
+            details.insert("php_ini_exists".into(), json!(ini_path.exists()));
+            if !ini_path.exists() {
+                issues.push("php.ini not found".into());
+                suggestions.push("Create php.ini from php.ini-development".into());
+            } else if let Ok(content) = fs::read_to_string(&ini_path) {
+                // Check critical settings
+                for key in &["memory_limit", "upload_max_filesize", "max_execution_time"] {
+                    for line in content.lines() {
+                        let trimmed = line.trim();
+                        if !trimmed.starts_with(';') && trimmed.starts_with(key) {
+                            if let Some((_, val)) = trimmed.split_once('=') {
+                                details.insert(key.to_string(), json!(val.trim()));
+                            }
+                        }
+                    }
+                }
+            }
+            // Check PHP error log
+            let err_log = bin_dir.join("php").join(version).join("logs").join("php_errors.log");
+            if err_log.exists() {
+                let size = fs::metadata(&err_log).map(|m| m.len()).unwrap_or(0);
+                details.insert("error_log_size".into(), json!(format_size(size)));
+            }
+        }
+        "mariadb" => {
+            let data_dir = bin_dir.join("data").join("mariadb");
+            details.insert("data_dir_exists".into(), json!(data_dir.exists()));
+            if !data_dir.exists() {
+                issues.push("MariaDB data directory not found".into());
+                suggestions.push("Initialize MariaDB data directory".into());
+            }
+            // Check error log
+            let err_log = data_dir.join("mysql.err");
+            if err_log.exists() {
+                let size = fs::metadata(&err_log).map(|m| m.len()).unwrap_or(0);
+                details.insert("error_log_size".into(), json!(format_size(size)));
+            }
+            // Try mysqladmin ping if running
+            if running {
+                if let Ok(client) = find_mariadb_client(&bin_dir) {
+                    let ping = hidden_command(&client)
+                        .args(["--host=127.0.0.1", "--port=3306", "-u", "root", "-proot", "--connect-timeout=3"])
+                        .arg("-e").arg("SELECT 1")
+                        .output();
+                    if let Ok(output) = ping {
+                        let reachable = output.status.success();
+                        details.insert("reachable".into(), json!(reachable));
+                        if !reachable {
+                            issues.push("MariaDB is running but not responding to queries".into());
+                            suggestions.push("Check MariaDB error log".into());
+                        }
+                    }
+                }
+            }
+        }
+        "redis" => {
+            if running {
+                if let Ok(cli) = find_redis_cli(&bin_dir) {
+                    let ping = hidden_command(&cli)
+                        .args(["-h", "127.0.0.1", "-p", "6379", "PING"])
+                        .output();
+                    if let Ok(output) = ping {
+                        let pong = String::from_utf8_lossy(&output.stdout).contains("PONG");
+                        details.insert("ping".into(), json!(if pong { "PONG" } else { "failed" }));
+                        if !pong {
+                            issues.push("Redis is running but not responding to PING".into());
+                        }
+                    }
+                }
+            }
+            let redis_log = bin_dir.join("redis").join("redis.log");
+            if redis_log.exists() {
+                let size = fs::metadata(&redis_log).map(|m| m.len()).unwrap_or(0);
+                details.insert("log_size".into(), json!(format_size(size)));
+            }
+        }
+        "apache" => {
+            let apache_exe = PathBuf::from(&svc.path);
+            if let Ok(output) = hidden_command(&apache_exe).arg("-t").output() {
+                let config_ok = output.status.success();
+                details.insert("config_test".into(), json!(if config_ok { "ok" } else { "failed" }));
+                if !config_ok {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    issues.push(format!("Apache config test failed: {}", stderr.trim()));
+                }
+            }
+        }
+        "postgresql" => {
+            let data_dir = bin_dir.join("data").join("postgres");
+            details.insert("data_dir_exists".into(), json!(data_dir.exists()));
+            if running {
+                if let Ok(psql) = find_psql_client(&bin_dir) {
+                    let ping = hidden_command(&psql)
+                        .args(["-U", "postgres", "-h", "127.0.0.1", "-p", "5432", "-c", "SELECT 1"])
+                        .env("PGPASSWORD", "postgres")
+                        .output();
+                    if let Ok(output) = ping {
+                        let reachable = output.status.success();
+                        details.insert("reachable".into(), json!(reachable));
+                        if !reachable {
+                            issues.push("PostgreSQL running but not responding".into());
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let status = if !exe_exists {
+        "down"
+    } else if issues.is_empty() && running {
+        "healthy"
+    } else if running {
+        "degraded"
+    } else {
+        "down"
+    };
+
+    let result = json!({
+        "service": svc.name,
+        "version": svc.version,
+        "status": status,
+        "issues": issues,
+        "suggestions": suggestions,
+        "details": details
+    });
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+fn tool_diagnose_site(domain: &str) -> Result<String, String> {
+    if domain.is_empty() {
+        return Err("Domain is required".to_string());
+    }
+
+    let bin_dir = get_bin_dir();
+    let mut issues: Vec<String> = Vec::new();
+    let mut suggestions: Vec<String> = Vec::new();
+    let mut details = serde_json::Map::new();
+
+    // Check site config exists
+    let store = read_sites_store().unwrap_or(SiteStore { version: "1".into(), sites: vec![] });
+    let site = store.sites.iter().find(|s| s.domain == domain);
+
+    let has_config = site.is_some();
+    details.insert("in_sites_json".into(), json!(has_config));
+
+    if !has_config {
+        issues.push("Site not found in sites.json".into());
+        suggestions.push("Create the site: create_site".into());
+    }
+
+    // Check nginx config file
+    let nginx_conf = bin_dir.join("nginx").join("conf").join("sites-enabled").join(format!("{}.conf", domain));
+    let has_nginx_conf = nginx_conf.exists();
+    details.insert("nginx_config_exists".into(), json!(has_nginx_conf));
+    if !has_nginx_conf {
+        issues.push("Nginx config file not found".into());
+    }
+
+    // Check web server running
+    let nginx_running = is_service_running("nginx");
+    details.insert("web_server_running".into(), json!(nginx_running));
+    if !nginx_running {
+        issues.push("Web server (nginx) is not running".into());
+        suggestions.push("Start nginx: start_service {{ \"name\": \"nginx\" }}".into());
+    }
+
+    // Check PHP if site uses PHP
+    if let Some(s) = site {
+        if let Some(ref php_ver) = s.php_version {
+            let php_name = format!("php-{}", php_ver);
+            let php_running = is_service_running(&php_name);
+            details.insert("php_version".into(), json!(php_ver));
+            details.insert("php_running".into(), json!(php_running));
+            if !php_running {
+                issues.push(format!("PHP {} is not running", php_ver));
+                suggestions.push(format!("Start PHP: start_service {{ \"name\": \"{}\" }}", php_name));
+            }
+        }
+
+        // Check document root
+        let doc_root = std::path::Path::new(&s.path);
+        details.insert("document_root".into(), json!(s.path));
+        details.insert("document_root_exists".into(), json!(doc_root.exists()));
+        if !doc_root.exists() {
+            issues.push("Document root does not exist".into());
+            suggestions.push(format!("Create directory: {}", s.path));
+        }
+    }
+
+    // Check hosts file
+    let hosts_path = get_hosts_path();
+    let in_hosts = if let Ok(content) = fs::read_to_string(&hosts_path) {
+        content.contains(&format!("127.0.0.1 {}", domain))
+    } else {
+        false
+    };
+    details.insert("in_hosts_file".into(), json!(in_hosts));
+    if !in_hosts {
+        issues.push("Domain not in hosts file".into());
+        suggestions.push(format!("Add hosts entry: hosts_add {{ \"domain\": \"{}\" }}", domain));
+    }
+
+    // Check SSL
+    let ssl_cert = bin_dir.join("nginx").join("ssl").join(format!("{}.pem", domain));
+    let ssl_key = bin_dir.join("nginx").join("ssl").join(format!("{}-key.pem", domain));
+    let has_ssl = ssl_cert.exists() && ssl_key.exists();
+    details.insert("ssl_cert_exists".into(), json!(ssl_cert.exists()));
+    details.insert("ssl_key_exists".into(), json!(ssl_key.exists()));
+
+    if let Some(s) = site {
+        if s.ssl_enabled && !has_ssl {
+            issues.push("SSL is enabled but certificate files are missing".into());
+            suggestions.push(format!("Generate SSL: generate_ssl {{ \"domain\": \"{}\" }}", domain));
+        }
+    }
+
+    // Check reachability via TCP
+    let port = site.map(|s| s.port).unwrap_or(80);
+    let reachable = std::net::TcpStream::connect_timeout(
+        &format!("127.0.0.1:{}", port).parse().unwrap(),
+        std::time::Duration::from_secs(2),
+    ).is_ok();
+    details.insert("reachable".into(), json!(reachable));
+    if !reachable && nginx_running {
+        issues.push(format!("Site not reachable on port {}", port));
+        suggestions.push("Check nginx config and ensure site is properly configured".into());
+    }
+
+    let status = if issues.is_empty() {
+        "healthy"
+    } else if reachable {
+        "degraded"
+    } else {
+        "down"
+    };
+
+    let result = json!({
+        "domain": domain,
+        "status": status,
+        "issues": issues,
+        "suggestions": suggestions,
+        "details": details
+    });
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+fn tool_analyze_logs(service: Option<&str>, lines: usize, severity: &str) -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let all_logs = scan_log_files(&bin_dir);
+
+    let logs: Vec<&LogFile> = if let Some(svc) = service {
+        all_logs.iter().filter(|l| l.name.starts_with(svc)).collect()
+    } else {
+        all_logs.iter().collect()
+    };
+
+    if logs.is_empty() {
+        return Ok(serde_json::to_string_pretty(&json!({
+            "logs_analyzed": 0,
+            "total_errors": 0,
+            "patterns": [],
+            "message": "No log files found"
+        })).unwrap());
+    }
+
+    // Known error patterns with solutions
+    let known_patterns: Vec<(&str, &str)> = vec![
+        ("502 Bad Gateway", "PHP-FPM is not running or port mismatch. Check PHP service and port configuration."),
+        ("Connection refused", "Target service is not running. Start the required service."),
+        ("Permission denied", "File permission issue. Check file ownership and permissions."),
+        ("No input file specified", "Document root is incorrect or index file is missing. Check site configuration."),
+        ("Allowed memory size", "PHP memory_limit exceeded. Increase memory_limit in php.ini."),
+        ("Maximum execution time", "Script timeout. Increase max_execution_time in php.ini."),
+        ("upstream timed out", "Backend service too slow to respond. Increase timeout values."),
+        ("Address already in use", "Port is already in use by another process. Check for port conflicts."),
+        ("SSL_ERROR", "SSL certificate issue. Regenerate SSL certificate with generate_ssl."),
+        ("404 Not Found", "Requested file does not exist. Check document root and file paths."),
+        ("access denied", "Database access denied. Check credentials in .env or config."),
+        ("Can't connect to", "Database connection failed. Ensure database service is running."),
+        ("FATAL ERROR", "Fatal application error. Check application logs for stack trace."),
+        ("Segmentation fault", "Process crashed. Check for corrupted binaries or incompatible extensions."),
+        ("[error]", "General error entry."),
+        ("[warn]", "Warning entry."),
+        ("[crit]", "Critical error."),
+        ("[emerg]", "Emergency — service may be unusable."),
+    ];
+
+    let mut all_patterns: std::collections::HashMap<String, (usize, String)> = std::collections::HashMap::new();
+    let mut total_errors = 0;
+    let mut analyzed_logs = Vec::new();
+
+    for log in &logs {
+        if let Ok(content) = fs::read_to_string(&log.path) {
+            let all_lines: Vec<&str> = content.lines().collect();
+            let start = if all_lines.len() > lines { all_lines.len() - lines } else { 0 };
+            let tail = &all_lines[start..];
+
+            let mut log_errors = 0;
+            for line in tail {
+                let lower = line.to_lowercase();
+
+                // Filter by severity
+                let is_error = lower.contains("error") || lower.contains("fatal") ||
+                    lower.contains("crit") || lower.contains("emerg") || lower.contains("fail");
+                let is_warning = lower.contains("warn");
+
+                let include = match severity {
+                    "all" => true,
+                    "warning" => is_error || is_warning,
+                    _ => is_error, // "error" default
+                };
+
+                if !include { continue; }
+
+                log_errors += 1;
+                total_errors += 1;
+
+                // Match known patterns
+                for (pattern, solution) in &known_patterns {
+                    if lower.contains(&pattern.to_lowercase()) {
+                        let entry = all_patterns.entry(pattern.to_string())
+                            .or_insert((0, solution.to_string()));
+                        entry.0 += 1;
+                    }
+                }
+            }
+
+            analyzed_logs.push(json!({
+                "log": log.name,
+                "lines_analyzed": tail.len(),
+                "errors_found": log_errors,
+                "size": format_size(log.size)
+            }));
+        }
+    }
+
+    // Sort patterns by frequency
+    let mut pattern_list: Vec<Value> = all_patterns.iter()
+        .map(|(pattern, (count, solution))| json!({
+            "pattern": pattern,
+            "count": count,
+            "suggestion": solution
+        }))
+        .collect();
+    pattern_list.sort_by(|a, b| {
+        let ca = a.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let cb = b.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        cb.cmp(&ca)
+    });
+
+    // Top 20
+    pattern_list.truncate(20);
+
+    let result = json!({
+        "logs_analyzed": analyzed_logs.len(),
+        "total_errors": total_errors,
+        "severity_filter": severity,
+        "logs": analyzed_logs,
+        "patterns": pattern_list
+    });
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+fn tool_get_health_report() -> Result<String, String> {
+    let bin_dir = get_bin_dir();
+    let data_dir = get_orbit_data_dir();
+    let services = scan_services(&bin_dir);
+    let logs = scan_log_files(&bin_dir);
+    let store = read_sites_store().unwrap_or(SiteStore { version: "1".into(), sites: vec![] });
+
+    let mut score: i32 = 100;
+    let mut issues: Vec<String> = Vec::new();
+    let mut service_list = Vec::new();
+
+    // Check all services
+    for svc in &services {
+        let running = is_service_running(&svc.name);
+        let port = get_service_port(&svc.name);
+        service_list.push(json!({
+            "name": svc.name,
+            "version": svc.version,
+            "status": if running { "running" } else { "stopped" },
+            "port": port
+        }));
+    }
+
+    // Check for port conflicts
+    let mut port_map: std::collections::HashMap<u16, Vec<String>> = std::collections::HashMap::new();
+    for svc in &services {
+        if let Some(port) = get_service_port(&svc.name) {
+            port_map.entry(port).or_default().push(svc.name.clone());
+        }
+    }
+    let mut port_conflicts = Vec::new();
+    for (port, svcs) in &port_map {
+        if svcs.len() > 1 {
+            port_conflicts.push(json!({
+                "port": port,
+                "services": svcs
+            }));
+            score -= 15;
+            issues.push(format!("Port {} conflict: {}", port, svcs.join(", ")));
+        }
+    }
+
+    // Disk usage for bin/ and data/
+    let bin_size = dir_size(&bin_dir);
+    let data_size = dir_size(&data_dir.join("data"));
+
+    // Large log files (>100MB)
+    let mut large_logs = Vec::new();
+    for log in &logs {
+        if log.size > 100 * 1024 * 1024 {
+            large_logs.push(json!({
+                "name": log.name,
+                "size": format_size(log.size)
+            }));
+            score -= 5;
+            issues.push(format!("Large log file: {} ({})", log.name, format_size(log.size)));
+        }
+    }
+
+    // Site health
+    let mut site_issues_list = Vec::new();
+    for site in &store.sites {
+        let mut site_problems: Vec<String> = Vec::new();
+        let doc_root = std::path::Path::new(&site.path);
+        if !doc_root.exists() {
+            site_problems.push("Document root missing".into());
+            score -= 5;
+        }
+        if let Some(ref php_ver) = site.php_version {
+            let php_name = format!("php-{}", php_ver);
+            if !is_service_running(&php_name) {
+                site_problems.push(format!("PHP {} not running", php_ver));
+                score -= 3;
+            }
+        }
+        if !site_problems.is_empty() {
+            site_issues_list.push(json!({
+                "domain": site.domain,
+                "issues": site_problems
+            }));
+        }
+    }
+
+    // Check key services not running
+    let key_services = ["nginx", "mariadb"];
+    for key in key_services {
+        let installed = services.iter().any(|s| s.service_type == key);
+        if installed && !is_service_running(key) {
+            score -= 10;
+            issues.push(format!("{} is installed but not running", key));
+        }
+    }
+
+    // Clamp score
+    if score < 0 { score = 0; }
+
+    let result = json!({
+        "score": score,
+        "status": if score >= 80 { "good" } else if score >= 50 { "fair" } else { "poor" },
+        "services": service_list,
+        "port_conflicts": port_conflicts,
+        "disk_usage": {
+            "bin_directory": format_size(bin_size),
+            "data_directory": format_size(data_size)
+        },
+        "large_logs": large_logs,
+        "site_issues": site_issues_list,
+        "issues": issues,
+        "sites_count": store.sites.len(),
+        "services_count": services.len(),
+        "services_running": services.iter().filter(|s| is_service_running(&s.name)).count()
+    });
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+fn dir_size(path: &std::path::Path) -> u64 {
+    if !path.exists() { return 0; }
+    let mut total: u64 = 0;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                total += dir_size(&path);
+            } else {
+                total += fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            }
+        }
+    }
+    total
+}
+
+// ─── Blueprint System Tools ─────────────────────────────────────
+
+#[derive(Clone)]
+struct Blueprint {
+    name: &'static str,
+    description: &'static str,
+    services: &'static [&'static str],
+    template: &'static str,
+    scaffold: &'static [&'static str],
+    php_extensions: &'static [&'static str],
+    env_template: Option<&'static str>,
+}
+
+fn get_blueprints() -> Vec<Blueprint> {
+    vec![
+        Blueprint {
+            name: "laravel-vite",
+            description: "Laravel with Vite frontend bundler, MariaDB, and Redis",
+            services: &["nginx", "php", "mariadb", "redis"],
+            template: "laravel",
+            scaffold: &["composer create-project laravel/laravel .", "npm install"],
+            php_extensions: &["pdo_mysql", "mbstring", "openssl", "tokenizer", "xml", "ctype", "json", "bcmath", "redis"],
+            env_template: Some("APP_NAME={{domain}}\nAPP_URL=http://{{domain}}\nDB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE={{db_name}}\nDB_USERNAME=root\nDB_PASSWORD=root\nCACHE_DRIVER=redis\nSESSION_DRIVER=redis\nREDIS_HOST=127.0.0.1\n"),
+        },
+        Blueprint {
+            name: "wordpress-woocommerce",
+            description: "WordPress with WooCommerce-ready configuration",
+            services: &["nginx", "php", "mariadb"],
+            template: "wordpress",
+            scaffold: &["composer create-project johnpbloch/wordpress ."],
+            php_extensions: &["pdo_mysql", "gd", "mbstring", "xml", "curl", "zip", "intl"],
+            env_template: None,
+        },
+        Blueprint {
+            name: "nextjs-fullstack",
+            description: "Next.js full-stack application with nginx reverse proxy",
+            services: &["nginx", "nodejs"],
+            template: "reverse-proxy",
+            scaffold: &["npx create-next-app@latest . --yes"],
+            php_extensions: &[],
+            env_template: None,
+        },
+        Blueprint {
+            name: "astro-static",
+            description: "Astro static site generator",
+            services: &["nginx"],
+            template: "static",
+            scaffold: &["npm create astro@latest . -- --yes"],
+            php_extensions: &[],
+            env_template: None,
+        },
+        Blueprint {
+            name: "django",
+            description: "Django web framework with nginx reverse proxy",
+            services: &["nginx", "python"],
+            template: "django",
+            scaffold: &["pip install django", "django-admin startproject app ."],
+            php_extensions: &[],
+            env_template: Some("DEBUG=True\nSECRET_KEY=change-me\nALLOWED_HOSTS={{domain}},localhost,127.0.0.1\nDATABASE_URL=sqlite:///db.sqlite3\n"),
+        },
+        Blueprint {
+            name: "flask",
+            description: "Flask micro web framework with nginx reverse proxy",
+            services: &["nginx", "python"],
+            template: "django",
+            scaffold: &["pip install flask"],
+            php_extensions: &[],
+            env_template: Some("FLASK_APP=app.py\nFLASK_ENV=development\nFLASK_DEBUG=1\n"),
+        },
+        Blueprint {
+            name: "sveltekit",
+            description: "SvelteKit application with nginx reverse proxy and WebSocket support",
+            services: &["nginx", "nodejs"],
+            template: "sveltekit",
+            scaffold: &["npm create svelte@latest . -- --yes"],
+            php_extensions: &[],
+            env_template: None,
+        },
+        Blueprint {
+            name: "remix",
+            description: "Remix full-stack web framework",
+            services: &["nginx", "nodejs"],
+            template: "remix",
+            scaffold: &["npx create-remix@latest . --yes"],
+            php_extensions: &[],
+            env_template: None,
+        },
+    ]
+}
+
+fn tool_list_blueprints() -> Result<String, String> {
+    let blueprints = get_blueprints();
+    let result: Vec<Value> = blueprints.iter().map(|bp| json!({
+        "name": bp.name,
+        "description": bp.description,
+        "services": bp.services,
+        "template": bp.template
+    })).collect();
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
+fn tool_get_blueprint(name: &str) -> Result<String, String> {
+    if name.is_empty() {
+        return Err("Blueprint name is required".to_string());
+    }
+
+    let blueprints = get_blueprints();
+    let bp = blueprints.iter().find(|b| b.name == name);
+
+    match bp {
+        Some(bp) => {
+            let result = json!({
+                "name": bp.name,
+                "description": bp.description,
+                "services": bp.services,
+                "template": bp.template,
+                "scaffold_commands": bp.scaffold,
+                "php_extensions": bp.php_extensions,
+                "has_env_template": bp.env_template.is_some()
+            });
+            Ok(serde_json::to_string_pretty(&result).unwrap())
+        }
+        None => {
+            let available: Vec<&str> = blueprints.iter().map(|b| b.name).collect();
+            Err(format!("Blueprint '{}' not found. Available: {}", name, available.join(", ")))
+        }
+    }
+}
+
+fn tool_create_from_blueprint(
+    blueprint_name: &str,
+    domain: &str,
+    path: &str,
+    php_version: Option<&str>,
+) -> Result<String, String> {
+    if blueprint_name.is_empty() || domain.is_empty() || path.is_empty() {
+        return Err("Blueprint, domain, and path are required".to_string());
+    }
+
+    let blueprints = get_blueprints();
+    let bp = blueprints.iter().find(|b| b.name == blueprint_name)
+        .ok_or_else(|| {
+            let available: Vec<&str> = blueprints.iter().map(|b| b.name).collect();
+            format!("Blueprint '{}' not found. Available: {}", blueprint_name, available.join(", "))
+        })?;
+
+    let bin_dir = get_bin_dir();
+    let services = scan_services(&bin_dir);
+    let php_ver = php_version.unwrap_or("8.4");
+    let mut steps: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
+
+    // Step 1: Verify required services are installed
+    for required in bp.services {
+        let resolved = if *required == "php" {
+            format!("php-{}", php_ver)
+        } else {
+            required.to_string()
+        };
+
+        let found = services.iter().any(|s| {
+            s.name == resolved || s.service_type == *required
+        });
+
+        if !found {
+            return Err(format!(
+                "Required service '{}' is not installed. Install it first: install_service {{ \"service\": \"{}\" }}",
+                required, required
+            ));
+        }
+    }
+    steps.push("Verified all required services are installed".into());
+
+    // Step 2: Start services that aren't running
+    for required in bp.services {
+        let resolved = if *required == "php" {
+            format!("php-{}", php_ver)
+        } else {
+            required.to_string()
+        };
+
+        let svc = services.iter().find(|s| {
+            s.name == resolved || s.service_type == *required
+        });
+
+        if let Some(svc) = svc {
+            if !is_service_running(&svc.name) {
+                match start_service_process(svc) {
+                    Ok(pid) => {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        steps.push(format!("Started {} (PID: {})", svc.name, pid));
+                    }
+                    Err(e) => warnings.push(format!("Failed to start {}: {}", svc.name, e)),
+                }
+            } else {
+                steps.push(format!("{} already running", svc.name));
+            }
+        }
+    }
+
+    // Step 3: Enable PHP extensions if needed
+    if !bp.php_extensions.is_empty() {
+        let ini_path = bin_dir.join("php").join(php_ver).join("php.ini");
+        if ini_path.exists() {
+            if let Ok(content) = fs::read_to_string(&ini_path) {
+                let mut new_content = content.clone();
+                let mut enabled_exts = Vec::new();
+                for ext in bp.php_extensions {
+                    let disabled = format!(";extension={}", ext);
+                    let enabled = format!("extension={}", ext);
+                    if new_content.contains(&disabled) {
+                        new_content = new_content.replace(&disabled, &enabled);
+                        enabled_exts.push(*ext);
+                    } else if !new_content.contains(&enabled) {
+                        new_content = format!("{}\n{}\n", new_content.trim_end(), enabled);
+                        enabled_exts.push(*ext);
+                    }
+                }
+                if !enabled_exts.is_empty() {
+                    backup_file(&ini_path).ok();
+                    fs::write(&ini_path, &new_content).ok();
+                    steps.push(format!("Enabled PHP extensions: {}", enabled_exts.join(", ")));
+                }
+            }
+        }
+    }
+
+    // Step 4: Create project directory
+    let project_path = std::path::Path::new(path);
+    if !project_path.exists() {
+        fs::create_dir_all(project_path)
+            .map_err(|e| format!("Failed to create project directory: {}", e))?;
+        steps.push(format!("Created directory: {}", path));
+    }
+
+    // Step 5: Create site
+    let site_result = tool_create_site(domain, path, Some(bp.template), Some(php_ver), false);
+    match site_result {
+        Ok(msg) => steps.push(format!("Created site: {}", msg)),
+        Err(e) => {
+            if e.contains("already exists") {
+                warnings.push(format!("Site already exists: {}", domain));
+            } else {
+                warnings.push(format!("Site creation warning: {}", e));
+            }
+        }
+    }
+
+    // Step 6: Run scaffold commands
+    for cmd_str in bp.scaffold {
+        let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+        if parts.is_empty() { continue; }
+
+        let program = parts[0];
+        let cmd_args = &parts[1..];
+
+        // Find the program
+        let program_path = match program {
+            "composer" => {
+                // Use PHP + composer.phar
+                match (find_php_exe(&bin_dir), find_composer_phar(&bin_dir)) {
+                    (Ok(php), Ok(phar)) => {
+                        let mut cmd = hidden_command(&php);
+                        cmd.arg(&phar);
+                        for arg in cmd_args {
+                            cmd.arg(arg);
+                        }
+                        cmd.arg("--no-interaction");
+                        cmd.current_dir(path);
+                        match cmd.output() {
+                            Ok(output) => {
+                                if output.status.success() {
+                                    steps.push(format!("Ran: {}", cmd_str));
+                                } else {
+                                    let stderr = String::from_utf8_lossy(&output.stderr);
+                                    warnings.push(format!("Command '{}' failed: {}", cmd_str, stderr.trim()));
+                                }
+                            }
+                            Err(e) => warnings.push(format!("Failed to run '{}': {}", cmd_str, e)),
+                        }
+                        continue;
+                    }
+                    _ => {
+                        warnings.push(format!("Composer not available, skipping: {}", cmd_str));
+                        continue;
+                    }
+                }
+            }
+            "pip" => {
+                let python = bin_dir.join("python").join("python.exe");
+                if python.exists() {
+                    let mut cmd = hidden_command(&python);
+                    cmd.arg("-m").arg("pip");
+                    for arg in cmd_args {
+                        cmd.arg(arg);
+                    }
+                    cmd.current_dir(path);
+                    match cmd.output() {
+                        Ok(output) => {
+                            if output.status.success() {
+                                steps.push(format!("Ran: {}", cmd_str));
+                            } else {
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                warnings.push(format!("Command '{}' failed: {}", cmd_str, stderr.trim()));
+                            }
+                        }
+                        Err(e) => warnings.push(format!("Failed to run '{}': {}", cmd_str, e)),
+                    }
+                    continue;
+                }
+                warnings.push(format!("Python not available, skipping: {}", cmd_str));
+                continue;
+            }
+            "django-admin" => {
+                let python = bin_dir.join("python").join("python.exe");
+                if python.exists() {
+                    let mut cmd = hidden_command(&python);
+                    cmd.arg("-m").arg("django");
+                    for arg in cmd_args {
+                        cmd.arg(arg);
+                    }
+                    cmd.current_dir(path);
+                    match cmd.output() {
+                        Ok(output) => {
+                            if output.status.success() {
+                                steps.push(format!("Ran: {}", cmd_str));
+                            } else {
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                warnings.push(format!("Command '{}' failed: {}", cmd_str, stderr.trim()));
+                            }
+                        }
+                        Err(e) => warnings.push(format!("Failed to run '{}': {}", cmd_str, e)),
+                    }
+                    continue;
+                }
+                warnings.push(format!("Python not available for django-admin, skipping: {}", cmd_str));
+                continue;
+            }
+            _ => {
+                // Try npx, npm, node from bin/nodejs
+                let node_dir = bin_dir.join("nodejs");
+                let program_exe = if program == "npx" || program == "npm" {
+                    node_dir.join(format!("{}.cmd", program))
+                } else {
+                    PathBuf::from(program)
+                };
+
+                program_exe
+            }
+        };
+
+        let mut cmd = hidden_command(&program_path);
+        for arg in cmd_args {
+            cmd.arg(arg);
+        }
+        cmd.current_dir(path);
+
+        // Add node_modules/.bin to PATH
+        let node_dir = bin_dir.join("nodejs");
+        if node_dir.exists() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            cmd.env("PATH", format!("{};{}", node_dir.display(), current_path));
+        }
+
+        match cmd.output() {
+            Ok(output) => {
+                if output.status.success() {
+                    steps.push(format!("Ran: {}", cmd_str));
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    warnings.push(format!("Command '{}' failed: {}", cmd_str, stderr.trim()));
+                }
+            }
+            Err(e) => warnings.push(format!("Failed to run '{}': {}", cmd_str, e)),
+        }
+    }
+
+    // Step 7: Write .env if template exists
+    if let Some(env_tpl) = bp.env_template {
+        let db_name = domain.replace('.', "_").replace('-', "_");
+        let env_content = env_tpl
+            .replace("{{domain}}", domain)
+            .replace("{{db_name}}", &db_name);
+
+        let env_path = project_path.join(".env");
+        if !env_path.exists() {
+            fs::write(&env_path, &env_content).ok();
+            steps.push("Created .env file".into());
+        } else {
+            warnings.push(".env file already exists, skipped".into());
+        }
+    }
+
+    let result = json!({
+        "blueprint": bp.name,
+        "domain": domain,
+        "path": path,
+        "steps": steps,
+        "warnings": warnings,
+        "status": if warnings.is_empty() { "success" } else { "completed_with_warnings" }
+    });
+
+    Ok(serde_json::to_string_pretty(&result).unwrap())
+}
+
 // ─── Utilities ───────────────────────────────────────────────────
 
 fn chrono_now() -> String {
@@ -3472,7 +4574,7 @@ fn chrono_now() -> String {
 // ─── Entry Point ─────────────────────────────────────────────────
 
 fn main() {
-    eprintln!("[orbit-mcp] Orbit MCP Server v1.0.0 starting...");
+    eprintln!("[orbit-mcp] Orbit MCP Server v1.1.0 starting...");
     eprintln!("[orbit-mcp] Data dir: {}", get_orbit_data_dir().display());
 
     // Standby mode: process stays alive without reading stdin
