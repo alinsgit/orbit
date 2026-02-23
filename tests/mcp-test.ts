@@ -602,6 +602,209 @@ const tests: TestCase[] = [
     },
   },
 
+  // ═══════════════════ Composer ═══════════════════
+  {
+    name: "Composer install (nonexistent path → error)",
+    tool: "composer_install",
+    args: { project_path: "C:\\nonexistent\\path\\__mcp_test__" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for nonexistent project path";
+      return null;
+    },
+  },
+  {
+    name: "Composer require (nonexistent path → error)",
+    tool: "composer_require",
+    args: { project_path: "C:\\nonexistent\\path\\__mcp_test__", package: "laravel/framework" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for nonexistent project path";
+      return null;
+    },
+  },
+  {
+    name: "Composer run (nonexistent path → error)",
+    tool: "composer_run",
+    args: { project_path: "C:\\nonexistent\\path\\__mcp_test__", script: "test" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for nonexistent project path";
+      return null;
+    },
+  },
+
+  // ═══════════════════ Site Config ═══════════════════
+  {
+    name: "Read site config (nonexistent → error)",
+    tool: "read_site_config",
+    args: { domain: "__nonexistent-domain__.test" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for nonexistent site config";
+      return null;
+    },
+  },
+
+  // ═══════════════════ Hosts (destructive) ═══════════════════
+  {
+    name: "Add hosts entry",
+    tool: "hosts_add",
+    args: { domain: "__mcp-test-hosts__.test" },
+    destructive: true,
+    validate: (r) => {
+      // May fail without admin privileges — both OK and error are acceptable
+      return null;
+    },
+  },
+  {
+    name: "Remove hosts entry",
+    tool: "hosts_remove",
+    args: { domain: "__mcp-test-hosts__.test" },
+    destructive: true,
+    dependsOn: "Add hosts entry",
+    validate: (r) => {
+      return null;
+    },
+  },
+
+  // ═══════════════════ Batch Operations (destructive) ═══════════════════
+  {
+    name: "Start all services",
+    tool: "start_all_services",
+    destructive: true,
+    validate: (r) => {
+      if (isError(r)) return `Failed to start all services: ${getContent(r)}`;
+      return null;
+    },
+  },
+  {
+    name: "Stop all services",
+    tool: "stop_all_services",
+    destructive: true,
+    validate: (r) => {
+      if (isError(r)) return `Failed to stop all services: ${getContent(r)}`;
+      return null;
+    },
+  },
+
+  // ═══════════════════ Log Management (destructive) ═══════════════════
+  {
+    name: "Clear log (nonexistent → error)",
+    tool: "clear_log",
+    args: { name: "__nonexistent__/fake.log" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for nonexistent log";
+      return null;
+    },
+  },
+
+  // ═══════════════════ Install/Uninstall ═══════════════════
+  {
+    name: "Install service (empty name → error)",
+    tool: "install_service",
+    args: { service: "" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for empty service name";
+      return null;
+    },
+  },
+
+  // ═══════════════════ Diagnostics ═══════════════════
+  {
+    name: "Diagnose service (nginx)",
+    tool: "diagnose_service",
+    args: { name: "nginx" },
+    validate: (r) => {
+      if (isError(r)) return `Failed to diagnose nginx: ${getContent(r)}`;
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (!data?.status) return "Missing status in diagnosis";
+      if (!["healthy", "degraded", "down", "not_installed"].includes(data.status))
+        return `Unexpected status: ${data.status}`;
+      return null;
+    },
+  },
+  {
+    name: "Diagnose service (unknown → error)",
+    tool: "diagnose_service",
+    args: { name: "nonexistent-xyz" },
+    validate: (r) => {
+      if (isError(r)) return null; // Expected error
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (data?.status === "not_installed") return null; // Also acceptable
+      return "Expected error or not_installed for unknown service";
+    },
+  },
+  {
+    name: "Diagnose site (nonexistent)",
+    tool: "diagnose_site",
+    args: { domain: "__nonexistent__.test" },
+    validate: (r) => {
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (!data?.status) return "Missing status in site diagnosis";
+      return null;
+    },
+  },
+  {
+    name: "Analyze logs",
+    tool: "analyze_logs",
+    args: { lines: 50 },
+    validate: (r) => {
+      if (isError(r)) return `Failed to analyze logs: ${getContent(r)}`;
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (!data) return "Expected JSON response from analyze_logs";
+      return null;
+    },
+  },
+  {
+    name: "Get health report",
+    tool: "get_health_report",
+    validate: (r) => {
+      if (isError(r)) return `Failed to get health report: ${getContent(r)}`;
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (typeof data?.score !== "number") return "Missing health score";
+      if (!Array.isArray(data?.services)) return "Missing services array";
+      return null;
+    },
+  },
+
+  // ═══════════════════ Blueprints ═══════════════════
+  {
+    name: "List blueprints",
+    tool: "list_blueprints",
+    validate: (r) => {
+      if (isError(r)) return `Failed to list blueprints: ${getContent(r)}`;
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (!Array.isArray(data)) return "Expected array of blueprints";
+      if (data.length === 0) return "No blueprints found";
+      return null;
+    },
+  },
+  {
+    name: "Get blueprint (laravel-vite)",
+    tool: "get_blueprint",
+    args: { name: "laravel-vite" },
+    validate: (r) => {
+      if (isError(r)) return `Failed to get blueprint: ${getContent(r)}`;
+      const text = getContent(r);
+      const data = parseJson(text);
+      if (!data?.name) return "Missing blueprint name";
+      if (!Array.isArray(data?.services)) return "Missing services array";
+      return null;
+    },
+  },
+  {
+    name: "Get blueprint (nonexistent → error)",
+    tool: "get_blueprint",
+    args: { name: "__nonexistent_blueprint__" },
+    validate: (r) => {
+      if (!isError(r)) return "Expected error for nonexistent blueprint";
+      return null;
+    },
+  },
+
   // ═══════════════════ Edge Cases ═══════════════════
   {
     name: "Empty tool args",

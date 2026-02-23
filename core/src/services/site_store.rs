@@ -19,12 +19,18 @@ pub struct SiteMetadata {
     pub web_server: String,
     #[serde(default)]
     pub dev_port: Option<u16>,
+    #[serde(default = "default_timestamp")]
     pub created_at: String,
+    #[serde(default = "default_timestamp")]
     pub updated_at: String,
 }
 
 fn default_web_server() -> String {
     "nginx".to_string()
+}
+
+fn default_timestamp() -> String {
+    chrono::Utc::now().to_rfc3339()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
