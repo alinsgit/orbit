@@ -3,13 +3,17 @@ import {
     getCliStatus,
     installCli,
     uninstallCli,
-    CliStatus
+    checkCliUpdate,
+    updateCli,
+    CliStatus,
+    BinaryUpdateInfo
 } from '../lib/api'
 import {
     Download,
     Trash2,
     RefreshCw,
     TerminalSquare,
+    ArrowUpCircle
 } from 'lucide-react'
 import { useApp } from '../lib/AppContext'
 import { InfoTooltip } from './InfoTooltip'
@@ -19,12 +23,16 @@ export function CliManager() {
     const [status, setStatus] = useState<CliStatus | null>(null)
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState<string | null>(null)
+    const [updateInfo, setUpdateInfo] = useState<BinaryUpdateInfo | null>(null)
 
     const loadStatus = async () => {
         try {
             setLoading(true)
             const result = await getCliStatus()
             setStatus(result)
+            if (result.installed) {
+                checkCliUpdate().then(setUpdateInfo).catch(() => {})
+            }
         } catch (err) {
             addToast({ type: 'error', message: 'Failed to load CLI status' })
             console.error(err)
@@ -63,6 +71,20 @@ export function CliManager() {
         }
     }
 
+    const handleUpdate = async () => {
+        try {
+            setActionLoading('update')
+            await updateCli()
+            addToast({ type: 'success', message: 'CLI updated successfully. Restart terminal to use new version.' })
+            setUpdateInfo(null)
+            await loadStatus()
+        } catch (err) {
+            addToast({ type: 'error', message: 'Failed to update CLI' })
+        } finally {
+            setActionLoading(null)
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
@@ -89,7 +111,12 @@ export function CliManager() {
                         </div>
                     }
                 />
-                <div className="ml-auto">
+                <div className="ml-auto flex items-center gap-2">
+                    {updateInfo?.has_update && (
+                        <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs font-medium">
+                            Update Available (v{updateInfo.latest_version})
+                        </span>
+                    )}
                     {status?.installed ? (
                         <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs font-medium">
                             Installed{status.version ? ` • ${status.version}` : ''}
@@ -140,18 +167,34 @@ export function CliManager() {
                         Install
                     </button>
                 ) : (
-                    <button
-                        onClick={handleUninstall}
-                        disabled={actionLoading !== null}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                    >
-                        {actionLoading === 'uninstall' ? (
-                            <RefreshCw size={16} className="animate-spin" />
-                        ) : (
-                            <Trash2 size={16} />
+                    <>
+                        {updateInfo?.has_update && (
+                            <button
+                                onClick={handleUpdate}
+                                disabled={actionLoading !== null}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {actionLoading === 'update' ? (
+                                    <RefreshCw size={16} className="animate-spin" />
+                                ) : (
+                                    <ArrowUpCircle size={16} />
+                                )}
+                                Update
+                            </button>
                         )}
-                        Uninstall
-                    </button>
+                        <button
+                            onClick={handleUninstall}
+                            disabled={actionLoading !== null}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                            {actionLoading === 'uninstall' ? (
+                                <RefreshCw size={16} className="animate-spin" />
+                            ) : (
+                                <Trash2 size={16} />
+                            )}
+                            Uninstall
+                        </button>
+                    </>
                 )}
             </div>
         </div>

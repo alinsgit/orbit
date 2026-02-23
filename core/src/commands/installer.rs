@@ -108,16 +108,6 @@ pub async fn download_service(
     }
 }
 
-/// Move contents from a subfolder up to parent (used when ZIP has nested structure)
-fn flatten_subfolder(parent: &PathBuf, subfolder_name: &str) -> Result<(), String> {
-    let subfolder = parent.join(subfolder_name);
-    if subfolder.exists() && subfolder.is_dir() {
-        log::info!("Flattening {}/{} to {}", parent.display(), subfolder_name, parent.display());
-        move_subfolder_up(&subfolder, parent)?;
-    }
-    Ok(())
-}
-
 /// Move contents from source directory to destination (used for Apache24 subfolder)
 fn move_subfolder_up(source: &PathBuf, dest: &PathBuf) -> Result<(), String> {
     let entries = std::fs::read_dir(source)

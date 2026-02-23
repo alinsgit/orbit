@@ -16,6 +16,7 @@ pub mod php_registry;
 pub mod phpmyadmin;
 pub mod process;
 pub mod registry;
+pub mod site_process;
 pub mod site_store;
 pub mod sites;
 pub mod ssl;

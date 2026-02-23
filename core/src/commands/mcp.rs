@@ -1,5 +1,5 @@
 use tauri::{command, AppHandle};
-use crate::services::mcp::{McpManager, McpStatus};
+use crate::services::mcp::{McpManager, McpStatus, BinaryUpdateInfo};
 
 #[command]
 pub fn get_mcp_status(app: AppHandle) -> Result<McpStatus, String> {
@@ -35,4 +35,15 @@ pub fn stop_mcp() -> Result<String, String> {
 pub fn get_mcp_binary_path(app: AppHandle) -> Result<String, String> {
     let path = McpManager::get_exe_path(&app)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+#[command]
+pub async fn check_mcp_update(app: AppHandle) -> Result<BinaryUpdateInfo, String> {
+    McpManager::check_for_update(&app).await
+}
+
+#[command]
+pub async fn update_mcp(app: AppHandle) -> Result<String, String> {
+    McpManager::update(&app).await?;
+    Ok("MCP server updated successfully".to_string())
 }
