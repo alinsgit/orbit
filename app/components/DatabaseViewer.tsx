@@ -486,7 +486,7 @@ export default function DatabaseViewer() {
 
               {!hasRequiredServices && (
                 <p className="text-sm text-amber-400 mt-3">
-                  Please install the selected Database Engine, PHP, and Nginx from the Services tab first.
+                  Please install {engineTab === 'mariadb' ? 'MariaDB' : 'PostgreSQL'}, PHP, and Nginx from the Services tab first. Web tools (Adminer{engineTab === 'mariadb' ? ', phpMyAdmin' : ''}) require PHP and Nginx to run.
                 </p>
               )}
             </div>
@@ -634,7 +634,7 @@ export default function DatabaseViewer() {
             <div className="bg-surface-raised rounded-xl p-4 space-y-3">
               <h3 className="text-sm font-medium text-content-secondary mb-3">MongoDB Engine</h3>
               <p className="text-sm text-content-muted">
-                MongoDB is natively managed through standard TCP socket connections over the background mongod daemon. Visual Quick Manage is currently available for MariaDB; use external tools (like MongoDB Compass) to manage your NoSQL schemas natively.
+                MongoDB is natively managed through standard TCP socket connections over the background mongod daemon. Visual Quick Manage is available for MariaDB and PostgreSQL; use external tools (like MongoDB Compass) to manage your NoSQL schemas natively.
               </p>
             </div>
 

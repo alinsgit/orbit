@@ -39,6 +39,9 @@ impl TemplateManager {
             ("wordpress", TEMPLATE_WORDPRESS),
             ("litecart", TEMPLATE_LITECART),
             ("reverse-proxy", TEMPLATE_REVERSE_PROXY),
+            ("django", TEMPLATE_DJANGO),
+            ("sveltekit", TEMPLATE_SVELTEKIT),
+            ("remix", TEMPLATE_REMIX),
         ];
 
         for (name, content) in defaults {
@@ -67,6 +70,9 @@ impl TemplateManager {
             ("wordpress", "WordPress CMS site"),
             ("litecart", "LiteCart e-commerce site"),
             ("reverse-proxy", "Reverse proxy for JS frameworks"),
+            ("django", "Django/Flask reverse proxy with static/media"),
+            ("sveltekit", "SvelteKit reverse proxy with WebSocket HMR"),
+            ("remix", "Remix reverse proxy with build caching"),
         ]);
 
         if let Ok(entries) = fs::read_dir(&templates_dir) {
@@ -125,6 +131,9 @@ impl TemplateManager {
                 "wordpress" => Ok(TEMPLATE_WORDPRESS.to_string()),
                 "litecart" => Ok(TEMPLATE_LITECART.to_string()),
                 "reverse-proxy" => Ok(TEMPLATE_REVERSE_PROXY.to_string()),
+                "django" => Ok(TEMPLATE_DJANGO.to_string()),
+                "sveltekit" => Ok(TEMPLATE_SVELTEKIT.to_string()),
+                "remix" => Ok(TEMPLATE_REMIX.to_string()),
                 _ => Err(format!("Template not found: {}", name)),
             }
         }
@@ -151,6 +160,9 @@ impl TemplateManager {
             "wordpress" => Ok(TEMPLATE_WORDPRESS),
             "litecart" => Ok(TEMPLATE_LITECART),
             "reverse-proxy" => Ok(TEMPLATE_REVERSE_PROXY),
+            "django" => Ok(TEMPLATE_DJANGO),
+            "sveltekit" => Ok(TEMPLATE_SVELTEKIT),
+            "remix" => Ok(TEMPLATE_REMIX),
             _ => Err(format!("No default template for: {}", name)),
         }?;
 
@@ -159,7 +171,7 @@ impl TemplateManager {
 
     /// Delete a custom template
     pub fn delete_template(bin_path: &PathBuf, name: &str) -> Result<(), String> {
-        let defaults = ["http", "https", "static", "laravel", "wordpress", "litecart", "reverse-proxy"];
+        let defaults = ["http", "https", "static", "laravel", "wordpress", "litecart", "reverse-proxy", "django", "sveltekit", "remix"];
         if defaults.contains(&name) {
             return Err("Cannot delete default templates".to_string());
         }
@@ -823,6 +835,112 @@ pub const APACHE_TEMPLATE_LITECART: &str = r#"<VirtualHost *:{{port}}>
 </VirtualHost>
 "#;
 
+/// Django reverse proxy template (Python WSGI/ASGI apps)
+pub const TEMPLATE_DJANGO: &str = r#"server {
+    listen       {{port}};
+    server_name  {{domain}};
+
+    access_log  logs/{{domain}}.access.log;
+    error_log   logs/{{domain}}.error.log;
+
+    # Static files served directly by nginx
+    location /static/ {
+        alias "{{path}}/staticfiles/";
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Media files
+    location /media/ {
+        alias "{{path}}/media/";
+        expires 7d;
+    }
+
+    # Proxy to Django dev server
+    location / {
+        proxy_pass http://127.0.0.1:{{dev_port}};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+    }
+}
+"#;
+
+/// SvelteKit reverse proxy template with WebSocket support
+pub const TEMPLATE_SVELTEKIT: &str = r#"server {
+    listen       {{port}};
+    server_name  {{domain}};
+
+    access_log  logs/{{domain}}.access.log;
+    error_log   logs/{{domain}}.error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{dev_port}};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        # SvelteKit HMR needs longer timeouts
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # SvelteKit Vite HMR WebSocket
+    location /__vite_hmr {
+        proxy_pass http://127.0.0.1:{{dev_port}}/__vite_hmr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400s;
+    }
+}
+"#;
+
+/// Remix reverse proxy template
+pub const TEMPLATE_REMIX: &str = r#"server {
+    listen       {{port}};
+    server_name  {{domain}};
+
+    access_log  logs/{{domain}}.access.log;
+    error_log   logs/{{domain}}.error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{dev_port}};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Static assets with caching
+    location /build/ {
+        proxy_pass http://127.0.0.1:{{dev_port}}/build/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+"#;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SiteTemplate {
     Http,
@@ -832,6 +950,9 @@ pub enum SiteTemplate {
     WordPress,
     LiteCart,
     ReverseProxy,
+    Django,
+    SvelteKit,
+    Remix,
 }
 
 impl SiteTemplate {
@@ -851,6 +972,9 @@ impl SiteTemplate {
             SiteTemplate::WordPress => TEMPLATE_WORDPRESS,
             SiteTemplate::LiteCart => TEMPLATE_LITECART,
             SiteTemplate::ReverseProxy => TEMPLATE_REVERSE_PROXY,
+            SiteTemplate::Django => TEMPLATE_DJANGO,
+            SiteTemplate::SvelteKit => TEMPLATE_SVELTEKIT,
+            SiteTemplate::Remix => TEMPLATE_REMIX,
         }
     }
 
@@ -862,7 +986,10 @@ impl SiteTemplate {
             SiteTemplate::Laravel => APACHE_TEMPLATE_LARAVEL,
             SiteTemplate::WordPress => APACHE_TEMPLATE_WORDPRESS,
             SiteTemplate::LiteCart => APACHE_TEMPLATE_LITECART,
-            SiteTemplate::ReverseProxy => APACHE_TEMPLATE_REVERSE_PROXY,
+            SiteTemplate::ReverseProxy
+            | SiteTemplate::Django
+            | SiteTemplate::SvelteKit
+            | SiteTemplate::Remix => APACHE_TEMPLATE_REVERSE_PROXY,
         }
     }
 

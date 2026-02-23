@@ -70,6 +70,11 @@ export function isConnected(): boolean {
   return db !== null;
 }
 
+// Get currently connected engine
+export function getConnectedEngine(): 'mariadb' | 'postgresql' | 'mongodb' | null {
+  return currentEngine;
+}
+
 const getVal = (result: Record<string, any>[]) => {
   if (!result[0]) return '';
   return result[0].Value || result[0].value || Object.values(result[0])[1] || Object.values(result[0])[0] || '';
