@@ -208,7 +208,7 @@ export function McpManager() {
         <InfoTooltip
           content={
             <div className="space-y-2 text-content-secondary">
-              <p>Model Context Protocol (MCP) allows AI tools like Claude Code, Cursor, and Windsurf to manage your Orbit services, sites, and databases.</p>
+              <p>Model Context Protocol (MCP) allows AI-powered editors and tools to manage your Orbit services, sites, and databases.</p>
               <p className="text-xs text-content-muted">Install the MCP server, then add the config snippet to your AI tool.</p>
             </div>
           }
