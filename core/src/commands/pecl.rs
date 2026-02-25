@@ -3,11 +3,14 @@
 //! - Linux/macOS: Uses `pecl install` command
 //! - Windows: Downloads DLL from windows.php.net or alternative sources
 
+#[cfg(target_os = "windows")]
 use crate::services::download::download_file;
 use crate::services::validation::validate_php_version;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "windows")]
+use std::path::Path;
+use std::path::PathBuf;
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 use tauri::{command, AppHandle, Manager};
@@ -133,6 +136,7 @@ fn get_extension_info() -> Vec<(&'static str, &'static str, &'static str)> {
 }
 
 /// Fetch available versions for an extension from PECL REST API
+#[allow(dead_code)]
 async fn fetch_pecl_versions(extension_name: &str) -> Vec<String> {
     let url = format!(
         "https://pecl.php.net/rest/r/{}/allreleases.xml",
@@ -404,13 +408,13 @@ fn get_windows_download_urls(extension_name: &str, php_version: &str, dynamic_ve
 /// Install extension on Linux/macOS using pecl command
 #[cfg(not(target_os = "windows"))]
 async fn install_extension_unix(
-    bin_path: &PathBuf,
-    php_version: &str,
+    bin_path: &Path,
+    _php_version: &str,
     extension_name: &str,
 ) -> Result<String, String> {
-    let php_exe = bin_path.join("bin").join("php");
+    let _php_exe = bin_path.join("bin").join("php");
     let pecl_exe = bin_path.join("bin").join("pecl");
-    let phpize_exe = bin_path.join("bin").join("phpize");
+    let _phpize_exe = bin_path.join("bin").join("phpize");
 
     // Check if pecl exists
     if !pecl_exe.exists() {

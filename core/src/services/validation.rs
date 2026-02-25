@@ -191,6 +191,7 @@ pub fn sanitize_for_nginx(value: &str) -> String {
 }
 
 /// Sanitizes a string for safe use in PowerShell
+#[cfg(target_os = "windows")]
 pub fn sanitize_for_powershell(value: &str) -> String {
     // Escape single quotes by doubling them (PowerShell convention)
     // Also remove dangerous characters
@@ -400,6 +401,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_sanitize_for_powershell() {
         assert_eq!(sanitize_for_powershell("it's"), "it''s");
         assert_eq!(sanitize_for_powershell("test`cmd"), "testcmd");

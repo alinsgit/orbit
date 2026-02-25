@@ -35,6 +35,7 @@ use std::process::Command;
 
 /// Creates a Command that runs without a visible console window on Windows.
 pub fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
     let mut cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {

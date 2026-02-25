@@ -23,6 +23,7 @@ pub enum ServiceType {
     Mailpit,
 }
 
+#[cfg(target_os = "windows")]
 use super::hidden_command;
 
 /// Check if a port is in use
