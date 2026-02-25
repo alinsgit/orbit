@@ -261,6 +261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }).catch(err => {
       console.error('Autostart failed:', err);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [services, settings]);
 
   // Refresh services when switching to dashboard tab (silent)
@@ -268,6 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (activeTab === 'services') {
       refreshServices();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   return (

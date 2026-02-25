@@ -54,6 +54,7 @@ export function SettingsManager() {
     loadVersionInfo();
     handleCheckForUpdates();
     loadWorkspaceSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadWorkspaceSettings = async () => {

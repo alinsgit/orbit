@@ -221,6 +221,7 @@ export function ServiceManager() {
 
   useEffect(() => {
     fetchAvailable();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check PATH statuses when services change (debounced)
@@ -231,6 +232,7 @@ export function ServiceManager() {
       }, 500);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [services.length]);
 
   const handleInstall = async (serviceType: string, version: ServiceVersion) => {

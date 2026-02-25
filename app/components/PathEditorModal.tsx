@@ -17,6 +17,7 @@ export function PathEditorModal({ onClose }: PathEditorModalProps) {
   // Initial load
   useEffect(() => {
     fetchPaths();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchPaths = async () => {

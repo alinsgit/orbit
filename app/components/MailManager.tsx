@@ -41,6 +41,7 @@ export function MailManager() {
 
   useEffect(() => {
     loadStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleInstall = async () => {
@@ -49,7 +50,7 @@ export function MailManager() {
       await installMailpit()
       addToast({ type: 'success', message: 'Mailpit installed successfully' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to install Mailpit' })
     } finally {
       setActionLoading(null)
@@ -63,7 +64,7 @@ export function MailManager() {
       await uninstallMailpit()
       addToast({ type: 'success', message: 'Mailpit uninstalled' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to uninstall Mailpit' })
     } finally {
       setActionLoading(null)
@@ -76,7 +77,7 @@ export function MailManager() {
       await startMailpit()
       addToast({ type: 'success', message: 'Mailpit started' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to start Mailpit' })
     } finally {
       setActionLoading(null)
@@ -89,7 +90,7 @@ export function MailManager() {
       await stopMailpit()
       addToast({ type: 'success', message: 'Mailpit stopped' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to stop Mailpit' })
     } finally {
       setActionLoading(null)

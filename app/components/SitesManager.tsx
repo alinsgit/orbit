@@ -311,6 +311,7 @@ export function SitesManager() {
     if (sites.length > 0) {
       refreshAppStatus(sites);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sites.length]);
 
   const handleStartApp = async (domain: string) => {
@@ -747,7 +748,7 @@ export function SitesManager() {
           try {
             url = await getTunnelUrl();
             if (url) break;
-          } catch(e) {
+          } catch(_e) {
             // Ngrok node might still be waking up, wait 1 sec
             await new Promise(r => setTimeout(r, 1000));
           }

@@ -54,6 +54,7 @@ export function McpManager() {
 
   useEffect(() => {
     loadStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleInstall = async () => {
@@ -62,7 +63,7 @@ export function McpManager() {
       await installMcp()
       addToast({ type: 'success', message: 'MCP server installed successfully' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to install MCP server' })
     } finally {
       setActionLoading(null)
@@ -76,7 +77,7 @@ export function McpManager() {
       await uninstallMcp()
       addToast({ type: 'success', message: 'MCP server uninstalled' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to uninstall MCP server' })
     } finally {
       setActionLoading(null)
@@ -89,7 +90,7 @@ export function McpManager() {
       await startMcp()
       addToast({ type: 'success', message: 'MCP server started' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to start MCP server' })
     } finally {
       setActionLoading(null)
@@ -102,7 +103,7 @@ export function McpManager() {
       await stopMcp()
       addToast({ type: 'success', message: 'MCP server stopped' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to stop MCP server' })
     } finally {
       setActionLoading(null)
@@ -116,7 +117,7 @@ export function McpManager() {
       addToast({ type: 'success', message: 'MCP server updated successfully' })
       setUpdateInfo(null)
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to update MCP server' })
     } finally {
       setActionLoading(null)

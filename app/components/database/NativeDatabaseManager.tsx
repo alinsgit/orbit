@@ -106,6 +106,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
       port: dbEngine === 'postgresql' ? 5432 : 3306,
       user: dbEngine === 'postgresql' ? 'postgres' : 'root',
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbEngine]);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -143,6 +144,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
       // Connected to a different engine — don't show this engine's data
       setConnected(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleConnect = async () => {
