@@ -160,7 +160,7 @@ jobs:
           chmod +x orbit-mcp-macos-x64
 
       - name: Upload CLI & MCP to Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
