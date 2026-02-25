@@ -1,4 +1,6 @@
-use crate::services::validation::{validate_domain, sanitize_for_powershell};
+use crate::services::validation::validate_domain;
+#[cfg(target_os = "windows")]
+use crate::services::validation::sanitize_for_powershell;
 use std::fs;
 use std::io::Write;
 use std::process::Command;

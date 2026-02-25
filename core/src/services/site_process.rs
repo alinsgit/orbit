@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 
+#[cfg(target_os = "windows")]
 use super::hidden_command;
 
 /// Manages site-level application processes (e.g., `npm run dev`, `python manage.py runserver`).
@@ -106,7 +107,7 @@ impl SiteProcessManager {
             #[cfg(not(target_os = "windows"))]
             {
                 let _ = Command::new("kill")
-                    .args(&["-TERM", &pid.to_string()])
+                    .args(["-TERM", &pid.to_string()])
                     .output();
             }
 
@@ -161,7 +162,7 @@ impl SiteProcessManager {
                 #[cfg(not(target_os = "windows"))]
                 {
                     let _ = Command::new("kill")
-                        .args(&["-TERM", &pid.to_string()])
+                        .args(["-TERM", &pid.to_string()])
                         .output();
                 }
 
