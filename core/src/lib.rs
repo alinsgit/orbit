@@ -106,6 +106,8 @@ pub fn run() {
         commands::sites::update_site,
         commands::sites::delete_site,
         commands::sites::regenerate_site_config,
+        commands::sites::read_site_config,
+        commands::sites::write_site_config,
         commands::sites::scaffold_basic_project,
         // Nginx
         commands::sites::nginx_test_config,
@@ -224,6 +226,13 @@ pub fn run() {
         commands::mailpit::start_mailpit,
         commands::mailpit::stop_mailpit,
         commands::mailpit::get_mailpit_exe_path,
+        // Meilisearch (Search engine)
+        commands::meilisearch::get_meilisearch_status,
+        commands::meilisearch::install_meilisearch,
+        commands::meilisearch::uninstall_meilisearch,
+        commands::meilisearch::start_meilisearch,
+        commands::meilisearch::stop_meilisearch,
+        commands::meilisearch::get_meilisearch_exe_path,
         // PECL Extension Manager
         commands::pecl::get_available_extensions,
         commands::pecl::install_pecl_extension,
@@ -234,6 +243,9 @@ pub fn run() {
         commands::backup::export_all_databases,
         commands::backup::import_sql,
         commands::backup::rebuild_database,
+        // PostgreSQL Backup/Import
+        commands::backup::pg_export_database,
+        commands::backup::pg_import_sql,
         // Updater
         commands::updater::check_for_updates,
         commands::updater::get_current_version,
@@ -263,6 +275,15 @@ pub fn run() {
         commands::cli::uninstall_cli,
         commands::cli::check_cli_update,
         commands::cli::update_cli,
+        // MongoDB
+        commands::mongodb::mongo_list_databases,
+        commands::mongodb::mongo_list_collections,
+        commands::mongodb::mongo_db_stats,
+        commands::mongodb::mongo_drop_database,
+        commands::mongodb::mongo_run_command,
+        // Blueprints
+        commands::blueprints::list_blueprints,
+        commands::blueprints::create_from_blueprint,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

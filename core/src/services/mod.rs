@@ -28,6 +28,8 @@ pub mod tunnel;
 pub mod terminal;
 pub mod mcp;
 pub mod cli;
+pub mod meilisearch;
+pub mod blueprints;
 
 use std::process::Command;
 

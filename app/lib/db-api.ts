@@ -282,7 +282,7 @@ export async function alterDatabaseCharset(name: string, charset: string, collat
   if (!db) throw new Error('Not connected');
 
   if (currentEngine === 'postgresql') {
-    // Cannot typically alter collation natively like this in PG
+    throw new Error('PostgreSQL does not support altering database encoding after creation. Recreate the database with the desired encoding instead.');
   } else {
     const systemDbs = ['mysql', 'information_schema', 'performance_schema', 'sys'];
     if (systemDbs.includes(name.toLowerCase())) {

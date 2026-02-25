@@ -192,6 +192,118 @@ impl BackupManager {
         ))
     }
 
+    // ─── PostgreSQL Backup ──────────────────────────────────────
+
+    /// Find pg_dump executable
+    pub fn find_pg_dump_exe(pg_root: &PathBuf) -> Result<PathBuf, String> {
+        let paths = [
+            pg_root.join("bin").join(if cfg!(windows) { "pg_dump.exe" } else { "pg_dump" }),
+            pg_root.join(if cfg!(windows) { "pg_dump.exe" } else { "pg_dump" }),
+        ];
+        for path in paths {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+        Err("pg_dump executable not found".to_string())
+    }
+
+    /// Find psql executable
+    pub fn find_psql_exe(pg_root: &PathBuf) -> Result<PathBuf, String> {
+        let paths = [
+            pg_root.join("bin").join(if cfg!(windows) { "psql.exe" } else { "psql" }),
+            pg_root.join(if cfg!(windows) { "psql.exe" } else { "psql" }),
+        ];
+        for path in paths {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+        Err("psql executable not found".to_string())
+    }
+
+    /// Export a PostgreSQL database to a .sql file
+    pub fn pg_export_database(
+        pg_root: &PathBuf,
+        db_name: &str,
+        output_path: &str,
+    ) -> Result<String, String> {
+        let pg_dump = Self::find_pg_dump_exe(pg_root)?;
+
+        log::info!("Exporting PostgreSQL database '{}' to '{}'", db_name, output_path);
+
+        let output = hidden_command(&pg_dump)
+            .arg("--host=127.0.0.1")
+            .arg("--port=5432")
+            .arg("-U")
+            .arg("postgres")
+            .arg("--no-password")
+            .arg("-f")
+            .arg(output_path)
+            .arg(db_name)
+            .output()
+            .map_err(|e| format!("Failed to run pg_dump: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("PostgreSQL export failed: {}", stderr));
+        }
+
+        let size = fs::metadata(output_path).map(|m| m.len()).unwrap_or(0);
+        log::info!("PostgreSQL export complete: {} bytes", size);
+
+        Ok(format!("Database '{}' exported successfully ({} bytes)", db_name, size))
+    }
+
+    /// Import a .sql file into a PostgreSQL database
+    pub fn pg_import_sql(
+        pg_root: &PathBuf,
+        db_name: &str,
+        sql_path: &str,
+    ) -> Result<String, String> {
+        let psql = Self::find_psql_exe(pg_root)?;
+
+        if !std::path::Path::new(sql_path).exists() {
+            return Err(format!("SQL file not found: {}", sql_path));
+        }
+
+        let sql_content = fs::read(sql_path)
+            .map_err(|e| format!("Failed to read SQL file: {}", e))?;
+        let file_size = sql_content.len();
+
+        log::info!("Importing '{}' ({} bytes) into PostgreSQL database '{}'", sql_path, file_size, db_name);
+
+        let mut child = hidden_command(&psql)
+            .arg("--host=127.0.0.1")
+            .arg("--port=5432")
+            .arg("-U")
+            .arg("postgres")
+            .arg("--no-password")
+            .arg("-d")
+            .arg(db_name)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start psql: {}", e))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(&sql_content)
+                .map_err(|e| format!("Failed to write to psql stdin: {}", e))?;
+        }
+
+        let output = child.wait_with_output()
+            .map_err(|e| format!("Failed to wait for psql: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("PostgreSQL import failed: {}", stderr));
+        }
+
+        log::info!("PostgreSQL import complete for database '{}'", db_name);
+        Ok(format!("SQL file imported successfully into '{}' ({} bytes)", db_name, file_size))
+    }
+
     /// Rebuild a database: drop → create → import
     pub fn rebuild_database(
         mariadb_root: &PathBuf,

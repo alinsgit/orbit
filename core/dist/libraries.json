@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/alinsgit/orbit-libraries/main/schema.json",
-  "updated": "2026-02-21T01:27:19.513Z",
+  "updated": "2026-02-25T16:25:57.958Z",
   "version": "1.2.0",
   "services": {
     "php": {
@@ -110,8 +110,8 @@
         "2.4.66-VS18": {
           "latest": "2.4.66",
           "windows": {
-            "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.66-260131-Win64-VS18.zip",
-            "filename": "httpd-2.4.66-260131-Win64-VS18.zip"
+            "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.66-260223-Win64-VS18.zip",
+            "filename": "httpd-2.4.66-260223-Win64-VS18.zip"
           }
         },
         "2.4.66-VS17": {
@@ -342,17 +342,17 @@
           }
         },
         "24": {
-          "latest": "24.13.1",
+          "latest": "24.14.0",
           "windows": {
-            "url": "https://nodejs.org/dist/v24.13.1/node-v24.13.1-win-x64.zip",
-            "filename": "node-v24.13.1-win-x64.zip"
+            "url": "https://nodejs.org/dist/v24.14.0/node-v24.14.0-win-x64.zip",
+            "filename": "node-v24.14.0-win-x64.zip"
           }
         },
         "25": {
-          "latest": "25.6.1",
+          "latest": "25.7.0",
           "windows": {
-            "url": "https://nodejs.org/dist/v25.6.1/node-v25.6.1-win-x64.zip",
-            "filename": "node-v25.6.1-win-x64.zip"
+            "url": "https://nodejs.org/dist/v25.7.0/node-v25.7.0-win-x64.zip",
+            "filename": "node-v25.7.0-win-x64.zip"
           }
         }
       }
@@ -480,21 +480,21 @@
     "deno": {
       "name": "Deno",
       "description": "Next-generation JavaScript runtime",
-      "latest": "2.6.10",
+      "latest": "2.7.0",
       "windows": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-x86_64-pc-windows-msvc.zip",
         "filename": "deno-x86_64-pc-windows-msvc.zip"
       },
       "macos_arm64": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-aarch64-apple-darwin.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-aarch64-apple-darwin.zip",
         "filename": "deno-aarch64-apple-darwin.zip"
       },
       "macos_x64": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-x86_64-apple-darwin.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-x86_64-apple-darwin.zip",
         "filename": "deno-x86_64-apple-darwin.zip"
       },
       "linux": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.6.10/deno-x86_64-unknown-linux-gnu.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-x86_64-unknown-linux-gnu.zip",
         "filename": "deno-x86_64-unknown-linux-gnu.zip"
       }
     },
@@ -522,27 +522,44 @@
     "redis": {
       "name": "Redis",
       "description": "In-memory data structure store",
-      "latest": "8.6.0",
+      "latest": "8.6.1",
       "windows": {
-        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.6.0/Redis-8.6.0-Windows-x64-cygwin-with-Service.zip",
-        "filename": "Redis-8.6.0-Windows-x64-cygwin-with-Service.zip"
+        "url": "https://github.com/redis-windows/redis-windows/releases/download/8.6.1/Redis-8.6.1-Windows-x64-cygwin-with-Service.zip",
+        "filename": "Redis-8.6.1-Windows-x64-cygwin-with-Service.zip"
       }
     },
     "mailpit": {
       "name": "Mailpit",
       "description": "Email testing tool for developers",
-      "latest": "1.29.1",
+      "latest": "1.29.2",
       "windows": {
-        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.1/mailpit-windows-amd64.zip",
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.2/mailpit-windows-amd64.zip",
         "filename": "mailpit-windows-amd64.zip"
       },
       "macos_arm64": {
-        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.1/mailpit-darwin-arm64.tar.gz",
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.2/mailpit-darwin-arm64.tar.gz",
         "filename": "mailpit-darwin-arm64.tar.gz"
       },
       "linux": {
-        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.1/mailpit-linux-amd64.tar.gz",
+        "url": "https://github.com/axllent/mailpit/releases/download/v1.29.2/mailpit-linux-amd64.tar.gz",
         "filename": "mailpit-linux-amd64.tar.gz"
+      }
+    },
+    "meilisearch": {
+      "name": "Meilisearch",
+      "description": "Fast, typo-tolerant search engine",
+      "latest": "1.36.0",
+      "windows": {
+        "url": "https://github.com/meilisearch/meilisearch/releases/download/v1.36.0/meilisearch-windows-amd64.exe",
+        "filename": "meilisearch-windows-amd64.exe"
+      },
+      "macos_arm64": {
+        "url": "https://github.com/meilisearch/meilisearch/releases/download/v1.36.0/meilisearch-macos-apple-silicon",
+        "filename": "meilisearch-macos-apple-silicon"
+      },
+      "linux": {
+        "url": "https://github.com/meilisearch/meilisearch/releases/download/v1.36.0/meilisearch-linux-amd64",
+        "filename": "meilisearch-linux-amd64"
       }
     },
     "composer": {
