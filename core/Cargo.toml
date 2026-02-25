@@ -51,7 +51,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 clap = { version = "4", features = ["derive"], optional = true }
 colored = { version = "2", optional = true }
-sysinfo = "0.29"
+sysinfo = "0.38"
 portable-pty = "0.8.1"
 
 [features]
