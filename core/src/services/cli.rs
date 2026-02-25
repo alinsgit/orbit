@@ -107,7 +107,7 @@ impl CliManager {
 
         // Create directory
         fs::create_dir_all(&cli_dir)
-            .map_err(|e| format!("Failed to create CLI directory: {}", e))?;
+            .map_err(|e| format!("Failed to create CLI directory: {e}"))?;
 
         let url = Self::get_download_url().await;
         let exe_path = Self::get_exe_path(app)?;
@@ -126,7 +126,7 @@ impl CliManager {
 
         if cli_dir.exists() {
             fs::remove_dir_all(&cli_dir)
-                .map_err(|e| format!("Failed to remove CLI: {}", e))?;
+                .map_err(|e| format!("Failed to remove CLI: {e}"))?;
         }
 
         // Clean up PATH entry

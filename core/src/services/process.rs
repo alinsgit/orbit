@@ -1,6 +1,6 @@
 use crate::services::config::ConfigManager;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use sysinfo::{SystemExt, ProcessExt};
@@ -29,8 +29,8 @@ use super::hidden_command;
 fn is_port_in_use(port: u16) -> bool {
     use std::net::TcpListener;
     // Check both addresses — on Windows, services may bind to either
-    TcpListener::bind(format!("127.0.0.1:{}", port)).is_err()
-        || TcpListener::bind(format!("0.0.0.0:{}", port)).is_err()
+    TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
+        || TcpListener::bind(format!("0.0.0.0:{port}")).is_err()
 }
 
 /// Get expected port for a service by name
@@ -41,9 +41,7 @@ fn get_service_port(service_name: &str) -> Option<u16> {
         Some(5432)
     } else if service_name.contains("mongo") {
         Some(27017)
-    } else if service_name.contains("nginx") {
-        Some(80)
-    } else if service_name.contains("apache") || service_name.contains("httpd") {
+    } else if service_name.contains("nginx") || service_name.contains("apache") || service_name.contains("httpd") {
         Some(80)
     } else if service_name.contains("php") {
         if let Some(version_str) = service_name.strip_prefix("php-") {
@@ -105,7 +103,7 @@ impl ServiceManager {
         }
     }
 
-    fn ensure_config(service_type: ServiceType, bin_path_buf: &PathBuf) {
+    fn ensure_config(service_type: ServiceType, bin_path_buf: &Path) {
         if let Some(parent) = bin_path_buf.parent() {
             let root = parent.to_path_buf();
             match service_type {
@@ -134,7 +132,7 @@ impl ServiceManager {
         bin_path: &str,
         args: &[&str],
     ) -> Result<u32, String> {
-        let name = format!("{:?}", service_type);
+        let name = format!("{service_type:?}");
         self.start_with_name(name, service_type, bin_path, args)
     }
 
@@ -148,7 +146,7 @@ impl ServiceManager {
         // Check if service is already running (covers orphaned processes)
         if let Some(port) = get_service_port(&name) {
             if is_port_in_use(port) {
-                log::info!("Service {} already running on port {}", name, port);
+                log::info!("Service {name} already running on port {port}");
                 return Ok(0); // Already running, report success
             }
         }
@@ -204,8 +202,7 @@ impl ServiceManager {
                         Ok(Some(exit_status)) => {
                             // Process already exited - it crashed
                             Err(format!(
-                                "Service {} exited immediately (exit code: {})",
-                                name, exit_status
+                                "Service {name} exited immediately (exit code: {exit_status})"
                             ))
                         }
                         Ok(None) => {
@@ -215,11 +212,11 @@ impl ServiceManager {
                             processes.insert(name, child);
                             Ok(pid)
                         }
-                        Err(e) => Err(format!("Failed to check service status: {}", e)),
+                        Err(e) => Err(format!("Failed to check service status: {e}")),
                     }
                 }
             }
-            Err(e) => Err(format!("Failed to start service: {}", e)),
+            Err(e) => Err(format!("Failed to start service: {e}")),
         }
     }
 
@@ -232,7 +229,7 @@ impl ServiceManager {
             #[cfg(target_os = "windows")]
             {
                 let _ = hidden_command("taskkill")
-                    .args(&["/F", "/PID", &pid.to_string(), "/T"])
+                    .args(["/F", "/PID", &pid.to_string(), "/T"])
                     .output();
             }
             #[cfg(not(target_os = "windows"))]
@@ -250,7 +247,7 @@ impl ServiceManager {
             #[cfg(target_os = "windows")]
             for pname in &process_names {
                 let output = hidden_command("taskkill")
-                    .args(&["/F", "/IM", pname, "/T"])
+                    .args(["/F", "/IM", pname, "/T"])
                     .output();
                 if let Ok(o) = output {
                     if o.status.success() {
@@ -351,7 +348,7 @@ impl ServiceManager {
                 #[cfg(target_os = "windows")]
                 {
                     let _ = hidden_command("taskkill")
-                        .args(&["/F", "/PID", &pid.to_string(), "/T"])
+                        .args(["/F", "/PID", &pid.to_string(), "/T"])
                         .output();
                 }
                 #[cfg(not(target_os = "windows"))]
@@ -405,7 +402,7 @@ impl ServiceManager {
                 #[cfg(target_os = "windows")]
                 {
                     let _ = hidden_command("taskkill")
-                        .args(&["/F", "/PID", &pid.to_string(), "/T"])
+                        .args(["/F", "/PID", &pid.to_string(), "/T"])
                         .output();
                 }
                 #[cfg(not(target_os = "windows"))]

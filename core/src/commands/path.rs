@@ -57,7 +57,7 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
         "mailpit" => bin_path.join("mailpit"),
         "mcp" => bin_path.join("mcp"),
         "cli" => bin_path.join("cli"),
-        _ => return Err(format!("Unknown service type: {}", service_type)),
+        _ => return Err(format!("Unknown service type: {service_type}")),
     };
 
     if !service_path.exists() {
@@ -87,14 +87,14 @@ pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<Strin
     let output = hidden_command("powershell")
         .args(["-NoProfile", "-Command", &ps_script])
         .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(format!("{}: {}", path_str, stdout.trim()))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {}", stderr))
+        Err(format!("Failed to update PATH: {stderr}"))
     }
 }
 
@@ -129,7 +129,7 @@ pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<
         "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
         "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
         "cli" => bin_path.join("cli").to_string_lossy().to_string(),
-        _ => return Err(format!("Unknown service type: {}", service_type)),
+        _ => return Err(format!("Unknown service type: {service_type}")),
     };
 
     // PowerShell script to remove from user PATH
@@ -159,14 +159,14 @@ pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<
     let output = hidden_command("powershell")
         .args(["-NoProfile", "-Command", &ps_script])
         .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(format!("{}: {}", path_pattern, stdout.trim()))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {}", stderr))
+        Err(format!("Failed to update PATH: {stderr}"))
     }
 }
 
@@ -222,7 +222,7 @@ pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result
         "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
         "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
         "cli" => bin_path.join("cli").to_string_lossy().to_string(),
-        _ => return Err(format!("Unknown service type: {}", service_type)),
+        _ => return Err(format!("Unknown service type: {service_type}")),
     };
 
     // Get current user PATH
@@ -233,13 +233,13 @@ pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result
             "[Environment]::GetEnvironmentVariable('Path', 'User')",
         ])
         .output()
-        .map_err(|e| format!("Failed to get PATH: {}", e))?;
+        .map_err(|e| format!("Failed to get PATH: {e}"))?;
 
     let user_path = String::from_utf8_lossy(&output.stdout).to_lowercase();
     let service_path_lower = service_path.to_lowercase();
 
     let in_path = user_path.split(';').any(|p| {
-        p.trim() == service_path_lower || p.trim().starts_with(&format!("{}\\", service_path_lower))
+        p.trim() == service_path_lower || p.trim().starts_with(&format!("{service_path_lower}\\"))
     });
 
     Ok(ServicePathStatus {
@@ -366,7 +366,7 @@ pub fn add_to_path(app: AppHandle) -> Result<String, String> {
     let output = hidden_command("powershell")
         .args(["-NoProfile", "-Command", &ps_script])
         .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -377,7 +377,7 @@ pub fn add_to_path(app: AppHandle) -> Result<String, String> {
         ))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {}", stderr))
+        Err(format!("Failed to update PATH: {stderr}"))
     }
 }
 
@@ -398,7 +398,7 @@ pub fn check_path_status(app: AppHandle) -> Result<PathStatus, String> {
             "[Environment]::GetEnvironmentVariable('Path', 'User')",
         ])
         .output()
-        .map_err(|e| format!("Failed to get PATH: {}", e))?;
+        .map_err(|e| format!("Failed to get PATH: {e}"))?;
 
     let user_path = String::from_utf8_lossy(&output.stdout).to_lowercase();
     let bin_path_str = bin_path.to_string_lossy().to_lowercase();
@@ -449,14 +449,14 @@ pub fn remove_from_path(app: AppHandle) -> Result<String, String> {
     let output = hidden_command("powershell")
         .args(["-NoProfile", "-Command", &ps_script])
         .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(format!("PATH cleaned. {}", stdout.trim()))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {}", stderr))
+        Err(format!("Failed to update PATH: {stderr}"))
     }
 }
 
@@ -483,7 +483,7 @@ pub fn get_user_path() -> Result<Vec<String>, String> {
             "[Environment]::GetEnvironmentVariable('Path', 'User')",
         ])
         .output()
-        .map_err(|e| format!("Failed to get PATH: {}", e))?;
+        .map_err(|e| format!("Failed to get PATH: {e}"))?;
 
     let path_str = String::from_utf8_lossy(&output.stdout).to_string();
     
@@ -521,13 +521,13 @@ pub fn save_user_path(paths: Vec<String>) -> Result<String, String> {
     let output = hidden_command("powershell")
         .args(["-NoProfile", "-Command", &ps_script])
         .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
 
     if output.status.success() {
         Ok("PATH saved successfully.".into())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {}", stderr))
+        Err(format!("Failed to update PATH: {stderr}"))
     }
 }
 

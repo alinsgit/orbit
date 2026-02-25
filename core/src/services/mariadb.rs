@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::hidden_command;
 
@@ -9,8 +9,8 @@ pub struct MariaDBManager;
 impl MariaDBManager {
     /// Initialize MariaDB database
     pub fn initialize(
-        mariadb_root: &PathBuf,
-        data_dir: &PathBuf,
+        mariadb_root: &Path,
+        data_dir: &Path,
         _root_password: &str,
     ) -> Result<(), String> {
         // 1. Check if already initialized
@@ -23,10 +23,10 @@ impl MariaDBManager {
         // 2. Clean data directory from previous failed attempts
         if data_dir.exists() {
             fs::remove_dir_all(data_dir)
-                .map_err(|e| format!("Failed to clean data directory: {}", e))?;
+                .map_err(|e| format!("Failed to clean data directory: {e}"))?;
         }
         fs::create_dir_all(data_dir)
-            .map_err(|e| format!("Failed to create data directory: {}", e))?;
+            .map_err(|e| format!("Failed to create data directory: {e}"))?;
 
         // 3. Run mysql_install_db to initialize (before config, since it needs empty dir)
         let install_db_path = mariadb_root.join("mysql_install_db.exe");
@@ -45,12 +45,12 @@ impl MariaDBManager {
     }
 
     /// Ensure MariaDB configuration is up-to-date (public wrapper)
-    pub fn ensure_config(mariadb_root: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String> {
+    pub fn ensure_config(mariadb_root: &Path, data_dir: &Path) -> Result<PathBuf, String> {
         Self::create_config(mariadb_root, data_dir)
     }
 
     /// Create MariaDB configuration file
-    fn create_config(mariadb_root: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String> {
+    fn create_config(mariadb_root: &Path, data_dir: &Path) -> Result<PathBuf, String> {
         let conf_path = data_dir.join("my.ini");
 
         // Use forward slashes for MySQL/MariaDB paths on Windows
@@ -61,13 +61,13 @@ impl MariaDBManager {
         let plugin_dir = Self::find_plugin_dir(mariadb_root);
         let plugin_dir_str = plugin_dir
             .map(|p| p.display().to_string().replace('\\', "/"))
-            .unwrap_or_else(|| format!("{}/lib/plugin", basedir_str));
+            .unwrap_or_else(|| format!("{basedir_str}/lib/plugin"));
 
         let conf_content = format!(
             r#"[mysqld]
-basedir={}
-datadir={}
-plugin_dir={}
+basedir={basedir_str}
+datadir={data_path_str}
+plugin_dir={plugin_dir_str}
 port=3306
 bind-address=127.0.0.1
 skip-networking=0
@@ -82,30 +82,29 @@ port=3306
 host=127.0.0.1
 
 [mariadb]
-"#,
-            basedir_str, data_path_str, plugin_dir_str
+"#
         );
 
         // Create parent directory if needed
         if let Some(parent) = conf_path.parent() {
             if !parent.exists() {
                 fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create config directory: {}", e))?;
+                    .map_err(|e| format!("Failed to create config directory: {e}"))?;
             }
         }
 
         let mut conf_file = fs::File::create(&conf_path)
-            .map_err(|e| format!("Failed to create my.ini: {}", e))?;
+            .map_err(|e| format!("Failed to create my.ini: {e}"))?;
 
         conf_file
             .write_all(conf_content.as_bytes())
-            .map_err(|e| format!("Failed to write my.ini: {}", e))?;
+            .map_err(|e| format!("Failed to write my.ini: {e}"))?;
 
         Ok(conf_path)
     }
 
     /// Find the plugin directory — it may be inside a version subfolder
-    fn find_plugin_dir(mariadb_root: &PathBuf) -> Option<PathBuf> {
+    fn find_plugin_dir(mariadb_root: &Path) -> Option<PathBuf> {
         // Direct paths
         let direct = mariadb_root.join("lib").join("plugin");
         if direct.exists() {
@@ -129,7 +128,7 @@ host=127.0.0.1
     }
 
     /// Find mariadbd.exe or mysqld.exe
-    fn find_mariadbd(mariadb_root: &PathBuf) -> Result<PathBuf, String> {
+    fn find_mariadbd(mariadb_root: &Path) -> Result<PathBuf, String> {
         // Try mariadbd first (newer naming)
         let mariadbd = mariadb_root.join("mariadbd.exe");
         if mariadbd.exists() {
@@ -158,9 +157,9 @@ host=127.0.0.1
 
     /// Run mysql_install_db for initialization
     fn run_install_db(
-        install_db_path: &PathBuf,
-        mariadb_root: &PathBuf,
-        data_dir: &PathBuf,
+        install_db_path: &Path,
+        mariadb_root: &Path,
+        data_dir: &Path,
     ) -> Result<(), String> {
         log::info!("Running mysql_install_db for initialization");
 
@@ -170,11 +169,11 @@ host=127.0.0.1
             .arg("--default-user")
             .current_dir(mariadb_root)
             .output()
-            .map_err(|e| format!("Failed to run mysql_install_db: {}", e))?;
+            .map_err(|e| format!("Failed to run mysql_install_db: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("mysql_install_db failed: {}", stderr));
+            return Err(format!("mysql_install_db failed: {stderr}"));
         }
 
         log::info!("mysql_install_db completed successfully");
@@ -182,14 +181,14 @@ host=127.0.0.1
     }
 
     /// Run mariadbd --initialize-insecure for initialization
-    fn run_mariadbd_initialize(mariadbd_path: &PathBuf, data_dir: &PathBuf) -> Result<(), String> {
+    fn run_mariadbd_initialize(mariadbd_path: &Path, data_dir: &Path) -> Result<(), String> {
         log::info!("Running mariadbd --initialize-insecure");
 
         let output = hidden_command(mariadbd_path)
             .arg("--initialize-insecure")
             .arg(format!("--datadir={}", data_dir.display()))
             .output()
-            .map_err(|e| format!("Failed to run mariadbd --initialize: {}", e))?;
+            .map_err(|e| format!("Failed to run mariadbd --initialize: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -198,7 +197,7 @@ host=127.0.0.1
                 log::warn!("--initialize-insecure not supported, trying without");
                 return Ok(()); // Data files might be created differently
             }
-            return Err(format!("mariadbd --initialize failed: {}", stderr));
+            return Err(format!("mariadbd --initialize failed: {stderr}"));
         }
 
         log::info!("mariadbd initialization completed successfully");
@@ -207,19 +206,19 @@ host=127.0.0.1
 
     /// Check if MariaDB is initialized
     #[allow(dead_code)]
-    pub fn is_initialized(data_dir: &PathBuf) -> bool {
+    pub fn is_initialized(data_dir: &Path) -> bool {
         data_dir.join("mysql").exists()
     }
 
     /// Get the MariaDB server executable path
     #[allow(dead_code)]
-    pub fn get_server_path(mariadb_root: &PathBuf) -> Result<PathBuf, String> {
+    pub fn get_server_path(mariadb_root: &Path) -> Result<PathBuf, String> {
         Self::find_mariadbd(mariadb_root)
     }
 
     /// Get the MariaDB client executable path
     #[allow(dead_code)]
-    pub fn get_client_path(mariadb_root: &PathBuf) -> Result<PathBuf, String> {
+    pub fn get_client_path(mariadb_root: &Path) -> Result<PathBuf, String> {
         let paths = [
             mariadb_root.join("mariadb.exe"),
             mariadb_root.join("mysql.exe"),

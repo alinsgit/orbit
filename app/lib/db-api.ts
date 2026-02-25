@@ -39,8 +39,8 @@ export async function dbConnect(config: DbConnectionConfig): Promise<void> {
   }
 
   const passStr = config.password ? `:${encodeURIComponent(config.password)}` : '';
-  let connectionString = '';
-  
+  let connectionString;
+
   if (engine === 'postgresql') {
     connectionString = `postgres://${encodeURIComponent(config.user)}${passStr}@${config.host}:${config.port}/postgres`;
   } else if (engine === 'mariadb') {
@@ -93,13 +93,13 @@ export async function getServerInfo(): Promise<ServerInfo> {
     try {
       const uptimeResult = await db.select<any[]>("SELECT extract(epoch from current_timestamp - pg_postmaster_start_time()) as uptime");
       uptime = parseInt(getVal(uptimeResult));
-    } catch { }
+    } catch { /* optional stat */ }
 
     let connections = 0;
     try {
       const connectionsResult = await db.select<any[]>("SELECT sum(numbackends) as connections FROM pg_stat_database");
       connections = parseInt(getVal(connectionsResult));
-    } catch { }
+    } catch { /* optional stat */ }
     
     return { version, uptime, connections };
   } else {
@@ -119,7 +119,7 @@ export async function getServerInfo(): Promise<ServerInfo> {
 export async function listDatabases(): Promise<DatabaseInfo[]> {
   if (!db) throw new Error('Not connected');
 
-  let result: any[] = [];
+  let result: any[];
   if (currentEngine === 'postgresql') {
     result = await db.select<any[]>("SELECT datname as Database FROM pg_database WHERE datistemplate = false");
   } else {
@@ -312,7 +312,7 @@ export async function getDatabaseUsers(database: string): Promise<UserInfo[]> {
       if (hasAccess) {
         dbUsers.push(user);
       }
-    } catch { }
+    } catch { /* user may lack grant query access */ }
   }
 
   return dbUsers;

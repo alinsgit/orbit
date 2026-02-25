@@ -7,7 +7,7 @@ use crate::services::download::download_file;
 use crate::services::validation::validate_php_version;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 use tauri::{command, AppHandle, Manager};
@@ -85,16 +85,16 @@ pub async fn get_available_extensions(
     for (ext_name, description, category) in get_extension_info() {
         let is_installed = installed_exts.iter().any(|e| e == ext_name);
         let is_enabled = is_installed
-            && (ini_content.contains(&format!("extension={}", ext_name))
-                || ini_content.contains(&format!("extension={}.so", ext_name))
-                || ini_content.contains(&format!("extension=php_{}.dll", ext_name)))
-            && !ini_content.contains(&format!(";extension={}", ext_name));
+            && (ini_content.contains(&format!("extension={ext_name}"))
+                || ini_content.contains(&format!("extension={ext_name}.so"))
+                || ini_content.contains(&format!("extension=php_{ext_name}.dll")))
+            && !ini_content.contains(&format!(";extension={ext_name}"));
 
         result.push(PeclExtension {
             name: ext_name.to_string(),
             version: "latest".to_string(),
             description: description.to_string(),
-            download_url: Some(format!("pecl://{}", ext_name)),
+            download_url: Some(format!("pecl://{ext_name}")),
             installed: is_installed,
             enabled: is_enabled,
             category: category.to_string(),
@@ -224,15 +224,15 @@ pub async fn install_pecl_extension(
 #[cfg(target_os = "windows")]
 async fn install_extension_windows(
     app: &AppHandle,
-    bin_path: &PathBuf,
+    bin_path: &Path,
     php_version: &str,
     extension_name: &str,
 ) -> Result<String, String> {
     let ext_dir = bin_path.join("ext");
-    let dll_path = ext_dir.join(format!("php_{}.dll", extension_name));
+    let dll_path = ext_dir.join(format!("php_{extension_name}.dll"));
 
     if dll_path.exists() {
-        return Err(format!("Extension {} is already installed", extension_name));
+        return Err(format!("Extension {extension_name} is already installed"));
     }
 
     // Parse PHP version
@@ -244,16 +244,15 @@ async fn install_extension_windows(
     };
 
     // Fetch available versions dynamically from PECL API
-    log::info!("Fetching available versions for {} from PECL API", extension_name);
-    let dynamic_versions = fetch_pecl_versions(&extension_name).await;
+    log::info!("Fetching available versions for {extension_name} from PECL API");
+    let dynamic_versions = fetch_pecl_versions(extension_name).await;
     
     // Try multiple download sources with dynamic versions
-    let download_urls = get_windows_download_urls(&extension_name, &php_major_minor, &dynamic_versions);
+    let download_urls = get_windows_download_urls(extension_name, &php_major_minor, &dynamic_versions);
     
     if download_urls.is_empty() {
         return Err(format!(
-            "No Windows DLL available for {} on PHP {}. Consider using pecl on WSL or compiling from source.",
-            extension_name, php_major_minor
+            "No Windows DLL available for {extension_name} on PHP {php_major_minor}. Consider using pecl on WSL or compiling from source."
         ));
     }
 
@@ -264,18 +263,18 @@ async fn install_extension_windows(
         .map_err(|e| e.to_string())?
         .join("bin")
         .join("temp");
-    fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp dir: {e}"))?;
 
     // Try each download URL
     let mut last_error = String::new();
     for url in download_urls {
-        log::info!("Trying to download {} from {}", extension_name, url);
+        log::info!("Trying to download {extension_name} from {url}");
         
         let is_direct_dll = url.ends_with(".dll");
         let temp_file = temp_dir.join(if is_direct_dll {
-            format!("php_{}.dll", extension_name)
+            format!("php_{extension_name}.dll")
         } else {
-            format!("{}.zip", extension_name)
+            format!("{extension_name}.zip")
         });
 
         match download_file(&url, &temp_file).await {
@@ -283,7 +282,7 @@ async fn install_extension_windows(
                 if is_direct_dll {
                     // Direct DLL - just copy
                     fs::copy(&temp_file, &dll_path)
-                        .map_err(|e| format!("Failed to copy DLL: {}", e))?;
+                        .map_err(|e| format!("Failed to copy DLL: {e}"))?;
                     fs::remove_file(&temp_file).ok();
                 } else {
                     // ZIP file - extract
@@ -292,19 +291,19 @@ async fn install_extension_windows(
                         fs::remove_dir_all(&extract_dir).ok();
                     }
                     fs::create_dir_all(&extract_dir)
-                        .map_err(|e| format!("Failed to create extract dir: {}", e))?;
+                        .map_err(|e| format!("Failed to create extract dir: {e}"))?;
 
                     crate::services::download::extract_zip(&temp_file, &extract_dir)?;
 
                     // Find the DLL file
-                    let dll_name = format!("php_{}.dll", extension_name);
+                    let dll_name = format!("php_{extension_name}.dll");
                     if let Ok(source_dll) = find_dll_recursive(&extract_dir, &dll_name) {
                         fs::copy(&source_dll, &dll_path)
-                            .map_err(|e| format!("Failed to copy DLL: {}", e))?;
+                            .map_err(|e| format!("Failed to copy DLL: {e}"))?;
                     } else {
                         fs::remove_file(&temp_file).ok();
                         fs::remove_dir_all(&extract_dir).ok();
-                        last_error = format!("DLL not found in archive");
+                        last_error = "DLL not found in archive".to_string();
                         continue;
                     }
 
@@ -313,10 +312,9 @@ async fn install_extension_windows(
                     fs::remove_dir_all(&extract_dir).ok();
                 }
 
-                log::info!("Extension {} installed successfully", extension_name);
+                log::info!("Extension {extension_name} installed successfully");
                 return Ok(format!(
-                    "Extension {} installed. Add 'extension={}' to php.ini to enable.",
-                    extension_name, extension_name
+                    "Extension {extension_name} installed. Add 'extension={extension_name}' to php.ini to enable."
                 ));
             }
             Err(e) => {
@@ -327,8 +325,7 @@ async fn install_extension_windows(
     }
 
     Err(format!(
-        "Failed to install {}: {}. Windows PECL builds may not be available for PHP {}.",
-        extension_name, last_error, php_version
+        "Failed to install {extension_name}: {last_error}. Windows PECL builds may not be available for PHP {php_version}."
     ))
 }
 
@@ -358,8 +355,7 @@ fn get_windows_download_urls(extension_name: &str, php_version: &str, dynamic_ve
         
         for xdebug_ver in xdebug_versions {
             urls.push(format!(
-                "https://xdebug.org/files/php_xdebug-{}-{}-nts-{}-x64.dll",
-                xdebug_ver, php_version, vs_version
+                "https://xdebug.org/files/php_xdebug-{xdebug_ver}-{php_version}-nts-{vs_version}-x64.dll"
             ));
         }
         return urls;
@@ -367,7 +363,7 @@ fn get_windows_download_urls(extension_name: &str, php_version: &str, dynamic_ve
 
     // Use dynamic versions from PECL API first, then fallback to hardcoded
     let versions: Vec<&str> = if !dynamic_versions.is_empty() {
-        log::info!("Using dynamic versions from PECL API: {:?}", dynamic_versions);
+        log::info!("Using dynamic versions from PECL API: {dynamic_versions:?}");
         dynamic_versions.iter().take(5).map(|s| s.as_str()).collect()
     } else {
         // Fallback to known working versions if API fails
@@ -391,16 +387,14 @@ fn get_windows_download_urls(extension_name: &str, php_version: &str, dynamic_ve
     // This source has PHP 8.2, 8.3, 8.4 builds!
     for ver in &versions {
         urls.push(format!(
-            "https://downloads.php.net/~windows/pecl/releases/{}/{}/php_{}-{}-{}-nts-{}-x64.zip",
-            extension_name, ver, extension_name, ver, php_version, vs_version
+            "https://downloads.php.net/~windows/pecl/releases/{extension_name}/{ver}/php_{extension_name}-{ver}-{php_version}-nts-{vs_version}-x64.zip"
         ));
     }
 
     // Fallback: windows.php.net (older builds, PHP 8.0-8.1)
     for ver in &versions {
         urls.push(format!(
-            "https://windows.php.net/downloads/pecl/releases/{}/{}/php_{}-{}-{}-nts-{}-x64.zip",
-            extension_name, ver, extension_name, ver, php_version, vs_version
+            "https://windows.php.net/downloads/pecl/releases/{extension_name}/{ver}/php_{extension_name}-{ver}-{php_version}-nts-{vs_version}-x64.zip"
         ));
     }
 
@@ -458,11 +452,11 @@ async fn install_extension_unix(
 #[cfg(target_os = "windows")]
 fn find_dll_recursive(dir: &PathBuf, dll_name: &str) -> Result<PathBuf, String> {
     if !dir.exists() {
-        return Err(format!("Directory does not exist: {:?}", dir));
+        return Err(format!("Directory does not exist: {dir:?}"));
     }
 
-    for entry in fs::read_dir(dir).map_err(|e| format!("Failed to read dir: {}", e))? {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+    for entry in fs::read_dir(dir).map_err(|e| format!("Failed to read dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
         let path = entry.path();
 
         if path.is_file() {
@@ -478,7 +472,7 @@ fn find_dll_recursive(dir: &PathBuf, dll_name: &str) -> Result<PathBuf, String> 
         }
     }
 
-    Err(format!("DLL {} not found in directory", dll_name))
+    Err(format!("DLL {dll_name} not found in directory"))
 }
 
 /// Uninstall a PECL extension
@@ -501,49 +495,49 @@ pub async fn uninstall_pecl_extension(
     let ext_dir = bin_path.join("ext");
     
     // Try both .dll and .so extensions
-    let dll_path = ext_dir.join(format!("php_{}.dll", extension_name));
-    let so_path = ext_dir.join(format!("{}.so", extension_name));
+    let dll_path = ext_dir.join(format!("php_{extension_name}.dll"));
+    let so_path = ext_dir.join(format!("{extension_name}.so"));
 
     let ext_path = if dll_path.exists() {
         dll_path
     } else if so_path.exists() {
         so_path
     } else {
-        return Err(format!("Extension {} is not installed", extension_name));
+        return Err(format!("Extension {extension_name} is not installed"));
     };
 
     // Disable in php.ini first
     let ini_path = bin_path.join("php.ini");
     if ini_path.exists() {
         let content = fs::read_to_string(&ini_path)
-            .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+            .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
         // Comment out the extension line
         let patterns = [
-            format!("extension={}", extension_name),
-            format!("extension={}.so", extension_name),
-            format!("extension=php_{}.dll", extension_name),
+            format!("extension={extension_name}"),
+            format!("extension={extension_name}.so"),
+            format!("extension=php_{extension_name}.dll"),
         ];
 
         let mut new_content = content.clone();
         for pattern in &patterns {
-            if new_content.contains(pattern) && !new_content.contains(&format!(";{}", pattern)) {
-                new_content = new_content.replace(pattern, &format!(";{}", pattern));
+            if new_content.contains(pattern) && !new_content.contains(&format!(";{pattern}")) {
+                new_content = new_content.replace(pattern, &format!(";{pattern}"));
             }
         }
 
         if new_content != content {
             fs::write(&ini_path, new_content)
-                .map_err(|e| format!("Failed to update php.ini: {}", e))?;
+                .map_err(|e| format!("Failed to update php.ini: {e}"))?;
         }
     }
 
     // Delete the extension file
-    fs::remove_file(&ext_path).map_err(|e| format!("Failed to delete extension: {}", e))?;
+    fs::remove_file(&ext_path).map_err(|e| format!("Failed to delete extension: {e}"))?;
 
-    log::info!("Extension {} uninstalled", extension_name);
+    log::info!("Extension {extension_name} uninstalled");
 
-    Ok(format!("Extension {} uninstalled successfully", extension_name))
+    Ok(format!("Extension {extension_name} uninstalled successfully"))
 }
 
 /// Search for extensions in PECL
@@ -565,7 +559,7 @@ pub async fn search_pecl_extensions(
             name: name.to_string(),
             version: "latest".to_string(),
             description: description.to_string(),
-            download_url: Some(format!("pecl://{}", name)),
+            download_url: Some(format!("pecl://{name}")),
             installed: false,
             enabled: false,
             category: category.to_string(),

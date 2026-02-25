@@ -80,14 +80,14 @@ pub fn scaffold_basic_project(path: String, template: String) -> Result<String, 
 
     // Create directory
     fs::create_dir_all(project_path)
-        .map_err(|e| format!("Failed to create directory: {}", e))?;
+        .map_err(|e| format!("Failed to create directory: {e}"))?;
 
     match template.as_str() {
         "http" => {
             let index_php = project_path.join("index.php");
             fs::write(&index_php, "<?php\nphpinfo();\n")
-                .map_err(|e| format!("Failed to create index.php: {}", e))?;
-            Ok(format!("Created PHP project at {}", path))
+                .map_err(|e| format!("Failed to create index.php: {e}"))?;
+            Ok(format!("Created PHP project at {path}"))
         }
         "static" => {
             let index_html = project_path.join("index.html");
@@ -104,14 +104,14 @@ pub fn scaffold_basic_project(path: String, template: String) -> Result<String, 
 </body>
 </html>"#;
             fs::write(&index_html, content)
-                .map_err(|e| format!("Failed to create index.html: {}", e))?;
-            Ok(format!("Created static project at {}", path))
+                .map_err(|e| format!("Failed to create index.html: {e}"))?;
+            Ok(format!("Created static project at {path}"))
         }
         "litecart" => {
             // Just create the directory, user downloads LiteCart manually
-            Ok(format!("Created directory at {}. Download LiteCart files into this folder.", path))
+            Ok(format!("Created directory at {path}. Download LiteCart files into this folder."))
         }
-        _ => Err(format!("Unsupported template for basic scaffold: {}", template)),
+        _ => Err(format!("Unsupported template for basic scaffold: {template}")),
     }
 }
 
@@ -199,23 +199,23 @@ pub struct ImportResult {
 #[command]
 pub fn read_site_config(app: AppHandle, domain: String) -> Result<String, String> {
     let sites_dir = NginxManager::get_sites_dir(&app)?;
-    let conf_path = sites_dir.join(format!("{}.conf", domain));
+    let conf_path = sites_dir.join(format!("{domain}.conf"));
 
     if !conf_path.exists() {
-        return Err(format!("No nginx config found for '{}'", domain));
+        return Err(format!("No nginx config found for '{domain}'"));
     }
 
     fs::read_to_string(&conf_path)
-        .map_err(|e| format!("Failed to read config: {}", e))
+        .map_err(|e| format!("Failed to read config: {e}"))
 }
 
 #[command]
 pub fn write_site_config(app: AppHandle, domain: String, content: String) -> Result<String, String> {
     let sites_dir = NginxManager::get_sites_dir(&app)?;
-    let conf_path = sites_dir.join(format!("{}.conf", domain));
+    let conf_path = sites_dir.join(format!("{domain}.conf"));
 
     if !conf_path.exists() {
-        return Err(format!("No nginx config found for '{}'", domain));
+        return Err(format!("No nginx config found for '{domain}'"));
     }
 
     // Backup old config
@@ -223,7 +223,7 @@ pub fn write_site_config(app: AppHandle, domain: String, content: String) -> Res
 
     // Write new config
     fs::write(&conf_path, &content)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
+        .map_err(|e| format!("Failed to write config: {e}"))?;
 
     // Validate with nginx -t
     match NginxManager::test_config(&app) {
@@ -239,7 +239,7 @@ pub fn write_site_config(app: AppHandle, domain: String, content: String) -> Res
             if let Some(old_content) = backup {
                 let _ = fs::write(&conf_path, old_content);
             }
-            Err(format!("Config validation failed (rolled back): {}", e))
+            Err(format!("Config validation failed (rolled back): {e}"))
         }
     }
 }
@@ -255,12 +255,12 @@ pub fn start_site_app(
     let store = SiteStore::load(&app)?;
     let site = store
         .get_site(&domain)
-        .ok_or_else(|| format!("Site {} not found", domain))?;
+        .ok_or_else(|| format!("Site {domain} not found"))?;
 
     let dev_command = site
         .dev_command
         .as_ref()
-        .ok_or_else(|| format!("Site {} has no dev_command configured", domain))?;
+        .ok_or_else(|| format!("Site {domain} has no dev_command configured"))?;
 
     state.start(&domain, dev_command, &site.path, site.dev_port)
 }

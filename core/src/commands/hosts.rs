@@ -4,7 +4,7 @@ use tauri::command;
 #[command]
 pub fn add_host(domain: String) -> Result<String, String> {
     match HostsManager::add_domain(&domain) {
-        Ok(_) => Ok(format!("Domain {} added to hosts file", domain)),
+        Ok(_) => Ok(format!("Domain {domain} added to hosts file")),
         Err(e) => Err(e),
     }
 }
@@ -12,7 +12,7 @@ pub fn add_host(domain: String) -> Result<String, String> {
 #[command]
 pub fn add_host_elevated(domain: String) -> Result<String, String> {
     match HostsManager::add_domain_elevated(&domain) {
-        Ok(_) => Ok(format!("Domain {} added to hosts file", domain)),
+        Ok(_) => Ok(format!("Domain {domain} added to hosts file")),
         Err(e) => Err(e),
     }
 }
@@ -20,7 +20,7 @@ pub fn add_host_elevated(domain: String) -> Result<String, String> {
 #[command]
 pub fn remove_host(domain: String) -> Result<String, String> {
     match HostsManager::remove_domain(&domain) {
-        Ok(_) => Ok(format!("Domain {} removed from hosts file", domain)),
+        Ok(_) => Ok(format!("Domain {domain} removed from hosts file")),
         Err(e) => Err(e),
     }
 }
@@ -44,7 +44,7 @@ pub fn get_hosts_file() -> Result<String, String> {
         return Err("Hosts file does not exist on this system.".to_string());
     }
 
-    std::fs::read_to_string(hosts_path).map_err(|e| format!("Failed to read hosts file: {}", e))
+    std::fs::read_to_string(hosts_path).map_err(|e| format!("Failed to read hosts file: {e}"))
 }
 
 /// Save the new contents to the system hosts file requiring elevation
@@ -65,7 +65,7 @@ pub fn save_hosts_file(app: tauri::AppHandle, new_content: String) -> Result<Str
         
     let temp_hosts_path = app_dir.join("temp_hosts.txt");
     std::fs::write(&temp_hosts_path, new_content)
-        .map_err(|e| format!("Failed to write temporary hosts file: {}", e))?;
+        .map_err(|e| format!("Failed to write temporary hosts file: {e}"))?;
 
     // 2. Execute elevated command to overwrite system hosts with temp file
     if cfg!(windows) {
@@ -77,7 +77,7 @@ pub fn save_hosts_file(app: tauri::AppHandle, new_content: String) -> Result<Str
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos() as u64)
             .unwrap_or(0);
-        let script_path = temp_dir.join(format!("orbit_save_hosts_{}.ps1", random_suffix));
+        let script_path = temp_dir.join(format!("orbit_save_hosts_{random_suffix}.ps1"));
 
         let script_content = format!(
             "Copy-Item -Path '{}' -Destination '{}' -Force",
@@ -85,7 +85,7 @@ pub fn save_hosts_file(app: tauri::AppHandle, new_content: String) -> Result<Str
         );
 
         std::fs::write(&script_path, &script_content)
-            .map_err(|e| format!("Failed to create temp script: {}", e))?;
+            .map_err(|e| format!("Failed to create temp script: {e}"))?;
 
         let output = crate::services::hidden_command("powershell")
             .args([
@@ -99,7 +99,7 @@ pub fn save_hosts_file(app: tauri::AppHandle, new_content: String) -> Result<Str
                 )
             ])
             .output()
-            .map_err(|e| format!("Failed to request elevation: {}", e))?;
+            .map_err(|e| format!("Failed to request elevation: {e}"))?;
 
         let _ = std::fs::remove_file(&script_path);
 
@@ -115,12 +115,12 @@ pub fn save_hosts_file(app: tauri::AppHandle, new_content: String) -> Result<Str
         let output = std::process::Command::new("pkexec")
             .args(["cp", &temp_hosts_path_str, &hosts_path_str])
             .output()
-            .map_err(|e| format!("Failed to execute pkexec: {}", e))?;
+            .map_err(|e| format!("Failed to execute pkexec: {e}"))?;
 
         if !output.status.success() {
             let _ = std::fs::remove_file(&temp_hosts_path); // Cleanup
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Unix elevation failed: {}", stderr));
+            return Err(format!("Unix elevation failed: {stderr}"));
         }
     }
 

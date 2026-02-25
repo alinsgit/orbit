@@ -16,25 +16,25 @@ impl HostsManager {
         // Validate domain before any operation
         validate_domain(domain).map_err(|e| e.to_string())?;
 
-        let entry = format!("\n127.0.0.1 {}\n", domain);
+        let entry = format!("\n127.0.0.1 {domain}\n");
 
         // Read current content
         let content = fs::read_to_string(HOSTS_PATH)
-            .map_err(|e| format!("Failed to read hosts file: {}", e))?;
+            .map_err(|e| format!("Failed to read hosts file: {e}"))?;
 
-        if content.contains(&format!("127.0.0.1 {}", domain)) {
+        if content.contains(&format!("127.0.0.1 {domain}")) {
             return Ok(()); // Already exists
         }
 
         // Append new domain
         let mut file = fs::OpenOptions::new()
-            .write(true)
+            
             .append(true)
             .open(HOSTS_PATH)
-            .map_err(|e| format!("Failed to open hosts file (Permission denied?): {}", e))?;
+            .map_err(|e| format!("Failed to open hosts file (Permission denied?): {e}"))?;
 
         file.write_all(entry.as_bytes())
-            .map_err(|e| format!("Failed to write to hosts file: {}", e))?;
+            .map_err(|e| format!("Failed to write to hosts file: {e}"))?;
 
         Ok(())
     }
@@ -50,9 +50,9 @@ impl HostsManager {
 
         // Check if already exists
         let content = fs::read_to_string(HOSTS_PATH)
-            .map_err(|e| format!("Failed to read hosts file: {}", e))?;
+            .map_err(|e| format!("Failed to read hosts file: {e}"))?;
 
-        if content.contains(&format!("127.0.0.1 {}", safe_domain)) {
+        if content.contains(&format!("127.0.0.1 {safe_domain}")) {
             return Ok(()); // Already exists
         }
 
@@ -62,24 +62,23 @@ impl HostsManager {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos() as u64)
             .unwrap_or(0);
-        let script_path = temp_dir.join(format!("orbit_host_{}.ps1", random_suffix));
+        let script_path = temp_dir.join(format!("orbit_host_{random_suffix}.ps1"));
 
         // Use here-string to avoid injection
         let script_content = format!(
             r#"$hostsPath = @'
-{}
+{HOSTS_PATH}
 '@
 $domain = @'
-{}
+{safe_domain}
 '@
 $entry = "`r`n127.0.0.1 $domain"
 Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
-"#,
-            HOSTS_PATH, safe_domain
+"#
         );
 
         fs::write(&script_path, &script_content)
-            .map_err(|e| format!("Failed to create temp script: {}", e))?;
+            .map_err(|e| format!("Failed to create temp script: {e}"))?;
 
         // Run the script with elevation (hidden window — only UAC prompt visible)
         let mut ps_command = Command::new("powershell");
@@ -100,11 +99,11 @@ Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
             ps_command.creation_flags(CREATE_NO_WINDOW);
         }
         let output = ps_command.output()
-            .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+            .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
 
         // Clean up temp script immediately
         if let Err(e) = fs::remove_file(&script_path) {
-            log::warn!("Failed to remove temp script: {}", e);
+            log::warn!("Failed to remove temp script: {e}");
         }
 
         if !output.status.success() {
@@ -112,14 +111,14 @@ Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
             if stderr.contains("canceled") || stderr.contains("denied") {
                 return Err("User cancelled UAC prompt".to_string());
             }
-            return Err(format!("Failed to add domain: {}", stderr));
+            return Err(format!("Failed to add domain: {stderr}"));
         }
 
         // Verify it was added
         let new_content = fs::read_to_string(HOSTS_PATH)
-            .map_err(|e| format!("Failed to verify: {}", e))?;
+            .map_err(|e| format!("Failed to verify: {e}"))?;
 
-        if new_content.contains(&format!("127.0.0.1 {}", safe_domain)) {
+        if new_content.contains(&format!("127.0.0.1 {safe_domain}")) {
             Ok(())
         } else {
             Err("Domain was not added (unknown error)".to_string())
@@ -137,13 +136,13 @@ Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
         validate_domain(domain).map_err(|e| e.to_string())?;
 
         let content = fs::read_to_string(HOSTS_PATH)
-            .map_err(|e| format!("Failed to read hosts file: {}", e))?;
+            .map_err(|e| format!("Failed to read hosts file: {e}"))?;
 
-        let entry = format!("127.0.0.1 {}", domain);
+        let entry = format!("127.0.0.1 {domain}");
         let new_content = content.replace(&entry, "").trim().to_string();
 
         fs::write(HOSTS_PATH, new_content)
-            .map_err(|e| format!("Failed to write to hosts file: {}", e))?;
+            .map_err(|e| format!("Failed to write to hosts file: {e}"))?;
 
         Ok(())
     }
@@ -156,7 +155,7 @@ Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         let output = Command::new("net")
-            .args(&["session"])
+            .args(["session"])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 

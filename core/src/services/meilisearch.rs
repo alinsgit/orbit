@@ -72,7 +72,7 @@ impl MeilisearchManager {
         let dir = Self::get_dir(app)?;
 
         fs::create_dir_all(&dir)
-            .map_err(|e| format!("Failed to create Meilisearch directory: {}", e))?;
+            .map_err(|e| format!("Failed to create Meilisearch directory: {e}"))?;
 
         let url = Self::get_download_url().await;
         let exe_path = Self::get_exe_path(app)?;
@@ -89,7 +89,7 @@ impl MeilisearchManager {
 
         if dir.exists() {
             fs::remove_dir_all(&dir)
-                .map_err(|e| format!("Failed to remove Meilisearch: {}", e))?;
+                .map_err(|e| format!("Failed to remove Meilisearch: {e}"))?;
         }
 
         Ok(())
@@ -134,10 +134,10 @@ impl MeilisearchManager {
             .create(true)
             .append(true)
             .open(&log_path)
-            .map_err(|e| format!("Failed to open log file: {}", e))?;
+            .map_err(|e| format!("Failed to open log file: {e}"))?;
         let log_err = log_file
             .try_clone()
-            .map_err(|e| format!("Failed to clone log handle: {}", e))?;
+            .map_err(|e| format!("Failed to clone log handle: {e}"))?;
 
         hidden_command(&exe_path)
             .args([
@@ -152,7 +152,7 @@ impl MeilisearchManager {
             .stdout(std::process::Stdio::from(log_file))
             .stderr(std::process::Stdio::from(log_err))
             .spawn()
-            .map_err(|e| format!("Failed to start Meilisearch: {}", e))?;
+            .map_err(|e| format!("Failed to start Meilisearch: {e}"))?;
 
         // Wait for port to become available (up to 5 seconds)
         for _ in 0..10 {
@@ -171,7 +171,7 @@ impl MeilisearchManager {
         hidden_command("taskkill")
             .args(["/F", "/IM", "meilisearch.exe"])
             .output()
-            .map_err(|e| format!("Failed to stop Meilisearch: {}", e))?;
+            .map_err(|e| format!("Failed to stop Meilisearch: {e}"))?;
         Ok(())
     }
 

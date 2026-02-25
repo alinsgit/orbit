@@ -51,20 +51,19 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
 #[command]
 pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     let url = format!(
-        "https://api.github.com/repos/{}/releases/latest",
-        GITHUB_REPO
+        "https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
     );
 
     let client = reqwest::Client::builder()
         .user_agent("Orbit-Desktop-App")
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     let response = client
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("Failed to check for updates: {}", e))?;
+        .map_err(|e| format!("Failed to check for updates: {e}"))?;
 
     if !response.status().is_success() {
         return Err(format!(
@@ -76,7 +75,7 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     let release: GitHubRelease = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse release info: {}", e))?;
+        .map_err(|e| format!("Failed to parse release info: {e}"))?;
 
     let latest_version = release.tag_name.trim_start_matches('v').to_string();
     let update_available = is_newer_version(CURRENT_VERSION, &latest_version);

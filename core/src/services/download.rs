@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::Write;
 use futures_util::StreamExt;
@@ -13,7 +13,7 @@ fn get_mirror_url(url: &str) -> Option<String> {
         // e.g. https://downloads.mariadb.org/f/mariadb-11.4.10/winx64-packages/mariadb-11.4.10-winx64.zip
         //   -> https://mirror.kumi.systems/mariadb/mariadb-11.4.10/winx64-packages/mariadb-11.4.10-winx64.zip
         let after_f = url.split("downloads.mariadb.org/f/").nth(1)?;
-        return Some(format!("https://mirror.kumi.systems/mariadb/{}", after_f));
+        return Some(format!("https://mirror.kumi.systems/mariadb/{after_f}"));
     }
     None
 }
@@ -34,7 +34,7 @@ pub async fn download_file(url: &str, dest_path: &PathBuf) -> Result<(), String>
         match download_file_single(attempt_url, dest_path).await {
             Ok(()) => return Ok(()),
             Err(e) => {
-                log::warn!("Download failed for {}: {}", attempt_url, e);
+                log::warn!("Download failed for {attempt_url}: {e}");
                 last_error = e;
             }
         }
@@ -50,7 +50,7 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
         .redirect(reqwest::redirect::Policy::limited(10))
         .timeout(std::time::Duration::from_secs(300)) // 5 min timeout for large files
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     
     // Retry up to 3 times with exponential backoff
     let max_retries = 3;
@@ -73,7 +73,7 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
         {
             Ok(r) => r,
             Err(e) => {
-                last_error = format!("Failed to send request: {}", e);
+                last_error = format!("Failed to send request: {e}");
                 continue;
             }
         };
@@ -88,8 +88,7 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
             let ct = content_type.to_str().unwrap_or("");
             if ct.contains("text/html") {
                 last_error = format!(
-                    "Download blocked: received HTML instead of file (possibly CloudFlare protection). URL: {}", 
-                    url
+                    "Download blocked: received HTML instead of file (possibly CloudFlare protection). URL: {url}"
                 );
                 // Don't retry for HTML responses - this won't change with retries
                 return Err(last_error);
@@ -98,16 +97,16 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
 
         // Get content length for progress (optional)
         let total_size = res.content_length().unwrap_or(0);
-        log::info!("Download size: {} bytes", total_size);
+        log::info!("Download size: {total_size} bytes");
 
         // Ensure parent directory exists
         if let Some(parent) = dest_path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+                .map_err(|e| format!("Failed to create directory: {e}"))?;
         }
 
         let mut file = File::create(dest_path)
-            .map_err(|e| format!("Failed to create file: {}", e))?;
+            .map_err(|e| format!("Failed to create file: {e}"))?;
 
         let mut stream = res.bytes_stream();
         let mut downloaded: u64 = 0;
@@ -117,14 +116,14 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
             match item {
                 Ok(chunk) => {
                     if let Err(e) = file.write_all(&chunk) {
-                        last_error = format!("Error while writing to file: {}", e);
+                        last_error = format!("Error while writing to file: {e}");
                         stream_error = true;
                         break;
                     }
                     downloaded += chunk.len() as u64;
                 }
                 Err(e) => {
-                    last_error = format!("Error while downloading chunk: {}", e);
+                    last_error = format!("Error while downloading chunk: {e}");
                     stream_error = true;
                     break;
                 }
@@ -139,12 +138,12 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
 
         // Verify download completed
         if total_size > 0 && downloaded != total_size {
-            last_error = format!("Download incomplete: {} of {} bytes", downloaded, total_size);
+            last_error = format!("Download incomplete: {downloaded} of {total_size} bytes");
             let _ = std::fs::remove_file(dest_path);
             continue;
         }
 
-        log::info!("Download complete: {} bytes written to {:?}", downloaded, dest_path);
+        log::info!("Download complete: {downloaded} bytes written to {dest_path:?}");
         return Ok(());
     }
 
@@ -152,28 +151,24 @@ async fn download_file_single(url: &str, dest_path: &PathBuf) -> Result<(), Stri
 }
 
 /// Extracts a zip file, optionally stripping a common root folder
-pub fn extract_zip(zip_path: &PathBuf, extract_path: &PathBuf) -> Result<(), String> {
+pub fn extract_zip(zip_path: &Path, extract_path: &Path) -> Result<(), String> {
     extract_zip_with_strip(zip_path, extract_path, true)
 }
 
 /// Extracts a zip file with configurable root folder stripping
-pub fn extract_zip_with_strip(zip_path: &PathBuf, extract_path: &PathBuf, strip_root: bool) -> Result<(), String> {
+pub fn extract_zip_with_strip(zip_path: &Path, extract_path: &Path, strip_root: bool) -> Result<(), String> {
     use zip::ZipArchive;
 
-    let file = File::open(zip_path).map_err(|e| format!("Failed to open zip: {}", e))?;
-    let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {}", e))?;
+    let file = File::open(zip_path).map_err(|e| format!("Failed to open zip: {e}"))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {e}"))?;
 
     // Detect common root folder if strip_root is enabled
-    let root_folder = if strip_root && archive.len() > 0 {
+    let root_folder = if strip_root && !archive.is_empty() {
         if let Ok(first) = archive.by_index(0) {
             let name = first.name();
             if name.ends_with('/') {
                 Some(name.to_string())
-            } else if let Some(idx) = name.find('/') {
-                Some(format!("{}/", &name[..idx]))
-            } else {
-                None
-            }
+            } else { name.find('/').map(|idx| format!("{}/", &name[..idx])) }
         } else {
             None
         }
@@ -184,7 +179,7 @@ pub fn extract_zip_with_strip(zip_path: &PathBuf, extract_path: &PathBuf, strip_
     log::info!("Extracting {} files, root_folder: {:?}", archive.len(), root_folder);
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| format!("Failed to read zip entry: {}", e))?;
+        let mut file = archive.by_index(i).map_err(|e| format!("Failed to read zip entry: {e}"))?;
 
         // Sanitize file path to prevent zip slip
         let file_path = match file.enclosed_name() {
@@ -212,15 +207,15 @@ pub fn extract_zip_with_strip(zip_path: &PathBuf, extract_path: &PathBuf, strip_
         let outpath = extract_path.join(&relative_path);
 
         if (*file.name()).ends_with('/') {
-            std::fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create dir: {}", e))?;
+            std::fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create dir: {e}"))?;
         } else {
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    std::fs::create_dir_all(p).map_err(|e| format!("Failed to create parent dir: {}", e))?;
+                    std::fs::create_dir_all(p).map_err(|e| format!("Failed to create parent dir: {e}"))?;
                 }
             }
-            let mut outfile = File::create(&outpath).map_err(|e| format!("Failed to create file: {}", e))?;
-            std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Failed to copy file: {}", e))?;
+            let mut outfile = File::create(&outpath).map_err(|e| format!("Failed to create file: {e}"))?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Failed to copy file: {e}"))?;
         }
 
         // Set permissions on Unix

@@ -13,6 +13,7 @@ export default [
       "core/target/**",
       ".tauri/**",
       "docs/**",
+      "tests/**",
     ],
   },
   {
@@ -35,7 +36,9 @@ export default [
         navigator: "readonly",
         fetch: "readonly",
         URL: "readonly",
+        React: "readonly",
         HTMLElement: "readonly",
+        HTMLDivElement: "readonly",
         HTMLInputElement: "readonly",
         HTMLTextAreaElement: "readonly",
         HTMLSelectElement: "readonly",
@@ -53,7 +56,10 @@ export default [
         AbortController: "readonly",
         TextDecoder: "readonly",
         TextEncoder: "readonly",
+        ReadableStreamDefaultReader: "readonly",
         crypto: "readonly",
+        localStorage: "readonly",
+        performance: "readonly",
       },
     },
     plugins: {
@@ -77,6 +83,7 @@ export default [
       "react-hooks/exhaustive-deps": "warn",
 
       // General
+      "preserve-caught-error": "off",
       "no-console": "off",
       "prefer-const": "warn",
       "no-var": "error",

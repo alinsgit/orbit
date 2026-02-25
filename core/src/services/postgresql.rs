@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 pub struct PostgreSQLManager;
@@ -7,8 +7,8 @@ pub struct PostgreSQLManager;
 impl PostgreSQLManager {
     /// Initialize PostgreSQL database cluster
     pub fn initialize(
-        postgres_root: &PathBuf,
-        data_dir: &PathBuf,
+        postgres_root: &Path,
+        data_dir: &Path,
         username: &str,
     ) -> Result<(), String> {
         // 1. Check if already initialized (PG_VERSION file exists)
@@ -20,10 +20,10 @@ impl PostgreSQLManager {
         // 2. Clean data directory from previous failed attempts
         if data_dir.exists() {
             fs::remove_dir_all(data_dir)
-                .map_err(|e| format!("Failed to clean postgres data directory: {}", e))?;
+                .map_err(|e| format!("Failed to clean postgres data directory: {e}"))?;
         }
         fs::create_dir_all(data_dir)
-            .map_err(|e| format!("Failed to create postgres data directory: {}", e))?;
+            .map_err(|e| format!("Failed to create postgres data directory: {e}"))?;
 
         // 3. Run initdb
         let initdb_path = postgres_root.join("bin").join(if cfg!(windows) { "initdb.exe" } else { "initdb" });
@@ -48,12 +48,12 @@ impl PostgreSQLManager {
         }
 
         let output = cmd.output()
-            .map_err(|e| format!("Failed to execute initdb: {}", e))?;
+            .map_err(|e| format!("Failed to execute initdb: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("initdb failed: {}\nStdout: {}", stderr, stdout));
+            return Err(format!("initdb failed: {stderr}\nStdout: {stdout}"));
         }
 
         log::info!("PostgreSQL initialized successfully");

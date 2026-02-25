@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::hidden_command;
@@ -28,25 +28,25 @@ pub struct SSLManager;
 
 impl SSLManager {
     /// Get mkcert executable path
-    pub fn get_mkcert_path(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_mkcert_path(bin_path: &Path) -> PathBuf {
         bin_path.join("mkcert").join("mkcert.exe")
     }
 
     /// Get SSL certificates directory
-    pub fn get_certs_dir(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_certs_dir(bin_path: &Path) -> PathBuf {
         bin_path.join("nginx").join("ssl")
     }
 
     /// Check if mkcert is installed
-    pub fn is_mkcert_installed(bin_path: &PathBuf) -> bool {
+    pub fn is_mkcert_installed(bin_path: &Path) -> bool {
         Self::get_mkcert_path(bin_path).exists()
     }
 
     /// Download and install mkcert
-    pub async fn install_mkcert(bin_path: &PathBuf) -> Result<String, String> {
+    pub async fn install_mkcert(bin_path: &Path) -> Result<String, String> {
         let mkcert_dir = bin_path.join("mkcert");
         if !mkcert_dir.exists() {
-            fs::create_dir_all(&mkcert_dir).map_err(|e| format!("Failed to create mkcert dir: {}", e))?;
+            fs::create_dir_all(&mkcert_dir).map_err(|e| format!("Failed to create mkcert dir: {e}"))?;
         }
 
         let mkcert_path = Self::get_mkcert_path(bin_path);
@@ -54,20 +54,20 @@ impl SSLManager {
         // Download mkcert
         let response = reqwest::get(MKCERT_DOWNLOAD_URL)
             .await
-            .map_err(|e| format!("Failed to download mkcert: {}", e))?;
+            .map_err(|e| format!("Failed to download mkcert: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("Failed to download mkcert: HTTP {}", response.status()));
         }
 
-        let bytes = response.bytes().await.map_err(|e| format!("Failed to read mkcert: {}", e))?;
-        fs::write(&mkcert_path, &bytes).map_err(|e| format!("Failed to save mkcert: {}", e))?;
+        let bytes = response.bytes().await.map_err(|e| format!("Failed to read mkcert: {e}"))?;
+        fs::write(&mkcert_path, &bytes).map_err(|e| format!("Failed to save mkcert: {e}"))?;
 
-        Ok(format!("mkcert {} installed successfully", MKCERT_VERSION))
+        Ok(format!("mkcert {MKCERT_VERSION} installed successfully"))
     }
 
     /// Install mkcert root CA (requires admin)
-    pub fn install_ca(bin_path: &PathBuf) -> Result<String, String> {
+    pub fn install_ca(bin_path: &Path) -> Result<String, String> {
         let mkcert_path = Self::get_mkcert_path(bin_path);
 
         if !mkcert_path.exists() {
@@ -77,7 +77,7 @@ impl SSLManager {
         let output = hidden_command(&mkcert_path)
             .arg("-install")
             .output()
-            .map_err(|e| format!("Failed to run mkcert: {}", e))?;
+            .map_err(|e| format!("Failed to run mkcert: {e}"))?;
 
         if output.status.success() {
             Ok("Root CA installed successfully. Browsers will now trust local certificates.".to_string())
@@ -87,13 +87,13 @@ impl SSLManager {
             if stderr.contains("already exists") || stderr.contains("The local CA is already installed") {
                 Ok("Root CA is already installed.".to_string())
             } else {
-                Err(format!("Failed to install CA: {}", stderr))
+                Err(format!("Failed to install CA: {stderr}"))
             }
         }
     }
 
     /// Check if root CA is installed
-    pub fn is_ca_installed(bin_path: &PathBuf) -> bool {
+    pub fn is_ca_installed(bin_path: &Path) -> bool {
         let mkcert_path = Self::get_mkcert_path(bin_path);
 
         if !mkcert_path.exists() {
@@ -113,7 +113,7 @@ impl SSLManager {
     }
 
     /// Generate SSL certificate for a domain using mkcert
-    pub fn generate_cert(bin_path: &PathBuf, domain: &str) -> Result<SslCertificate, String> {
+    pub fn generate_cert(bin_path: &Path, domain: &str) -> Result<SslCertificate, String> {
         let mkcert_path = Self::get_mkcert_path(bin_path);
 
         if !mkcert_path.exists() {
@@ -122,11 +122,11 @@ impl SSLManager {
 
         let certs_dir = Self::get_certs_dir(bin_path);
         if !certs_dir.exists() {
-            fs::create_dir_all(&certs_dir).map_err(|e| format!("Failed to create ssl dir: {}", e))?;
+            fs::create_dir_all(&certs_dir).map_err(|e| format!("Failed to create ssl dir: {e}"))?;
         }
 
-        let cert_path = certs_dir.join(format!("{}.pem", domain));
-        let key_path = certs_dir.join(format!("{}-key.pem", domain));
+        let cert_path = certs_dir.join(format!("{domain}.pem"));
+        let key_path = certs_dir.join(format!("{domain}-key.pem"));
 
         // Generate certificate
         let output = hidden_command(&mkcert_path)
@@ -136,16 +136,16 @@ impl SSLManager {
             .arg("-key-file")
             .arg(&key_path)
             .arg(domain)
-            .arg(format!("*.{}", domain)) // Wildcard
+            .arg(format!("*.{domain}")) // Wildcard
             .arg("localhost")
             .arg("127.0.0.1")
             .arg("::1")
             .output()
-            .map_err(|e| format!("Failed to run mkcert: {}", e))?;
+            .map_err(|e| format!("Failed to run mkcert: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Failed to generate certificate: {}", stderr));
+            return Err(format!("Failed to generate certificate: {stderr}"));
         }
 
         let created_at = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -160,10 +160,10 @@ impl SSLManager {
     }
 
     /// Get certificate for a domain (if exists)
-    pub fn get_cert(bin_path: &PathBuf, domain: &str) -> Option<SslCertificate> {
+    pub fn get_cert(bin_path: &Path, domain: &str) -> Option<SslCertificate> {
         let certs_dir = Self::get_certs_dir(bin_path);
-        let cert_path = certs_dir.join(format!("{}.pem", domain));
-        let key_path = certs_dir.join(format!("{}-key.pem", domain));
+        let cert_path = certs_dir.join(format!("{domain}.pem"));
+        let key_path = certs_dir.join(format!("{domain}-key.pem"));
 
         if cert_path.exists() && key_path.exists() {
             let modified = fs::metadata(&cert_path)
@@ -185,7 +185,7 @@ impl SSLManager {
     }
 
     /// List all certificates
-    pub fn list_certs(bin_path: &PathBuf) -> Vec<SslCertificate> {
+    pub fn list_certs(bin_path: &Path) -> Vec<SslCertificate> {
         let certs_dir = Self::get_certs_dir(bin_path);
         let mut certs = Vec::new();
 
@@ -208,23 +208,23 @@ impl SSLManager {
     }
 
     /// Delete certificate for a domain
-    pub fn delete_cert(bin_path: &PathBuf, domain: &str) -> Result<(), String> {
+    pub fn delete_cert(bin_path: &Path, domain: &str) -> Result<(), String> {
         let certs_dir = Self::get_certs_dir(bin_path);
-        let cert_path = certs_dir.join(format!("{}.pem", domain));
-        let key_path = certs_dir.join(format!("{}-key.pem", domain));
+        let cert_path = certs_dir.join(format!("{domain}.pem"));
+        let key_path = certs_dir.join(format!("{domain}-key.pem"));
 
         if cert_path.exists() {
-            fs::remove_file(&cert_path).map_err(|e| format!("Failed to delete cert: {}", e))?;
+            fs::remove_file(&cert_path).map_err(|e| format!("Failed to delete cert: {e}"))?;
         }
         if key_path.exists() {
-            fs::remove_file(&key_path).map_err(|e| format!("Failed to delete key: {}", e))?;
+            fs::remove_file(&key_path).map_err(|e| format!("Failed to delete key: {e}"))?;
         }
 
         Ok(())
     }
 
     /// Get full SSL status
-    pub fn get_status(bin_path: &PathBuf) -> SslStatus {
+    pub fn get_status(bin_path: &Path) -> SslStatus {
         let mkcert_installed = Self::is_mkcert_installed(bin_path);
         let mkcert_path = Self::get_mkcert_path(bin_path).to_string_lossy().to_string();
         let ca_installed = if mkcert_installed { Self::is_ca_installed(bin_path) } else { false };

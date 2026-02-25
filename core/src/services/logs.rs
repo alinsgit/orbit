@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,7 +32,7 @@ pub struct LogManager;
 
 impl LogManager {
     /// Get all available log files
-    pub fn get_log_files(bin_path: &PathBuf) -> Result<Vec<LogFile>, String> {
+    pub fn get_log_files(bin_path: &Path) -> Result<Vec<LogFile>, String> {
         let mut logs = Vec::new();
 
         // Nginx logs
@@ -91,7 +91,7 @@ impl LogManager {
                         if php_log.exists() {
                             let metadata = fs::metadata(&php_log).ok();
                             logs.push(LogFile {
-                                name: format!("php-{}-errors.log", version),
+                                name: format!("php-{version}-errors.log"),
                                 path: php_log.to_string_lossy().to_string(),
                                 size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
                                 modified: metadata
@@ -160,11 +160,10 @@ impl LogManager {
         // Redis log - show if redis is installed
         let redis_dir = bin_path.join("redis");
         let redis_log = redis_dir.join("redis.log");
-        if redis_dir.exists() {
-            if !redis_log.exists() {
+        if redis_dir.exists()
+            && !redis_log.exists() {
                 let _ = fs::write(&redis_log, "");
             }
-        }
         if redis_log.exists() {
             let metadata = fs::metadata(&redis_log).ok();
             logs.push(LogFile {
@@ -202,7 +201,7 @@ impl LogManager {
                         };
 
                         logs.push(LogFile {
-                            name: format!("apache-{}", name),
+                            name: format!("apache-{name}"),
                             path: path.to_string_lossy().to_string(),
                             size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
                             modified: metadata
@@ -235,7 +234,7 @@ impl LogManager {
                                 let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                                 let metadata = fs::metadata(&path).ok();
                                 logs.push(LogFile {
-                                    name: format!("postgresql-{}", name),
+                                    name: format!("postgresql-{name}"),
                                     path: path.to_string_lossy().to_string(),
                                     size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
                                     modified: metadata
@@ -332,8 +331,8 @@ impl LogManager {
         let file = File::open(&path).map_err(|e| e.to_string())?;
         let reader = BufReader::new(file);
 
-        let has_filters = level_filter.map_or(false, |l| l != "all")
-            || search_query.map_or(false, |q| !q.is_empty());
+        let has_filters = level_filter.is_some_and(|l| l != "all")
+            || search_query.is_some_and(|q| !q.is_empty());
 
         let needed = offset + lines;
         let mut ring: VecDeque<String> = VecDeque::with_capacity(needed + 1);
@@ -370,8 +369,8 @@ impl LogManager {
 
         // ring contains the last `needed` (or fewer) matching lines
         let ring_len = ring.len();
-        let take_end = if ring_len > offset { ring_len - offset } else { 0 };
-        let take_start = if take_end > lines { take_end - lines } else { 0 };
+        let take_end = ring_len.saturating_sub(offset);
+        let take_start = take_end.saturating_sub(lines);
 
         let entries: Vec<LogEntry> = ring
             .range(take_start..take_end)
@@ -575,7 +574,7 @@ impl LogManager {
 
     /// Clear a log file
     pub fn clear_log(path: &str) -> Result<(), String> {
-        fs::write(path, "").map_err(|e| format!("Failed to clear log: {}", e))
+        fs::write(path, "").map_err(|e| format!("Failed to clear log: {e}"))
     }
 
 }

@@ -22,11 +22,11 @@ impl VersionFetcher {
         // Fetch registry (remote with fallback)
         let registry = if force_refresh {
             LibraryRegistry::fetch().await.unwrap_or_else(|_| {
-                LibraryRegistry::load_fallback().unwrap_or_else(|e| panic!("Fallback registry broken: {}", e))
+                LibraryRegistry::load_fallback().unwrap_or_else(|e| panic!("Fallback registry broken: {e}"))
             })
         } else {
             LibraryRegistry::get().await.unwrap_or_else(|_| {
-                LibraryRegistry::load_fallback().unwrap_or_else(|e| panic!("Fallback registry broken: {}", e))
+                LibraryRegistry::load_fallback().unwrap_or_else(|e| panic!("Fallback registry broken: {e}"))
             })
         };
 
@@ -47,8 +47,8 @@ impl VersionFetcher {
 
         for service in &services {
             if let Err(e) = Self::fetch_versions(app, service, true).await {
-                log::error!("{} refresh failed: {}", service, e);
-                errors.push(format!("{}: {}", service, e));
+                log::error!("{service} refresh failed: {e}");
+                errors.push(format!("{service}: {e}"));
             }
         }
 
@@ -56,7 +56,7 @@ impl VersionFetcher {
             Ok(())
         } else {
             // Still Ok - partial failures are expected
-            log::warn!("Some services failed to refresh: {:?}", errors);
+            log::warn!("Some services failed to refresh: {errors:?}");
             Ok(())
         }
     }
@@ -64,7 +64,7 @@ impl VersionFetcher {
     /// Convert registry ServiceInfo to Vec<ServiceVersion>
     fn registry_to_versions(registry: &LibraryRegistry, service: &str) -> Result<Vec<ServiceVersion>, String> {
         let service_info = registry.services.get(service)
-            .ok_or_else(|| format!("Service '{}' not found in registry", service))?;
+            .ok_or_else(|| format!("Service '{service}' not found in registry"))?;
 
         let platform = Self::get_current_platform();
         let mut versions = Vec::new();
@@ -112,7 +112,7 @@ impl VersionFetcher {
         }
 
         if versions.is_empty() {
-            return Err(format!("No versions found for '{}' on platform '{}'", service, platform));
+            return Err(format!("No versions found for '{service}' on platform '{platform}'"));
         }
 
         Ok(versions)

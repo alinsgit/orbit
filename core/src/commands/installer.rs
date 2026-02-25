@@ -1,5 +1,5 @@
 use tauri::command;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::services::download::{download_file, extract_zip_with_strip};
 use tauri::AppHandle;
 use tauri::Manager;
@@ -17,17 +17,17 @@ pub async fn download_service(
         .join("bin");
     
     if !bin_path.exists() {
-        std::fs::create_dir_all(&bin_path).map_err(|e| format!("Failed to create bin dir: {}", e))?;
+        std::fs::create_dir_all(&bin_path).map_err(|e| format!("Failed to create bin dir: {e}"))?;
     }
 
     let downloads_dir = bin_path.join("downloads");
     if !downloads_dir.exists() {
-        std::fs::create_dir_all(&downloads_dir).map_err(|e| format!("Failed to create downloads dir: {}", e))?;
+        std::fs::create_dir_all(&downloads_dir).map_err(|e| format!("Failed to create downloads dir: {e}"))?;
     }
     
     let dest_path = downloads_dir.join(&filename);
 
-    log::info!("Downloading {} from {} to {:?}", service_type, url, dest_path);
+    log::info!("Downloading {service_type} from {url} to {dest_path:?}");
 
     // Download the file
     download_file(&url, &dest_path).await?;
@@ -53,15 +53,15 @@ pub async fn download_service(
         _ => (bin_path.join("misc").join(&service_type), false),
     };
 
-    log::info!("Extracting to {:?} (strip_root: {})", extract_target, strip_root);
+    log::info!("Extracting to {extract_target:?} (strip_root: {strip_root})");
 
     // Clean target directory for fresh install
     if extract_target.exists() {
         std::fs::remove_dir_all(&extract_target)
-            .map_err(|e| format!("Failed to clean target dir: {}", e))?;
+            .map_err(|e| format!("Failed to clean target dir: {e}"))?;
     }
     std::fs::create_dir_all(&extract_target)
-        .map_err(|e| format!("Failed to create extract dir: {}", e))?;
+        .map_err(|e| format!("Failed to create extract dir: {e}"))?;
 
     // Check if it's a raw executable (like rustup-init) or an archive
     if service_type == "rust" {
@@ -82,9 +82,9 @@ pub async fn download_service(
                     let _ = std::fs::set_permissions(&target_binary_path, perms);
                 }
                 
-                return Ok(format!("Service installed to {:?}", extract_target));
+                return Ok(format!("Service installed to {extract_target:?}"));
             },
-            Err(e) => return Err(format!("Failed to move executable: {}", e)),
+            Err(e) => return Err(format!("Failed to move executable: {e}")),
         }
     }
 
@@ -102,16 +102,16 @@ pub async fn download_service(
             // Note: PostgreSQL ZIP extracts to postgresql/pgsql/bin/ (nested).
             // Scanner and service.rs handle both flattened and nested structures.
 
-            Ok(format!("Service installed to {:?}", extract_target))
+            Ok(format!("Service installed to {extract_target:?}"))
         },
-        Err(e) => Err(format!("Extraction failed: {}", e)),
+        Err(e) => Err(format!("Extraction failed: {e}")),
     }
 }
 
 /// Move contents from source directory to destination (used for Apache24 subfolder)
-fn move_subfolder_up(source: &PathBuf, dest: &PathBuf) -> Result<(), String> {
+fn move_subfolder_up(source: &Path, dest: &Path) -> Result<(), String> {
     let entries = std::fs::read_dir(source)
-        .map_err(|e| format!("Failed to read subfolder: {}", e))?;
+        .map_err(|e| format!("Failed to read subfolder: {e}"))?;
 
     for entry in entries.flatten() {
         let src_path = entry.path();
@@ -140,9 +140,9 @@ fn move_subfolder_up(source: &PathBuf, dest: &PathBuf) -> Result<(), String> {
 }
 
 /// Recursively copy a directory
-fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dst)
-        .map_err(|e| format!("Failed to create dir {:?}: {}", dst, e))?;
+        .map_err(|e| format!("Failed to create dir {dst:?}: {e}"))?;
 
     for entry in std::fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
         let src_path = entry.path();
@@ -152,14 +152,14 @@ fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
             copy_dir_all(&src_path, &dst_path)?;
         } else {
             std::fs::copy(&src_path, &dst_path)
-                .map_err(|e| format!("Failed to copy {:?}: {}", src_path, e))?;
+                .map_err(|e| format!("Failed to copy {src_path:?}: {e}"))?;
         }
     }
     Ok(())
 }
 
 /// Configure Apache after installation
-fn configure_apache(apache_path: &PathBuf) -> Result<(), String> {
+fn configure_apache(apache_path: &Path) -> Result<(), String> {
     // Apache Lounge zips might have Apache24 subfolder even after stripping
     // Check both direct path and Apache24 subfolder
     let conf_dir = if apache_path.join("conf").exists() {
@@ -174,30 +174,30 @@ fn configure_apache(apache_path: &PathBuf) -> Result<(), String> {
         let contents: Vec<_> = std::fs::read_dir(apache_path)
             .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect())
             .unwrap_or_default();
-        return Err(format!("httpd.conf not found. Directory contents: {:?}", contents));
+        return Err(format!("httpd.conf not found. Directory contents: {contents:?}"));
     };
 
     let httpd_conf = conf_dir.join("httpd.conf");
 
     if !httpd_conf.exists() {
-        return Err(format!("httpd.conf not found at {:?}", httpd_conf));
+        return Err(format!("httpd.conf not found at {httpd_conf:?}"));
     }
 
     // Read httpd.conf
     let mut content = std::fs::read_to_string(&httpd_conf)
-        .map_err(|e| format!("Failed to read httpd.conf: {}", e))?;
+        .map_err(|e| format!("Failed to read httpd.conf: {e}"))?;
 
     // Update ServerRoot to use the actual installation path
     let server_root = apache_path.to_string_lossy().replace('\\', "/");
 
     // Replace the default ServerRoot
     let server_root_regex = regex::Regex::new(r#"(?m)^Define SRVROOT.*$"#).unwrap();
-    content = server_root_regex.replace(&content, format!(r#"Define SRVROOT "{}""#, server_root)).to_string();
+    content = server_root_regex.replace(&content, format!(r#"Define SRVROOT "{server_root}""#)).to_string();
 
     // If no SRVROOT define found, try replacing ServerRoot directly
     if !content.contains("SRVROOT") {
         let server_root_regex2 = regex::Regex::new(r#"(?m)^ServerRoot.*$"#).unwrap();
-        content = server_root_regex2.replace(&content, format!(r#"ServerRoot "{}""#, server_root)).to_string();
+        content = server_root_regex2.replace(&content, format!(r#"ServerRoot "{server_root}""#)).to_string();
     }
 
     // Enable common modules
@@ -209,8 +209,8 @@ fn configure_apache(apache_path: &PathBuf) -> Result<(), String> {
     ];
 
     for module in modules_to_enable {
-        let disabled = format!("#LoadModule {}_module", module);
-        let enabled = format!("LoadModule {}_module", module);
+        let disabled = format!("#LoadModule {module}_module");
+        let enabled = format!("LoadModule {module}_module");
         if content.contains(&disabled) {
             content = content.replace(&disabled, &enabled);
         }
@@ -226,16 +226,16 @@ fn configure_apache(apache_path: &PathBuf) -> Result<(), String> {
 
     // Write updated httpd.conf
     std::fs::write(&httpd_conf, content)
-        .map_err(|e| format!("Failed to write httpd.conf: {}", e))?;
+        .map_err(|e| format!("Failed to write httpd.conf: {e}"))?;
 
     // Create logs directory if it doesn't exist
     let logs_dir = apache_path.join("logs");
     if !logs_dir.exists() {
         std::fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs dir: {}", e))?;
+            .map_err(|e| format!("Failed to create logs dir: {e}"))?;
     }
 
-    log::info!("Apache configured successfully at {:?}", apache_path);
+    log::info!("Apache configured successfully at {apache_path:?}");
     Ok(())
 }
 
@@ -249,10 +249,10 @@ fn configure_php(php_path: &PathBuf) -> Result<(), String> {
     if !ini_target.exists() {
         if ini_dev.exists() {
             std::fs::copy(&ini_dev, &ini_target)
-                .map_err(|e| format!("Failed to create php.ini: {}", e))?;
+                .map_err(|e| format!("Failed to create php.ini: {e}"))?;
         } else if ini_prod.exists() {
             std::fs::copy(&ini_prod, &ini_target)
-                .map_err(|e| format!("Failed to create php.ini: {}", e))?;
+                .map_err(|e| format!("Failed to create php.ini: {e}"))?;
         } else {
             return Err("No php.ini template found".to_string());
         }
@@ -260,7 +260,7 @@ fn configure_php(php_path: &PathBuf) -> Result<(), String> {
 
     // Read php.ini
     let mut content = std::fs::read_to_string(&ini_target)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     // Set extension_dir
     let ext_dir = php_path.join("ext");
@@ -270,13 +270,13 @@ fn configure_php(php_path: &PathBuf) -> Result<(), String> {
     if content.contains(";extension_dir = \"ext\"") {
         content = content.replace(
             ";extension_dir = \"ext\"",
-            &format!("extension_dir = \"{}\"", ext_dir_str)
+            &format!("extension_dir = \"{ext_dir_str}\"")
         );
-    } else if !content.contains(&format!("extension_dir = \"{}\"", ext_dir_str)) {
+    } else if !content.contains(&format!("extension_dir = \"{ext_dir_str}\"")) {
         // Add extension_dir if not present
         content = content.replace(
             "[PHP]",
-            &format!("[PHP]\nextension_dir = \"{}\"", ext_dir_str)
+            &format!("[PHP]\nextension_dir = \"{ext_dir_str}\"")
         );
     }
 
@@ -293,8 +293,8 @@ fn configure_php(php_path: &PathBuf) -> Result<(), String> {
     ];
 
     for ext in extensions {
-        let disabled = format!(";extension={}", ext);
-        let enabled = format!("extension={}", ext);
+        let disabled = format!(";extension={ext}");
+        let enabled = format!("extension={ext}");
         if content.contains(&disabled) {
             content = content.replace(&disabled, &enabled);
         }
@@ -313,9 +313,9 @@ fn configure_php(php_path: &PathBuf) -> Result<(), String> {
 
     // Write updated php.ini
     std::fs::write(&ini_target, content)
-        .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to write php.ini: {e}"))?;
 
-    log::info!("PHP configured successfully at {:?}", php_path);
+    log::info!("PHP configured successfully at {php_path:?}");
     Ok(())
 }
 
@@ -327,7 +327,7 @@ pub fn check_vc_redist() -> Result<bool, String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         let output = Command::new("reg")
-            .args(&[
+            .args([
                 "query",
                 "HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64",
                 "/v",
@@ -335,7 +335,7 @@ pub fn check_vc_redist() -> Result<bool, String> {
             ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
-            .map_err(|e| format!("Failed to run reg query: {}", e))?;
+            .map_err(|e| format!("Failed to run reg query: {e}"))?;
 
         if !output.status.success() {
             // It might not be installed, or key doesn't exist

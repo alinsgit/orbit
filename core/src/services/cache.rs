@@ -74,8 +74,8 @@ impl CacheManager {
             if let Ok(content) = fs::read_to_string(&config_path) {
                 for line in content.lines() {
                     let trimmed = line.trim();
-                    if trimmed.starts_with("port ") {
-                        if let Ok(port) = trimmed[5..].trim().parse::<u16>() {
+                    if let Some(port_str) = trimmed.strip_prefix("port ") {
+                        if let Ok(port) = port_str.trim().parse::<u16>() {
                             return port;
                         }
                     }
@@ -88,7 +88,7 @@ impl CacheManager {
     /// Check if a port is in use
     fn check_port_in_use(port: u16) -> bool {
         use std::net::TcpListener;
-        TcpListener::bind(format!("127.0.0.1:{}", port)).is_err()
+        TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
     }
 
     /// Get full cache status
@@ -125,7 +125,7 @@ logfile "redis.log"
 
         let config_path = redis_dir.join("redis.conf");
         fs::write(&config_path, config_content)
-            .map_err(|e| format!("Failed to write Redis config: {}", e))?;
+            .map_err(|e| format!("Failed to write Redis config: {e}"))?;
 
         Ok(())
     }

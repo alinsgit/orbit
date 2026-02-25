@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default)]
 pub enum VersionSource {
+    #[default]
     Api,
     Cache,
     Fallback,
@@ -18,11 +20,6 @@ pub struct ServiceVersion {
     pub source: VersionSource,
 }
 
-impl Default for VersionSource {
-    fn default() -> Self {
-        VersionSource::Api
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CachedVersions {

@@ -40,7 +40,7 @@ impl SiteProcessManager {
                         processes.remove(domain);
                     }
                     Ok(None) => {
-                        return Err(format!("Site app for {} is already running", domain));
+                        return Err(format!("Site app for {domain} is already running"));
                     }
                     Err(_) => {
                         processes.remove(domain);
@@ -59,7 +59,7 @@ impl SiteProcessManager {
 
         let work_path = std::path::Path::new(working_dir);
         if !work_path.exists() {
-            return Err(format!("Working directory does not exist: {}", working_dir));
+            return Err(format!("Working directory does not exist: {working_dir}"));
         }
 
         let mut command = Command::new(&program);
@@ -83,10 +83,10 @@ impl SiteProcessManager {
                 let pid = child.id();
                 let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
                 processes.insert(domain.to_string(), child);
-                log::info!("Started site app for {} (PID: {}, cmd: {})", domain, pid, dev_command);
+                log::info!("Started site app for {domain} (PID: {pid}, cmd: {dev_command})");
                 Ok(pid)
             }
-            Err(e) => Err(format!("Failed to start site app: {}", e)),
+            Err(e) => Err(format!("Failed to start site app: {e}")),
         }
     }
 
@@ -100,7 +100,7 @@ impl SiteProcessManager {
             #[cfg(target_os = "windows")]
             {
                 let _ = hidden_command("taskkill")
-                    .args(&["/F", "/PID", &pid.to_string(), "/T"])
+                    .args(["/F", "/PID", &pid.to_string(), "/T"])
                     .output();
             }
             #[cfg(not(target_os = "windows"))]
@@ -111,10 +111,10 @@ impl SiteProcessManager {
             }
 
             let _ = child.wait();
-            log::info!("Stopped site app for {} (PID: {})", domain, pid);
+            log::info!("Stopped site app for {domain} (PID: {pid})");
             Ok(())
         } else {
-            Err(format!("No running app process for site {}", domain))
+            Err(format!("No running app process for site {domain}"))
         }
     }
 
@@ -155,7 +155,7 @@ impl SiteProcessManager {
                 #[cfg(target_os = "windows")]
                 {
                     let _ = hidden_command("taskkill")
-                        .args(&["/F", "/PID", &pid.to_string(), "/T"])
+                        .args(["/F", "/PID", &pid.to_string(), "/T"])
                         .output();
                 }
                 #[cfg(not(target_os = "windows"))]
@@ -166,7 +166,7 @@ impl SiteProcessManager {
                 }
 
                 let _ = child.wait();
-                log::info!("Stopped site app for {} (PID: {})", domain, pid);
+                log::info!("Stopped site app for {domain} (PID: {pid})");
             }
         }
 

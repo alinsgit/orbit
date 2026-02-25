@@ -254,7 +254,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       try {
         entry.fitAddon.fit();
         resizeTerminal(activeTabId, entry.term.cols, entry.term.rows).catch(console.error);
-      } catch { }
+      } catch { /* fit may fail if terminal not visible */ }
     }, 50);
     return () => clearTimeout(timer);
   }, [activeTabId, isExpanded]);
@@ -269,7 +269,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       try {
         entry.fitAddon.fit();
         resizeTerminal(activeTabId, entry.term.cols, entry.term.rows).catch(console.error);
-      } catch { }
+      } catch { /* fit may fail if terminal not visible */ }
     });
 
     observer.observe(wrapperRef.current);
@@ -284,7 +284,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       try {
         entry.fitAddon.fit();
         resizeTerminal(activeTabId, entry.term.cols, entry.term.rows).catch(console.error);
-      } catch { }
+      } catch { /* fit may fail if terminal not visible */ }
     };
 
     window.addEventListener('resize', handleResize);

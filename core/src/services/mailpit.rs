@@ -53,7 +53,7 @@ impl MailpitManager {
     /// Check if a port is in use
     fn check_port_in_use(port: u16) -> bool {
         use std::net::TcpListener;
-        TcpListener::bind(format!("127.0.0.1:{}", port)).is_err()
+        TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
     }
 
     /// Get full Mailpit status
@@ -80,7 +80,7 @@ impl MailpitManager {
 
         // Create directory
         fs::create_dir_all(&mailpit_dir)
-            .map_err(|e| format!("Failed to create Mailpit directory: {}", e))?;
+            .map_err(|e| format!("Failed to create Mailpit directory: {e}"))?;
 
         let url = Self::get_download_url().await;
 
@@ -106,7 +106,7 @@ impl MailpitManager {
 
         if mailpit_dir.exists() {
             fs::remove_dir_all(&mailpit_dir)
-                .map_err(|e| format!("Failed to remove Mailpit: {}", e))?;
+                .map_err(|e| format!("Failed to remove Mailpit: {e}"))?;
         }
 
         Ok(())
@@ -149,9 +149,9 @@ impl MailpitManager {
             .create(true)
             .append(true)
             .open(&log_path)
-            .map_err(|e| format!("Failed to open log file: {}", e))?;
+            .map_err(|e| format!("Failed to open log file: {e}"))?;
         let log_err = log_file.try_clone()
-            .map_err(|e| format!("Failed to clone log handle: {}", e))?;
+            .map_err(|e| format!("Failed to clone log handle: {e}"))?;
 
         hidden_command(&exe_path)
             .args([
@@ -161,7 +161,7 @@ impl MailpitManager {
             .stdout(std::process::Stdio::from(log_file))
             .stderr(std::process::Stdio::from(log_err))
             .spawn()
-            .map_err(|e| format!("Failed to start Mailpit: {}", e))?;
+            .map_err(|e| format!("Failed to start Mailpit: {e}"))?;
 
         // Wait for port to become available (up to 3 seconds)
         for _ in 0..6 {
@@ -180,7 +180,7 @@ impl MailpitManager {
         hidden_command("taskkill")
             .args(["/F", "/IM", "mailpit.exe"])
             .output()
-            .map_err(|e| format!("Failed to stop Mailpit: {}", e))?;
+            .map_err(|e| format!("Failed to stop Mailpit: {e}"))?;
         Ok(())
     }
 
