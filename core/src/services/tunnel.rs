@@ -59,12 +59,12 @@ impl TunnelManager {
         let mut tunnel_cmd = Command::new(&bin_path);
         tunnel_cmd.arg("http")
             .arg(port.to_string())
-            .arg(format!("--host-header={}", domain));
+            .arg(format!("--host-header={domain}"));
         #[cfg(windows)]
         tunnel_cmd.creation_flags(CREATE_NO_WINDOW);
         
         let child = tunnel_cmd.spawn()
-            .map_err(|e| format!("Failed to spawn Ngrok: {}", e))?;
+            .map_err(|e| format!("Failed to spawn Ngrok: {e}"))?;
 
         *child_guard = Some(child);
 
@@ -83,7 +83,7 @@ impl TunnelManager {
                     let _ = existing_child.wait();
                     Ok("Tunnel successfully stopped.".to_string())
                 },
-                Err(e) => Err(format!("Failed to kill Ngrok process: {}", e)),
+                Err(e) => Err(format!("Failed to kill Ngrok process: {e}")),
             }
         } else {
             Ok("No active tunnel found to stop.".to_string())

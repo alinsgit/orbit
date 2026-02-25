@@ -30,7 +30,7 @@ pub fn create_from_blueprint(
 ) -> Result<BlueprintResult, String> {
     let blueprints = get_blueprints();
     let bp = blueprints.iter().find(|b| b.name == blueprint)
-        .ok_or_else(|| format!("Blueprint '{}' not found", blueprint))?;
+        .ok_or_else(|| format!("Blueprint '{blueprint}' not found"))?;
 
     let mut warnings: Vec<String> = vec![];
 
@@ -38,7 +38,7 @@ pub fn create_from_blueprint(
     let project_path = Path::new(&path);
     if !project_path.exists() {
         fs::create_dir_all(project_path)
-            .map_err(|e| format!("Failed to create project directory: {}", e))?;
+            .map_err(|e| format!("Failed to create project directory: {e}"))?;
     }
 
     // Determine PHP version for PHP-based blueprints
@@ -67,7 +67,7 @@ pub fn create_from_blueprint(
 
     // Write .env if blueprint has env_template
     if let Some(ref env_tpl) = bp.env_template {
-        let db_name = domain.replace('.', "_").replace('-', "_");
+        let db_name = domain.replace(['.', '-'], "_");
         let env_content = env_tpl
             .replace("{{domain}}", &domain)
             .replace("{{db_name}}", &db_name);
@@ -75,7 +75,7 @@ pub fn create_from_blueprint(
         let env_path = project_path.join(".env");
         if !env_path.exists() {
             if let Err(e) = fs::write(&env_path, &env_content) {
-                warnings.push(format!("Failed to write .env: {}", e));
+                warnings.push(format!("Failed to write .env: {e}"));
             }
         } else {
             warnings.push(".env file already exists, skipped".into());
@@ -90,11 +90,11 @@ pub fn create_from_blueprint(
                     site_meta.dev_command = Some(dev_cmd.clone());
                     site_meta.updated_at = chrono::Local::now().to_rfc3339();
                     if let Err(e) = store.save(&app) {
-                        warnings.push(format!("Failed to save dev_command: {}", e));
+                        warnings.push(format!("Failed to save dev_command: {e}"));
                     }
                 }
             }
-            Err(e) => warnings.push(format!("Failed to update site metadata: {}", e)),
+            Err(e) => warnings.push(format!("Failed to update site metadata: {e}")),
         }
     }
 

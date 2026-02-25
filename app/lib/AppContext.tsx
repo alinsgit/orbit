@@ -119,9 +119,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           try {
             const s = await getServiceStatus(service.name);
             status = s as 'running' | 'stopped';
-          } catch {
-            status = 'stopped';
-          }
+          } catch { /* service may not be running */ }
 
           return { ...service, status, port: service.port };
         })

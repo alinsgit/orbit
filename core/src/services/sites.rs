@@ -69,26 +69,26 @@ impl SiteManager {
     fn validate_site_input(site: &Site) -> Result<(), String> {
         // 1. Validate domain
         validate_domain(&site.domain)
-            .map_err(|e| format!("Invalid domain: {}", e))?;
+            .map_err(|e| format!("Invalid domain: {e}"))?;
 
         // 2. Validate port
         validate_port(site.port)
-            .map_err(|e| format!("Invalid port: {}", e))?;
+            .map_err(|e| format!("Invalid port: {e}"))?;
 
         // 3. Validate PHP port if specified
         if let Some(php_port) = site.php_port {
             validate_port(php_port)
-                .map_err(|e| format!("Invalid PHP port: {}", e))?;
+                .map_err(|e| format!("Invalid PHP port: {e}"))?;
         }
 
         // 4. Validate path (allow any valid path for site root)
         validate_site_path(&site.path, None)
-            .map_err(|e| format!("Invalid path: {}", e))?;
+            .map_err(|e| format!("Invalid path: {e}"))?;
 
         // 5. Validate PHP version format if specified
         if let Some(ref version) = site.php_version {
             crate::services::validation::validate_php_version(version)
-                .map_err(|e| format!("Invalid PHP version: {}", e))?;
+                .map_err(|e| format!("Invalid PHP version: {e}"))?;
         }
 
         Ok(())
@@ -169,7 +169,7 @@ impl SiteManager {
         vars.insert("php_port", final_php_port.to_string());
 
         // Dev port for reverse proxy (JS frameworks)
-        let dev_port = site.dev_port.unwrap_or_else(|| {
+        let dev_port = site.dev_port.unwrap_or({
             match site.template.as_deref() {
                 Some("nextjs") => 3000,
                 Some("astro") => 4321,
@@ -231,7 +231,7 @@ impl SiteManager {
         // Write config file
         let conf_path = sites_dir.join(format!("{}.conf", site.domain));
         fs::write(&conf_path, &config_content)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+            .map_err(|e| format!("Failed to write config: {e}"))?;
 
         // Test config before proceeding
         let test_result = if use_apache {
@@ -246,7 +246,7 @@ impl SiteManager {
                 // Rollback: delete config file
                 let _ = fs::remove_file(&conf_path);
                 let server_name = if use_apache { "Apache" } else { "nginx" };
-                return Err(format!("Invalid {} config: {}", server_name, e));
+                return Err(format!("Invalid {server_name} config: {e}"));
             }
         }
 
@@ -258,7 +258,7 @@ impl SiteManager {
                 match HostsManager::add_domain_elevated(&site.domain) {
                     Ok(_) => None,
                     Err(e) => {
-                        log::warn!("Could not update hosts file: {}", e);
+                        log::warn!("Could not update hosts file: {e}");
                         Some(format!(
                             "Could not add {} to hosts file. Add manually: 127.0.0.1 {}",
                             site.domain, site.domain
@@ -283,8 +283,8 @@ impl SiteManager {
             php_version: site.php_version.clone(),
             php_port,
             ssl_enabled: site.ssl_enabled,
-            ssl_cert_path: ssl_cert_path,
-            ssl_key_path: ssl_key_path,
+            ssl_cert_path,
+            ssl_key_path,
             template: site.template.clone(),
             web_server: site.web_server.clone(),
             dev_port: stored_dev_port,
@@ -330,7 +330,7 @@ impl SiteManager {
             let migrated = store.migrate_from_nginx_configs(app)?;
             if migrated > 0 {
                 store.save(app)?;
-                log::info!("Migrated {} sites from nginx configs", migrated);
+                log::info!("Migrated {migrated} sites from nginx configs");
             }
         }
 
@@ -408,7 +408,7 @@ impl SiteManager {
     /// Update an existing site
     pub fn update_site(app: &AppHandle, domain: &str, updates: Site) -> Result<SiteWithStatus, String> {
         // Validate existing domain
-        validate_domain(domain).map_err(|e| format!("Invalid domain: {}", e))?;
+        validate_domain(domain).map_err(|e| format!("Invalid domain: {e}"))?;
 
         // Validate update data
         Self::validate_site_input(&updates)?;
@@ -417,7 +417,7 @@ impl SiteManager {
 
         let existing = store
             .get_site(domain)
-            .ok_or_else(|| format!("Site '{}' not found", domain))?
+            .ok_or_else(|| format!("Site '{domain}' not found"))?
             .clone();
 
         // Determine old web server type
@@ -426,17 +426,15 @@ impl SiteManager {
         // Delete old config from appropriate directory
         if old_use_apache {
             if let Ok(vhosts_dir) = ApacheManager::get_vhosts_dir(app) {
-                let old_conf = vhosts_dir.join(format!("{}.conf", domain));
+                let old_conf = vhosts_dir.join(format!("{domain}.conf"));
                 if old_conf.exists() {
-                    fs::remove_file(&old_conf).map_err(|e| format!("Failed to remove old config: {}", e))?;
+                    fs::remove_file(&old_conf).map_err(|e| format!("Failed to remove old config: {e}"))?;
                 }
             }
-        } else {
-            if let Ok(sites_dir) = NginxManager::get_sites_dir(app) {
-                let old_conf = sites_dir.join(format!("{}.conf", domain));
-                if old_conf.exists() {
-                    fs::remove_file(&old_conf).map_err(|e| format!("Failed to remove old config: {}", e))?;
-                }
+        } else if let Ok(sites_dir) = NginxManager::get_sites_dir(app) {
+            let old_conf = sites_dir.join(format!("{domain}.conf"));
+            if old_conf.exists() {
+                fs::remove_file(&old_conf).map_err(|e| format!("Failed to remove old config: {e}"))?;
             }
         }
 
@@ -494,17 +492,15 @@ impl SiteManager {
         // Delete config from appropriate directory
         if use_apache {
             if let Ok(vhosts_dir) = ApacheManager::get_vhosts_dir(app) {
-                let conf_path = vhosts_dir.join(format!("{}.conf", domain));
+                let conf_path = vhosts_dir.join(format!("{domain}.conf"));
                 if conf_path.exists() {
-                    fs::remove_file(&conf_path).map_err(|e| format!("Failed to delete config: {}", e))?;
+                    fs::remove_file(&conf_path).map_err(|e| format!("Failed to delete config: {e}"))?;
                 }
             }
-        } else {
-            if let Ok(sites_dir) = NginxManager::get_sites_dir(app) {
-                let conf_path = sites_dir.join(format!("{}.conf", domain));
-                if conf_path.exists() {
-                    fs::remove_file(&conf_path).map_err(|e| format!("Failed to delete config: {}", e))?;
-                }
+        } else if let Ok(sites_dir) = NginxManager::get_sites_dir(app) {
+            let conf_path = sites_dir.join(format!("{domain}.conf"));
+            if conf_path.exists() {
+                fs::remove_file(&conf_path).map_err(|e| format!("Failed to delete config: {e}"))?;
             }
         }
 
@@ -538,7 +534,7 @@ impl SiteManager {
         let store = SiteStore::load(app)?;
         let site = store
             .get_site(domain)
-            .ok_or_else(|| format!("Site '{}' not found", domain))?;
+            .ok_or_else(|| format!("Site '{domain}' not found"))?;
 
         let site_data = Site {
             domain: site.domain.clone(),
@@ -557,17 +553,15 @@ impl SiteManager {
         let use_apache = site.web_server.to_lowercase() == "apache";
         if use_apache {
             if let Ok(vhosts_dir) = ApacheManager::get_vhosts_dir(app) {
-                let conf_path = vhosts_dir.join(format!("{}.conf", domain));
+                let conf_path = vhosts_dir.join(format!("{domain}.conf"));
                 if conf_path.exists() {
                     fs::remove_file(&conf_path).ok();
                 }
             }
-        } else {
-            if let Ok(sites_dir) = NginxManager::get_sites_dir(app) {
-                let conf_path = sites_dir.join(format!("{}.conf", domain));
-                if conf_path.exists() {
-                    fs::remove_file(&conf_path).ok();
-                }
+        } else if let Ok(sites_dir) = NginxManager::get_sites_dir(app) {
+            let conf_path = sites_dir.join(format!("{domain}.conf"));
+            if conf_path.exists() {
+                fs::remove_file(&conf_path).ok();
             }
         }
 

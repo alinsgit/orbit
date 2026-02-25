@@ -1,8 +1,8 @@
-/// Shared path utilities for Orbit
-/// Used by both GUI (Tauri) and CLI to resolve data directories.
-///
-/// Windows: %LOCALAPPDATA%/com.orbit.dev/
-/// This matches Tauri's `app_local_data_dir()` for the "com.orbit.dev" identifier.
+//! Shared path utilities for Orbit.
+//! Used by both GUI (Tauri) and CLI to resolve data directories.
+//!
+//! Windows: %LOCALAPPDATA%/com.orbit.dev/
+//! This matches Tauri's `app_local_data_dir()` for the "com.orbit.dev" identifier.
 
 use std::path::PathBuf;
 
@@ -15,7 +15,7 @@ pub fn get_orbit_data_dir() -> PathBuf {
         let local_app_data = std::env::var("LOCALAPPDATA")
             .unwrap_or_else(|_| {
                 let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
-                format!("{}\\AppData\\Local", home)
+                format!("{home}\\AppData\\Local")
             });
         PathBuf::from(local_app_data).join("com.orbit.dev")
     }

@@ -84,7 +84,7 @@ pub async fn spawn_terminal(
         cols,
         pixel_width: 0,
         pixel_height: 0,
-    }).map_err(|e| format!("Failed to open pty: {}", e))?;
+    }).map_err(|e| format!("Failed to open pty: {e}"))?;
     
     // Determinate default shell
     let shell_fallback = "bash".to_string();
@@ -117,7 +117,7 @@ pub async fn spawn_terminal(
     }
     
     let _child = pty_pair.slave.spawn_command(cmd)
-        .map_err(|e| format!("Failed to spawn shell: {}", e))?;
+        .map_err(|e| format!("Failed to spawn shell: {e}"))?;
         
     // Save the master side to state so we can write/resize later
     let master = pty_pair.master;
@@ -147,7 +147,7 @@ pub async fn spawn_terminal(
             match reader.read(&mut buf) {
                 Ok(n) if n > 0 => {
                     let text = String::from_utf8_lossy(&buf[0..n]).to_string();
-                    let _ = app_clone.emit(&format!("pty-output-{}", id_clone), text);
+                    let _ = app_clone.emit(&format!("pty-output-{id_clone}"), text);
                 }
                 _ => break, // EOF or Error
             }

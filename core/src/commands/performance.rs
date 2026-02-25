@@ -71,7 +71,7 @@ pub fn get_opcache_config(app: AppHandle, version: String) -> Result<OpcacheConf
     }
 
     let content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     let enabled = content.contains("opcache.enable=1") ||
                   content.contains("opcache.enable = 1");
@@ -116,7 +116,7 @@ pub fn set_opcache_config(app: AppHandle, version: String, config: OpcacheConfig
     }
 
     let mut content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     // Check if extension=opcache exists, if not add it
     if !content.contains("extension=opcache") && !content.contains("zend_extension=opcache") {
@@ -159,7 +159,7 @@ opcache.fast_shutdown=1
     content.push_str(&opcache_block);
 
     fs::write(&ini_path, content)
-        .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to write php.ini: {e}"))?;
 
     Ok("OPcache configuration updated. Restart PHP to apply changes.".to_string())
 }
@@ -180,7 +180,7 @@ pub fn get_nginx_gzip_config(app: AppHandle) -> Result<NginxGzipConfig, String> 
     }
 
     let content = fs::read_to_string(&nginx_conf)
-        .map_err(|e| format!("Failed to read nginx.conf: {}", e))?;
+        .map_err(|e| format!("Failed to read nginx.conf: {e}"))?;
 
     // Check if gzip is enabled (gzip on; not commented)
     let enabled = content.lines().any(|line| {
@@ -227,7 +227,7 @@ pub fn set_nginx_gzip_config(app: AppHandle, config: NginxGzipConfig) -> Result<
     }
 
     let content = fs::read_to_string(&nginx_conf)
-        .map_err(|e| format!("Failed to read nginx.conf: {}", e))?;
+        .map_err(|e| format!("Failed to read nginx.conf: {e}"))?;
 
     // Remove existing gzip settings
     let lines: Vec<&str> = content.lines().collect();
@@ -273,7 +273,7 @@ pub fn set_nginx_gzip_config(app: AppHandle, config: NginxGzipConfig) -> Result<
 
     let new_content = filtered.join("\n");
     fs::write(&nginx_conf, new_content)
-        .map_err(|e| format!("Failed to write nginx.conf: {}", e))?;
+        .map_err(|e| format!("Failed to write nginx.conf: {e}"))?;
 
     // Reload nginx if running
     if NginxManager::is_running() {
@@ -293,7 +293,7 @@ pub fn get_nginx_conf_raw(app: AppHandle) -> Result<String, String> {
         return Err("nginx.conf not found".to_string());
     }
 
-    fs::read_to_string(&nginx_conf).map_err(|e| format!("Failed to read nginx.conf: {}", e))
+    fs::read_to_string(&nginx_conf).map_err(|e| format!("Failed to read nginx.conf: {e}"))
 }
 
 /// Save raw nginx.conf content
@@ -311,7 +311,7 @@ pub fn save_nginx_conf_raw(app: AppHandle, content: String) -> Result<String, St
         fs::copy(&nginx_conf, &backup_path).ok();
     }
 
-    fs::write(&nginx_conf, &content).map_err(|e| format!("Failed to save nginx.conf: {}", e))?;
+    fs::write(&nginx_conf, &content).map_err(|e| format!("Failed to save nginx.conf: {e}"))?;
 
     if NginxManager::is_running() {
         NginxManager::reload(&app)?;
@@ -336,7 +336,7 @@ pub fn get_mariadb_conf_raw(app: AppHandle) -> Result<String, String> {
         return Err("my.ini not found".to_string());
     }
 
-    fs::read_to_string(&ini_path).map_err(|e| format!("Failed to read my.ini: {}", e))
+    fs::read_to_string(&ini_path).map_err(|e| format!("Failed to read my.ini: {e}"))
 }
 
 /// Save raw MariaDB my.ini content
@@ -358,13 +358,11 @@ pub fn save_mariadb_conf_raw(app: AppHandle, content: String) -> Result<String, 
     if ini_path.exists() {
         let backup_path = ini_path.with_extension("ini.bak");
         fs::copy(&ini_path, &backup_path).ok();
-    } else {
-        if let Some(parent) = ini_path.parent() {
-            fs::create_dir_all(parent).ok();
-        }
+    } else if let Some(parent) = ini_path.parent() {
+        fs::create_dir_all(parent).ok();
     }
 
-    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save my.ini: {}", e))?;
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save my.ini: {e}"))?;
 
     Ok("my.ini saved successfully".to_string())
 }
@@ -385,7 +383,7 @@ pub fn get_apache_conf_raw(app: AppHandle) -> Result<String, String> {
         return Err("httpd.conf not found".to_string());
     }
 
-    fs::read_to_string(&conf_path).map_err(|e| format!("Failed to read httpd.conf: {}", e))
+    fs::read_to_string(&conf_path).map_err(|e| format!("Failed to read httpd.conf: {e}"))
 }
 
 /// Save raw Apache httpd.conf content
@@ -407,13 +405,11 @@ pub fn save_apache_conf_raw(app: AppHandle, content: String) -> Result<String, S
     if conf_path.exists() {
         let backup_path = conf_path.with_extension("conf.bak");
         fs::copy(&conf_path, &backup_path).ok();
-    } else {
-        if let Some(parent) = conf_path.parent() {
-            fs::create_dir_all(parent).ok();
-        }
+    } else if let Some(parent) = conf_path.parent() {
+        fs::create_dir_all(parent).ok();
     }
 
-    fs::write(&conf_path, &content).map_err(|e| format!("Failed to save httpd.conf: {}", e))?;
+    fs::write(&conf_path, &content).map_err(|e| format!("Failed to save httpd.conf: {e}"))?;
 
     Ok("httpd.conf saved successfully".to_string())
 }
@@ -524,10 +520,10 @@ pub fn clear_all_caches(app: AppHandle, php_version: Option<String>) -> Result<C
         match clear_opcache(&app, &version) {
             Ok(_) => {
                 opcache_cleared = true;
-                messages.push(format!("OPcache cleared for PHP {}", version));
+                messages.push(format!("OPcache cleared for PHP {version}"));
             }
             Err(e) => {
-                messages.push(format!("OPcache (PHP {}): {}", version, e));
+                messages.push(format!("OPcache (PHP {version}): {e}"));
             }
         }
     } else {
@@ -562,11 +558,11 @@ pub fn clear_all_caches(app: AppHandle, php_version: Option<String>) -> Result<C
         Ok(count) => {
             temp_files_cleared = count;
             if count > 0 {
-                messages.push(format!("{} temp files cleared", count));
+                messages.push(format!("{count} temp files cleared"));
             }
         }
         Err(e) => {
-            messages.push(format!("Temp files: {}", e));
+            messages.push(format!("Temp files: {e}"));
         }
     }
 
@@ -579,7 +575,7 @@ pub fn clear_all_caches(app: AppHandle, php_version: Option<String>) -> Result<C
             }
         }
         Err(e) => {
-            messages.push(format!("Nginx cache: {}", e));
+            messages.push(format!("Nginx cache: {e}"));
         }
     }
 
@@ -631,7 +627,7 @@ if (function_exists('opcache_reset')) {
 "#;
 
     fs::write(&script_path, script)
-        .map_err(|e| format!("Failed to create script: {}", e))?;
+        .map_err(|e| format!("Failed to create script: {e}"))?;
 
     let mut cmd = std::process::Command::new(&php_path);
     cmd.arg(&script_path);
@@ -642,7 +638,7 @@ if (function_exists('opcache_reset')) {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     let output = cmd.output()
-        .map_err(|e| format!("Failed to run PHP: {}", e))?;
+        .map_err(|e| format!("Failed to run PHP: {e}"))?;
 
     // Cleanup script
     let _ = fs::remove_file(&script_path);
@@ -693,11 +689,10 @@ fn clear_temp_files(app: &AppHandle) -> Result<u32, String> {
                     if fs::remove_file(&path).is_ok() {
                         count += 1;
                     }
-                } else if path.is_dir() {
-                    if fs::remove_dir_all(&path).is_ok() {
+                } else if path.is_dir()
+                    && fs::remove_dir_all(&path).is_ok() {
                         count += 1;
                     }
-                }
             }
         }
     }

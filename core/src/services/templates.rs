@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 /// Template information for API responses
@@ -17,17 +17,17 @@ pub struct TemplateManager;
 
 impl TemplateManager {
     /// Get the templates directory path
-    pub fn get_templates_dir(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_templates_dir(bin_path: &Path) -> PathBuf {
         bin_path.parent().unwrap_or(bin_path).join("templates")
     }
 
     /// Ensure templates directory exists and has default templates
-    pub fn ensure_templates(bin_path: &PathBuf) -> Result<(), String> {
+    pub fn ensure_templates(bin_path: &Path) -> Result<(), String> {
         let templates_dir = Self::get_templates_dir(bin_path);
 
         if !templates_dir.exists() {
             fs::create_dir_all(&templates_dir)
-                .map_err(|e| format!("Failed to create templates dir: {}", e))?;
+                .map_err(|e| format!("Failed to create templates dir: {e}"))?;
         }
 
         // Create default templates if they don't exist
@@ -45,10 +45,10 @@ impl TemplateManager {
         ];
 
         for (name, content) in defaults {
-            let path = templates_dir.join(format!("{}.conf", name));
+            let path = templates_dir.join(format!("{name}.conf"));
             if !path.exists() {
                 fs::write(&path, content)
-                    .map_err(|e| format!("Failed to write template {}: {}", name, e))?;
+                    .map_err(|e| format!("Failed to write template {name}: {e}"))?;
             }
         }
 
@@ -56,7 +56,7 @@ impl TemplateManager {
     }
 
     /// List all available templates
-    pub fn list_templates(bin_path: &PathBuf) -> Result<Vec<TemplateInfo>, String> {
+    pub fn list_templates(bin_path: &Path) -> Result<Vec<TemplateInfo>, String> {
         Self::ensure_templates(bin_path)?;
 
         let templates_dir = Self::get_templates_dir(bin_path);
@@ -112,15 +112,15 @@ impl TemplateManager {
     }
 
     /// Get template content by name
-    pub fn get_template(bin_path: &PathBuf, name: &str) -> Result<String, String> {
+    pub fn get_template(bin_path: &Path, name: &str) -> Result<String, String> {
         Self::ensure_templates(bin_path)?;
 
         let templates_dir = Self::get_templates_dir(bin_path);
-        let path = templates_dir.join(format!("{}.conf", name));
+        let path = templates_dir.join(format!("{name}.conf"));
 
         if path.exists() {
             fs::read_to_string(&path)
-                .map_err(|e| format!("Failed to read template: {}", e))
+                .map_err(|e| format!("Failed to read template: {e}"))
         } else {
             // Fall back to default template
             match name {
@@ -134,24 +134,24 @@ impl TemplateManager {
                 "django" => Ok(TEMPLATE_DJANGO.to_string()),
                 "sveltekit" => Ok(TEMPLATE_SVELTEKIT.to_string()),
                 "remix" => Ok(TEMPLATE_REMIX.to_string()),
-                _ => Err(format!("Template not found: {}", name)),
+                _ => Err(format!("Template not found: {name}")),
             }
         }
     }
 
     /// Save custom template content
-    pub fn save_template(bin_path: &PathBuf, name: &str, content: &str) -> Result<(), String> {
+    pub fn save_template(bin_path: &Path, name: &str, content: &str) -> Result<(), String> {
         Self::ensure_templates(bin_path)?;
 
         let templates_dir = Self::get_templates_dir(bin_path);
-        let path = templates_dir.join(format!("{}.conf", name));
+        let path = templates_dir.join(format!("{name}.conf"));
 
         fs::write(&path, content)
-            .map_err(|e| format!("Failed to save template: {}", e))
+            .map_err(|e| format!("Failed to save template: {e}"))
     }
 
     /// Reset a template to its default content
-    pub fn reset_template(bin_path: &PathBuf, name: &str) -> Result<(), String> {
+    pub fn reset_template(bin_path: &Path, name: &str) -> Result<(), String> {
         let default_content = match name {
             "http" => Ok(TEMPLATE_HTTP),
             "https" => Ok(TEMPLATE_HTTPS),
@@ -163,25 +163,25 @@ impl TemplateManager {
             "django" => Ok(TEMPLATE_DJANGO),
             "sveltekit" => Ok(TEMPLATE_SVELTEKIT),
             "remix" => Ok(TEMPLATE_REMIX),
-            _ => Err(format!("No default template for: {}", name)),
+            _ => Err(format!("No default template for: {name}")),
         }?;
 
         Self::save_template(bin_path, name, default_content)
     }
 
     /// Delete a custom template
-    pub fn delete_template(bin_path: &PathBuf, name: &str) -> Result<(), String> {
+    pub fn delete_template(bin_path: &Path, name: &str) -> Result<(), String> {
         let defaults = ["http", "https", "static", "laravel", "wordpress", "litecart", "reverse-proxy", "django", "sveltekit", "remix"];
         if defaults.contains(&name) {
             return Err("Cannot delete default templates".to_string());
         }
 
         let templates_dir = Self::get_templates_dir(bin_path);
-        let path = templates_dir.join(format!("{}.conf", name));
+        let path = templates_dir.join(format!("{name}.conf"));
 
         if path.exists() {
             fs::remove_file(&path)
-                .map_err(|e| format!("Failed to delete template: {}", e))
+                .map_err(|e| format!("Failed to delete template: {e}"))
         } else {
             Err("Template not found".to_string())
         }
@@ -196,7 +196,7 @@ impl TemplateEngine {
     pub fn render(template: &str, vars: &HashMap<&str, String>) -> String {
         let mut result = template.to_string();
         for (key, value) in vars {
-            let placeholder = format!("{{{{{}}}}}", key);
+            let placeholder = format!("{{{{{key}}}}}");
             result = result.replace(&placeholder, value);
         }
         result

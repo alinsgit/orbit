@@ -1,9 +1,7 @@
-/**
- * Library Registry Service
- * 
- * Fetches and caches library information from orbit-libraries repository.
- * This provides centralized version management for all downloadable services.
- */
+//! Library Registry Service
+//!
+//! Fetches and caches library information from orbit-libraries repository.
+//! This provides centralized version management for all downloadable services.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -87,7 +85,7 @@ impl LibraryRegistry {
         let registry = match Self::fetch_remote().await {
             Ok(r) => r,
             Err(e) => {
-                log::warn!("Remote registry unavailable: {}, using fallback", e);
+                log::warn!("Remote registry unavailable: {e}, using fallback");
                 Self::load_fallback()?
             }
         };
@@ -104,29 +102,29 @@ impl LibraryRegistry {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create client: {}", e))?;
+            .map_err(|e| format!("Failed to create client: {e}"))?;
 
         let response = client
             .get(REGISTRY_URL)
             .send()
             .await
-            .map_err(|e| format!("Failed to fetch registry: {}", e))?;
+            .map_err(|e| format!("Failed to fetch registry: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("Registry fetch failed: {}", response.status()));
         }
 
         let text = response.text().await
-            .map_err(|e| format!("Failed to read response: {}", e))?;
+            .map_err(|e| format!("Failed to read response: {e}"))?;
 
         serde_json::from_str(&text)
-            .map_err(|e| format!("Failed to parse registry: {}", e))
+            .map_err(|e| format!("Failed to parse registry: {e}"))
     }
 
     /// Load from embedded fallback
     pub fn load_fallback() -> Result<Self, String> {
         serde_json::from_str(FALLBACK_REGISTRY)
-            .map_err(|e| format!("Failed to parse fallback registry: {}", e))
+            .map_err(|e| format!("Failed to parse fallback registry: {e}"))
     }
 
     /// Get cached registry or fetch

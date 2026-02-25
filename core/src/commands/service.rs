@@ -210,7 +210,7 @@ pub fn start_service(
                     let _ = registry.save(&app);
                 }
             }
-            Ok(format!("Service {} started with PID {}", name, pid))
+            Ok(format!("Service {name} started with PID {pid}"))
         }
         Err(e) => Err(e),
     }
@@ -232,7 +232,7 @@ pub fn stop_service(
                     let _ = registry.save(&app);
                 }
             }
-            Ok(format!("Service {} stopped", name))
+            Ok(format!("Service {name} stopped"))
         }
         Err(e) => Err(e),
     }
@@ -283,16 +283,16 @@ pub fn uninstall_service(
     if let Some(parent) = service_path.parent() {
         if parent.exists() {
             std::fs::remove_dir_all(parent)
-                .map_err(|e| format!("Failed to remove service directory: {}", e))?;
+                .map_err(|e| format!("Failed to remove service directory: {e}"))?;
         }
     }
 
-    Ok(format!("Service {} uninstalled successfully", name))
+    Ok(format!("Service {name} uninstalled successfully"))
 }
 
 #[command]
 pub fn assign_php_port(php_version: u32, start_port: u16) -> Result<u16, String> {
-    let offset = (php_version - 80) / 1;
+    let offset = php_version - 80;
     let port = start_port + offset as u16;
 
     Ok(port)
@@ -302,7 +302,7 @@ pub fn assign_php_port(php_version: u32, start_port: u16) -> Result<u16, String>
 pub fn check_port_conflict(port: u16) -> Result<bool, String> {
     use std::net::TcpListener;
 
-    match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+    match TcpListener::bind(format!("127.0.0.1:{port}")) {
         Ok(_) => Ok(false),
         Err(_) => Ok(true),
     }
@@ -341,15 +341,15 @@ pub fn reload_service(app: AppHandle, name: String) -> Result<String, String> {
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
         let output = cmd.output()
-            .map_err(|e| format!("Failed to reload Apache: {}", e))?;
+            .map_err(|e| format!("Failed to reload Apache: {e}"))?;
 
         if output.status.success() {
             Ok("Apache configuration reloaded".to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("Apache reload failed: {}", stderr))
+            Err(format!("Apache reload failed: {stderr}"))
         }
     } else {
-        Err(format!("Service '{}' does not support reload. Use restart instead.", name))
+        Err(format!("Service '{name}' does not support reload. Use restart instead."))
     }
 }
