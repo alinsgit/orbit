@@ -1,7 +1,7 @@
 {
   "name": "orbit-local-server",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Modern local development environment - Manage Nginx, PHP, MariaDB and more",
   "author": "Orbit Dev Team",
   "license": "MIT",
@@ -37,13 +37,19 @@
     "xterm-addon-web-links": "^0.9.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.1.18",
     "@tauri-apps/cli": "^2.0.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.23",
+    "eslint": "^10.0.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "postcss": "^8.5.6",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.18",

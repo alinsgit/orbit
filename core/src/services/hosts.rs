@@ -177,3 +177,63 @@ Add-Content -Path $hostsPath -Value $entry -Force -Encoding ASCII
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_domain_validation() {
+        // empty domain
+        let res = HostsManager::add_domain("");
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("Domain cannot be empty"));
+
+        // path traversal
+        let res = HostsManager::add_domain("../evil");
+        assert!(res.is_err());
+        
+        // command injection
+        let res = HostsManager::add_domain("test; rm -rf /");
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_add_domain_elevated_validation() {
+        #[cfg(target_os = "windows")]
+        {
+            // empty domain
+            let res = HostsManager::add_domain_elevated("");
+            assert!(res.is_err());
+
+            // path traversal
+            let res = HostsManager::add_domain_elevated("../evil");
+            assert!(res.is_err());
+
+            // command injection
+            let res = HostsManager::add_domain_elevated("test; rm -rf /");
+            assert!(res.is_err());
+        }
+    }
+
+    #[test]
+    fn test_remove_domain_validation() {
+        // empty domain
+        let res = HostsManager::remove_domain("");
+        assert!(res.is_err());
+
+        // path traversal
+        let res = HostsManager::remove_domain("../evil");
+        assert!(res.is_err());
+
+        // command injection
+        let res = HostsManager::remove_domain("test; rm -rf /");
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_check_admin_returns_bool() {
+        // We just ensure it doesn't panic and returns a boolean
+        let _admin = HostsManager::check_admin();
+    }
+}

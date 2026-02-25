@@ -43,6 +43,7 @@ const SERVICE_BADGE: Record<string, { label: string; color: string; iconColor: s
   php:              { label: 'php',         color: 'bg-purple-500/20 text-purple-400', iconColor: 'text-purple-400' },
   mariadb:          { label: 'mariadb',     color: 'bg-sky-500/20 text-sky-400',       iconColor: 'text-sky-400' },
   mailpit:          { label: 'mailpit',     color: 'bg-pink-500/20 text-pink-400',     iconColor: 'text-pink-400' },
+  meilisearch:      { label: 'meilisearch', color: 'bg-violet-500/20 text-violet-400', iconColor: 'text-violet-400' },
   redis:            { label: 'redis',       color: 'bg-red-500/20 text-red-400',       iconColor: 'text-red-400' },
   'apache-error':   { label: 'apache-error',  color: 'bg-orange-500/20 text-orange-400', iconColor: 'text-orange-400' },
   'apache-access':  { label: 'apache-access', color: 'bg-blue-500/20 text-blue-400',     iconColor: 'text-blue-400' },

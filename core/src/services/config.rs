@@ -268,3 +268,100 @@ extension=zip
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_ensure_nginx_config_creates_files() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        assert!(ConfigManager::ensure_nginx_config(&root).is_ok());
+        
+        assert!(root.join("conf").exists());
+        assert!(root.join("conf/sites-enabled").exists());
+        assert!(root.join("conf/nginx.conf").exists());
+        assert!(root.join("conf/mime.types").exists());
+    }
+
+    #[test]
+    fn test_ensure_nginx_config_idempotent() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        assert!(ConfigManager::ensure_nginx_config(&root).is_ok());
+        assert!(ConfigManager::ensure_nginx_config(&root).is_ok()); // second call
+        
+        let conf_content = fs::read_to_string(root.join("conf/nginx.conf")).unwrap();
+        assert!(conf_content.contains("worker_processes"));
+    }
+
+    #[test]
+    fn test_ensure_mariadb_config_creates_files() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        assert!(ConfigManager::ensure_mariadb_config(&root).is_ok());
+        
+        assert!(root.join("data").exists());
+        assert!(root.join("data/my.ini").exists());
+    }
+
+    #[test]
+    fn test_ensure_mariadb_config_content() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        assert!(ConfigManager::ensure_mariadb_config(&root).is_ok());
+        
+        let content = fs::read_to_string(root.join("data/my.ini")).unwrap();
+        assert!(content.contains("[mysqld]"));
+        assert!(content.contains("port=3306"));
+        // Forward slashes replace test
+        assert!(!content.contains("\\"));
+    }
+
+    #[test]
+    fn test_ensure_php_config_fallback() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        assert!(ConfigManager::ensure_php_config(&root).is_ok());
+        
+        let ini_path = root.join("php.ini");
+        assert!(ini_path.exists());
+        let content = fs::read_to_string(ini_path).unwrap();
+        assert!(content.contains("[PHP]"));
+        assert!(content.contains("extension=pdo_mysql"));
+    }
+
+    #[test]
+    fn test_ensure_php_config_copies_dev() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        let dev_ini = root.join("php.ini-development");
+        fs::write(&dev_ini, "custom development config").unwrap();
+        
+        assert!(ConfigManager::ensure_php_config(&root).is_ok());
+        
+        let ini_path = root.join("php.ini");
+        let content = fs::read_to_string(ini_path).unwrap();
+        assert_eq!(content, "custom development config");
+    }
+
+    #[test]
+    fn test_ensure_apache_config_creates_dirs() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        
+        assert!(ConfigManager::ensure_apache_config(&root).is_ok());
+        
+        assert!(root.join("conf").exists());
+        assert!(root.join("logs").exists());
+    }
+}

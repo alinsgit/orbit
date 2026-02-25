@@ -11,5 +11,6 @@ export function getServiceIcon(type: string): string {
   if (t === 'bun') return '\u{1F95F}'
   if (t === 'go') return '\u{1F7E6}'
   if (t === 'deno') return '\u{1F995}'
+  if (t === 'meilisearch') return '\u{1F50D}'
   return '\u2699\uFE0F'
 }

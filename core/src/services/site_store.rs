@@ -226,3 +226,167 @@ pub fn get_next_php_port(store: &SiteStore, base_port: u16) -> u16 {
     }
     port
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_site(domain: &str) -> SiteMetadata {
+        SiteMetadata {
+            domain: domain.to_string(),
+            path: "/var/www/test".to_string(),
+            port: 80,
+            php_version: Some("8.4".to_string()),
+            php_port: Some(9004),
+            ssl_enabled: false,
+            ssl_cert_path: None,
+            ssl_key_path: None,
+            template: Some("laravel".to_string()),
+            web_server: "nginx".to_string(),
+            dev_port: None,
+            dev_command: None,
+            created_at: default_timestamp(),
+            updated_at: default_timestamp(),
+        }
+    }
+
+    #[test]
+    fn test_site_store_crud() {
+        let mut store = SiteStore {
+            version: "1.0".to_string(),
+            sites: vec![],
+        };
+
+        // Add
+        let site1 = create_test_site("test1.local");
+        store.add_site(site1.clone());
+        assert_eq!(store.sites.len(), 1);
+
+        // Add duplicate domain (should replace)
+        let mut site1_updated = create_test_site("test1.local");
+        site1_updated.port = 8080;
+        store.add_site(site1_updated);
+        assert_eq!(store.sites.len(), 1);
+        assert_eq!(store.sites[0].port, 8080);
+
+        // Add second site
+        let site2 = create_test_site("test2.local");
+        store.add_site(site2);
+        assert_eq!(store.sites.len(), 2);
+
+        // Get
+        assert!(store.get_site("test1.local").is_some());
+        assert!(store.get_site("test3.local").is_none());
+
+        // Get mut
+        if let Some(site) = store.get_site_mut("test1.local") {
+            site.port = 9090;
+        }
+        assert_eq!(store.get_site("test1.local").unwrap().port, 9090);
+
+        // Update
+        let mut updates = create_test_site("test2.local");
+        updates.port = 8888;
+        assert!(store.update_site("test2.local", updates));
+        assert_eq!(store.get_site("test2.local").unwrap().port, 8888);
+
+        // Update non-existent
+        let updates = create_test_site("nonexistent.local");
+        assert!(!store.update_site("nonexistent.local", updates));
+
+        // Remove
+        let removed = store.remove_site("test1.local");
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().domain, "test1.local");
+        assert_eq!(store.sites.len(), 1);
+
+        // Remove non-existent
+        assert!(store.remove_site("test1.local").is_none());
+    }
+
+    #[test]
+    fn test_parse_nginx_config() {
+        let config = r#"
+            server {
+                listen 80;
+                server_name example.test;
+                root "/var/www/example";
+                location ~ \.php$ {
+                    fastcgi_pass 127.0.0.1:9004;
+                }
+            }
+        "#;
+
+        let site = SiteStore::parse_nginx_config(config).unwrap();
+        assert_eq!(site.domain, "example.test");
+        assert_eq!(site.port, 80);
+        assert_eq!(site.path, "/var/www/example");
+        assert_eq!(site.php_port, Some(9004));
+        assert!(!site.ssl_enabled);
+        assert_eq!(site.web_server, "nginx");
+    }
+
+    #[test]
+    fn test_get_next_php_port() {
+        let mut store = SiteStore {
+            version: "1".to_string(),
+            sites: vec![],
+        };
+        
+        let mut site1 = create_test_site("test1");
+        site1.php_port = Some(9000);
+        store.add_site(site1);
+
+        let mut site2 = create_test_site("test2");
+        site2.php_port = Some(9001);
+        store.add_site(site2);
+
+        assert_eq!(get_next_php_port(&store, 9000), 9002);
+        assert_eq!(get_next_php_port(&store, 9005), 9005);
+    }
+
+    #[test]
+    fn test_site_metadata_serde() {
+        let site = create_test_site("serde.test");
+        let json = serde_json::to_string(&site).unwrap();
+        
+        let deserialized: SiteMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.domain, "serde.test");
+        assert_eq!(deserialized.port, 80);
+        assert_eq!(deserialized.web_server, "nginx"); // Default was used
+    }
+
+    #[test]
+    fn test_site_store_serde() {
+        let mut store = SiteStore {
+            version: "1.0".to_string(),
+            sites: vec![],
+        };
+        store.add_site(create_test_site("store1.test"));
+        store.add_site(create_test_site("store2.test"));
+
+        let json = serde_json::to_string(&store).unwrap();
+        let deserialized: SiteStore = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.version, "1.0");
+        assert_eq!(deserialized.sites.len(), 2);
+        assert_eq!(deserialized.sites[0].domain, "store1.test");
+    }
+
+    #[test]
+    fn test_site_metadata_optional_fields() {
+        // Test missing optional fields
+        let json = r#"{
+            "domain": "minimal.test",
+            "path": "/var/www/minimal",
+            "port": 80,
+            "ssl_enabled": false
+        }"#;
+
+        let site: SiteMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(site.domain, "minimal.test");
+        assert_eq!(site.php_version, None);
+        assert_eq!(site.template, None);
+        assert_eq!(site.web_server, "nginx"); // default
+    }
+}

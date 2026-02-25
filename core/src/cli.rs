@@ -286,6 +286,17 @@ fn scan_services(bin_path: &PathBuf) -> Vec<ServiceInfo> {
         });
     }
 
+    // Meilisearch
+    let meilisearch_exe = bin_path.join("meilisearch").join("meilisearch.exe");
+    if meilisearch_exe.exists() {
+        services.push(ServiceInfo {
+            name: "meilisearch".to_string(),
+            version: "installed".to_string(),
+            path: meilisearch_exe.to_string_lossy().to_string(),
+            service_type: "meilisearch".to_string(),
+        });
+    }
+
     // Composer
     let composer_phar = bin_path.join("composer").join("composer.phar");
     if composer_phar.exists() {
@@ -428,6 +439,8 @@ fn get_service_port(name: &str) -> Option<u16> {
         }
     } else if name.contains("mailpit") {
         Some(8025)
+    } else if name.contains("meilisearch") {
+        Some(7700)
     } else if name.contains("postgresql") {
         Some(5432)
     } else if name.contains("mongodb") {
@@ -450,6 +463,8 @@ fn get_process_image_names(name: &str) -> Vec<&'static str> {
         vec!["httpd.exe"]
     } else if name.contains("mailpit") {
         vec!["mailpit.exe"]
+    } else if name.contains("meilisearch") {
+        vec!["meilisearch.exe"]
     } else if name.contains("postgresql") {
         vec!["postgres.exe"]
     } else if name.contains("mongodb") {
@@ -510,6 +525,14 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
         "mailpit" => {
             (exe_path.clone(), vec![])
         }
+        "meilisearch" => {
+            let db_path = exe_path.parent().unwrap_or(std::path::Path::new(".")).join("data.ms");
+            (exe_path.clone(), vec![
+                "--http-addr".to_string(), "127.0.0.1:7700".to_string(),
+                "--db-path".to_string(), db_path.display().to_string(),
+                "--no-analytics".to_string(),
+            ])
+        }
         "postgresql" => {
             let data_dir = bin_dir.join("data").join("postgres");
             (exe_path.clone(), vec!["-D".to_string(), data_dir.display().to_string()])
@@ -534,6 +557,11 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
     let mut cmd = hidden_command(&exe);
     for arg in &args {
         cmd.arg(arg);
+    }
+
+    // Set working directory to exe's parent (needed for Redis relative config path)
+    if let Some(parent) = exe.parent() {
+        cmd.current_dir(parent);
     }
 
     match cmd.spawn() {
@@ -694,6 +722,17 @@ fn scan_log_files(bin_dir: &PathBuf) -> Vec<LogFile> {
         logs.push(LogFile {
             name: "mailpit/mailpit.log".to_string(),
             path: mailpit_log,
+            size,
+        });
+    }
+
+    // Meilisearch log
+    let meilisearch_log = bin_dir.join("meilisearch").join("meilisearch.log");
+    if meilisearch_log.exists() {
+        let size = fs::metadata(&meilisearch_log).map(|m| m.len()).unwrap_or(0);
+        logs.push(LogFile {
+            name: "meilisearch/meilisearch.log".to_string(),
+            path: meilisearch_log,
             size,
         });
     }
@@ -1059,7 +1098,7 @@ fn cmd_start(bin_dir: &PathBuf, service_name: Option<String>, all: bool) {
 
     let targets: Vec<&ServiceInfo> = if all {
         services.iter().filter(|s| {
-            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit" | "postgresql" | "mongodb")
+            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit" | "meilisearch" | "postgresql" | "mongodb")
         }).collect()
     } else if let Some(ref name) = service_name {
         services.iter().filter(|s| {
@@ -1153,7 +1192,7 @@ fn cmd_restart(bin_dir: &PathBuf, service_name: Option<String>, all: bool) {
 
     let targets: Vec<&ServiceInfo> = if all {
         services.iter().filter(|s| {
-            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit" | "postgresql" | "mongodb")
+            matches!(s.service_type.as_str(), "nginx" | "php" | "mariadb" | "redis" | "apache" | "mailpit" | "meilisearch" | "postgresql" | "mongodb")
         }).collect()
     } else if let Some(ref name) = service_name {
         services.iter().filter(|s| {
@@ -1231,6 +1270,7 @@ fn cmd_list(bin_dir: &PathBuf) {
         ("deno", "Deno", "Next-gen JavaScript runtime"),
         ("rust", "Rust", "Systems programming language"),
         ("mailpit", "Mailpit", "Email testing tool"),
+        ("meilisearch", "Meilisearch", "Fast search engine"),
         ("composer", "Composer", "PHP dependency manager"),
     ];
 
@@ -1704,6 +1744,10 @@ fn cmd_open(target: &str, https: bool) {
         "mailpit" => {
             open_in_browser("http://localhost:8025");
             println!("  {} Opening Mailpit...", "✓".bright_green());
+        }
+        "meilisearch" | "meili" => {
+            open_in_browser("http://localhost:7700");
+            println!("  {} Opening Meilisearch...", "✓".bright_green());
         }
         _ => {
             // Try to find in sites
@@ -2222,6 +2266,7 @@ fn cmd_install(bin_dir: &PathBuf, service: &str, version: Option<String>) {
         "deno" => (bin_dir.join("deno"), false),
         "python" => (bin_dir.join("python"), false),
         "mailpit" => (bin_dir.join("mailpit"), true),
+        "meilisearch" => (bin_dir.join("meilisearch"), false),
         s if s.starts_with("php-") => {
             let ver = s.strip_prefix("php-").unwrap_or("latest");
             (bin_dir.join("php").join(ver), false)
