@@ -8,7 +8,9 @@ use crate::services::download::download_file;
 use crate::services::validation::validate_php_version;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 use tauri::{command, AppHandle, Manager};
