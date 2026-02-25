@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Read, Write as IoWrite};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 const PHPMYADMIN_VERSION: &str = "5.2.2";
@@ -19,35 +19,35 @@ pub struct PhpMyAdminManager;
 
 impl PhpMyAdminManager {
     /// Get phpmyadmin directory
-    pub fn get_phpmyadmin_dir(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_phpmyadmin_dir(bin_path: &Path) -> PathBuf {
         bin_path.join("phpmyadmin")
     }
 
     /// Get phpmyadmin index file path
-    pub fn get_phpmyadmin_path(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_phpmyadmin_path(bin_path: &Path) -> PathBuf {
         Self::get_phpmyadmin_dir(bin_path).join("index.php")
     }
 
     /// Check if phpmyadmin is installed
-    pub fn is_installed(bin_path: &PathBuf) -> bool {
+    pub fn is_installed(bin_path: &Path) -> bool {
         Self::get_phpmyadmin_path(bin_path).exists()
     }
 
     /// Download and install PhpMyAdmin
-    pub async fn install(bin_path: &PathBuf) -> Result<String, String> {
+    pub async fn install(bin_path: &Path) -> Result<String, String> {
         let phpmyadmin_dir = Self::get_phpmyadmin_dir(bin_path);
 
         // Remove existing installation if present
         if phpmyadmin_dir.exists() {
             fs::remove_dir_all(&phpmyadmin_dir)
-                .map_err(|e| format!("Failed to remove existing phpmyadmin: {}", e))?;
+                .map_err(|e| format!("Failed to remove existing phpmyadmin: {e}"))?;
         }
 
         // Create temp directory for download
         let temp_dir = bin_path.join("temp");
         if !temp_dir.exists() {
             fs::create_dir_all(&temp_dir)
-                .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                .map_err(|e| format!("Failed to create temp dir: {e}"))?;
         }
 
         let zip_path = temp_dir.join("phpmyadmin.zip");
@@ -55,7 +55,7 @@ impl PhpMyAdminManager {
         // Download PhpMyAdmin
         let response = reqwest::get(PHPMYADMIN_DOWNLOAD_URL)
             .await
-            .map_err(|e| format!("Failed to download PhpMyAdmin: {}", e))?;
+            .map_err(|e| format!("Failed to download PhpMyAdmin: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!(
@@ -67,28 +67,28 @@ impl PhpMyAdminManager {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| format!("Failed to read PhpMyAdmin: {}", e))?;
+            .map_err(|e| format!("Failed to read PhpMyAdmin: {e}"))?;
 
-        fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save PhpMyAdmin: {}", e))?;
+        fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save PhpMyAdmin: {e}"))?;
 
         // Extract zip file
         let file =
-            fs::File::open(&zip_path).map_err(|e| format!("Failed to open zip file: {}", e))?;
+            fs::File::open(&zip_path).map_err(|e| format!("Failed to open zip file: {e}"))?;
 
         let mut archive =
-            ZipArchive::new(file).map_err(|e| format!("Failed to read zip archive: {}", e))?;
+            ZipArchive::new(file).map_err(|e| format!("Failed to read zip archive: {e}"))?;
 
         // Create phpmyadmin directory
         fs::create_dir_all(&phpmyadmin_dir)
-            .map_err(|e| format!("Failed to create phpmyadmin dir: {}", e))?;
+            .map_err(|e| format!("Failed to create phpmyadmin dir: {e}"))?;
 
         // Extract files - PhpMyAdmin zip has a root folder like "phpMyAdmin-5.2.1-all-languages"
-        let root_folder = format!("phpMyAdmin-{}-all-languages/", PHPMYADMIN_VERSION);
+        let root_folder = format!("phpMyAdmin-{PHPMYADMIN_VERSION}-all-languages/");
 
         for i in 0..archive.len() {
             let mut file = archive
                 .by_index(i)
-                .map_err(|e| format!("Failed to read zip entry: {}", e))?;
+                .map_err(|e| format!("Failed to read zip entry: {e}"))?;
 
             let name = file.name().to_string();
 
@@ -108,25 +108,25 @@ impl PhpMyAdminManager {
 
             if name.ends_with('/') {
                 fs::create_dir_all(&outpath)
-                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+                    .map_err(|e| format!("Failed to create directory: {e}"))?;
             } else {
                 if let Some(parent) = outpath.parent() {
                     if !parent.exists() {
                         fs::create_dir_all(parent)
-                            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
                     }
                 }
 
                 let mut outfile = fs::File::create(&outpath)
-                    .map_err(|e| format!("Failed to create file: {}", e))?;
+                    .map_err(|e| format!("Failed to create file: {e}"))?;
 
                 let mut buffer = Vec::new();
                 file.read_to_end(&mut buffer)
-                    .map_err(|e| format!("Failed to read file content: {}", e))?;
+                    .map_err(|e| format!("Failed to read file content: {e}"))?;
 
                 outfile
                     .write_all(&buffer)
-                    .map_err(|e| format!("Failed to write file: {}", e))?;
+                    .map_err(|e| format!("Failed to write file: {e}"))?;
             }
         }
 
@@ -143,14 +143,13 @@ impl PhpMyAdminManager {
         Self::create_wrapper(&phpmyadmin_dir)?;
 
         Ok(format!(
-            "PhpMyAdmin {} installed successfully",
-            PHPMYADMIN_VERSION
+            "PhpMyAdmin {PHPMYADMIN_VERSION} installed successfully"
         ))
     }
 
     /// Create .user.ini file for PHP 8.4 compatibility
     /// This file is loaded by PHP automatically and applies settings before any code runs
-    fn create_user_ini(phpmyadmin_dir: &PathBuf) -> Result<(), String> {
+    fn create_user_ini(phpmyadmin_dir: &Path) -> Result<(), String> {
         let user_ini_path = phpmyadmin_dir.join(".user.ini");
 
         let user_ini_content = r#"; PHP settings for PhpMyAdmin
@@ -179,20 +178,20 @@ post_max_size = 128M
 "#;
 
         fs::write(&user_ini_path, user_ini_content)
-            .map_err(|e| format!("Failed to create .user.ini: {}", e))?;
+            .map_err(|e| format!("Failed to create .user.ini: {e}"))?;
 
         Ok(())
     }
 
     /// Create a wrapper index file to handle PHP session issues
-    fn create_wrapper(phpmyadmin_dir: &PathBuf) -> Result<(), String> {
+    fn create_wrapper(phpmyadmin_dir: &Path) -> Result<(), String> {
         let index_path = phpmyadmin_dir.join("index.php");
         let original_path = phpmyadmin_dir.join("index_original.php");
 
         // Rename original index.php if it exists and wrapper doesn't exist yet
         if index_path.exists() && !original_path.exists() {
             fs::rename(&index_path, &original_path)
-                .map_err(|e| format!("Failed to rename index.php: {}", e))?;
+                .map_err(|e| format!("Failed to rename index.php: {e}"))?;
         }
 
         // Create wrapper - error suppression MUST happen before anything else
@@ -230,13 +229,13 @@ error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING);
 "#;
 
         fs::write(&index_path, wrapper_content)
-            .map_err(|e| format!("Failed to create wrapper: {}", e))?;
+            .map_err(|e| format!("Failed to create wrapper: {e}"))?;
 
         Ok(())
     }
 
     /// Create PhpMyAdmin configuration
-    fn create_config(phpmyadmin_dir: &PathBuf) -> Result<(), String> {
+    fn create_config(phpmyadmin_dir: &Path) -> Result<(), String> {
         let config_path = phpmyadmin_dir.join("config.inc.php");
 
         // Generate a random blowfish secret
@@ -273,7 +272,7 @@ ob_start();
 error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING);
 
 // Blowfish secret
-$cfg['blowfish_secret'] = '{}';
+$cfg['blowfish_secret'] = '{blowfish_secret}';
 
 // Server configuration
 $i = 0;
@@ -312,28 +311,27 @@ $cfg['AllowThirdPartyFraming'] = true;
 
 // phpMyAdmin configuration storage (disable warning)
 $cfg['PmaNoRelation_DisableWarning'] = true;
-"#,
-            blowfish_secret
+"#
         );
 
         fs::write(&config_path, config_content)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+            .map_err(|e| format!("Failed to write config: {e}"))?;
 
         Ok(())
     }
 
     /// Uninstall PhpMyAdmin
-    pub fn uninstall(bin_path: &PathBuf) -> Result<(), String> {
+    pub fn uninstall(bin_path: &Path) -> Result<(), String> {
         let phpmyadmin_dir = Self::get_phpmyadmin_dir(bin_path);
         if phpmyadmin_dir.exists() {
             fs::remove_dir_all(&phpmyadmin_dir)
-                .map_err(|e| format!("Failed to remove phpmyadmin: {}", e))?;
+                .map_err(|e| format!("Failed to remove phpmyadmin: {e}"))?;
         }
         Ok(())
     }
 
     /// Get status
-    pub fn get_status(bin_path: &PathBuf) -> PhpMyAdminStatus {
+    pub fn get_status(bin_path: &Path) -> PhpMyAdminStatus {
         let installed = Self::is_installed(bin_path);
         let phpmyadmin_path = Self::get_phpmyadmin_path(bin_path)
             .to_string_lossy()
@@ -355,7 +353,7 @@ $cfg['PmaNoRelation_DisableWarning'] = true;
     }
 
     /// Create nginx config for phpmyadmin
-    pub fn create_nginx_config(bin_path: &PathBuf, php_port: u16) -> Result<String, String> {
+    pub fn create_nginx_config(bin_path: &Path, php_port: u16) -> Result<String, String> {
         let phpmyadmin_dir = Self::get_phpmyadmin_dir(bin_path);
 
         if !phpmyadmin_dir.exists() {
@@ -417,25 +415,25 @@ error_reporting=E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING";
 
         if !nginx_conf_dir.exists() {
             fs::create_dir_all(&nginx_conf_dir)
-                .map_err(|e| format!("Failed to create nginx config dir: {}", e))?;
+                .map_err(|e| format!("Failed to create nginx config dir: {e}"))?;
         }
 
         let config_path = nginx_conf_dir.join("phpmyadmin.conf");
 
         fs::write(&config_path, &config)
-            .map_err(|e| format!("Failed to write nginx config: {}", e))?;
+            .map_err(|e| format!("Failed to write nginx config: {e}"))?;
 
         Ok(config_path.to_string_lossy().to_string())
     }
 
     /// Remove nginx config for phpmyadmin
-    pub fn remove_nginx_config(bin_path: &PathBuf) -> Result<(), String> {
+    pub fn remove_nginx_config(bin_path: &Path) -> Result<(), String> {
         let nginx_conf_dir = bin_path.join("nginx").join("conf").join("sites-enabled");
         let config_path = nginx_conf_dir.join("phpmyadmin.conf");
 
         if config_path.exists() {
             fs::remove_file(&config_path)
-                .map_err(|e| format!("Failed to remove nginx config: {}", e))?;
+                .map_err(|e| format!("Failed to remove nginx config: {e}"))?;
         }
 
         Ok(())

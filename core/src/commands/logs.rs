@@ -19,7 +19,7 @@ fn get_allowed_log_base(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .app_local_data_dir()
         .map_err(|e| e.to_string())?
         .canonicalize()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))
+        .map_err(|e| format!("Failed to resolve app data dir: {e}"))
 }
 
 #[command]

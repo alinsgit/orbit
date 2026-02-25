@@ -51,7 +51,7 @@ impl SiteStore {
 
         if !config_dir.exists() {
             fs::create_dir_all(&config_dir)
-                .map_err(|e| format!("Failed to create config dir: {}", e))?;
+                .map_err(|e| format!("Failed to create config dir: {e}"))?;
         }
 
         Ok(config_dir.join("sites.json"))
@@ -68,20 +68,20 @@ impl SiteStore {
         }
 
         let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read sites store: {}", e))?;
+            .map_err(|e| format!("Failed to read sites store: {e}"))?;
 
         serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse sites store: {}", e))
+            .map_err(|e| format!("Failed to parse sites store: {e}"))
     }
 
     pub fn save(&self, app: &AppHandle) -> Result<(), String> {
         let path = Self::get_store_path(app)?;
 
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("Failed to serialize sites: {}", e))?;
+            .map_err(|e| format!("Failed to serialize sites: {e}"))?;
 
         fs::write(&path, content)
-            .map_err(|e| format!("Failed to write sites store: {}", e))
+            .map_err(|e| format!("Failed to write sites store: {e}"))
     }
 
     pub fn add_site(&mut self, site: SiteMetadata) {
@@ -184,7 +184,7 @@ impl SiteStore {
             .find(|l| l.contains("fastcgi_pass"))
             .and_then(|l| {
                 l.split(':')
-                    .last()
+                    .next_back()
                     .and_then(|s| s.trim_end_matches(';').trim().parse::<u16>().ok())
             });
 

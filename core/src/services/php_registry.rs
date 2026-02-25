@@ -40,7 +40,7 @@ impl PhpRegistry {
 
         if !config_dir.exists() {
             fs::create_dir_all(&config_dir)
-                .map_err(|e| format!("Failed to create config dir: {}", e))?;
+                .map_err(|e| format!("Failed to create config dir: {e}"))?;
         }
 
         Ok(config_dir.join(Self::FILENAME))
@@ -55,10 +55,10 @@ impl PhpRegistry {
         }
 
         let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read PHP registry: {}", e))?;
+            .map_err(|e| format!("Failed to read PHP registry: {e}"))?;
 
         serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse PHP registry: {}", e))
+            .map_err(|e| format!("Failed to parse PHP registry: {e}"))
     }
 
     /// Save registry to file
@@ -66,10 +66,10 @@ impl PhpRegistry {
         let path = Self::get_registry_path(app)?;
 
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("Failed to serialize PHP registry: {}", e))?;
+            .map_err(|e| format!("Failed to serialize PHP registry: {e}"))?;
 
         fs::write(&path, content)
-            .map_err(|e| format!("Failed to write PHP registry: {}", e))
+            .map_err(|e| format!("Failed to write PHP registry: {e}"))
     }
 
     /// Create default registry with common PHP versions
@@ -248,7 +248,7 @@ impl PhpRegistry {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map(|output| {

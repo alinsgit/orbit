@@ -62,10 +62,10 @@ pub async fn get_tunnel_url() -> Result<String, String> {
     let res = client.get("http://127.0.0.1:4040/api/tunnels")
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to local Ngrok API: {}", e))?;
+        .map_err(|e| format!("Failed to connect to local Ngrok API: {e}"))?;
         
     let tunnels_response: NgrokApiTunnelsResponse = res.json().await
-        .map_err(|e| format!("Failed to parse Ngrok API response: {}", e))?;
+        .map_err(|e| format!("Failed to parse Ngrok API response: {e}"))?;
         
     // Look for HTTPS tunnel specifically
     if let Some(https_tunnel) = tunnels_response.tunnels.iter().find(|t| t.proto == "https") {

@@ -23,11 +23,11 @@ pub fn auto_start_services(
             Some(svc) => {
                 match start_service(app.clone(), state.clone(), svc.name.clone(), svc.path.clone()) {
                     Ok(msg) => results.push(msg),
-                    Err(e) => results.push(format!("Failed to start {}: {}", service_name, e)),
+                    Err(e) => results.push(format!("Failed to start {service_name}: {e}")),
                 }
             }
             None => {
-                results.push(format!("Service {} not found in installed services", service_name));
+                results.push(format!("Service {service_name} not found in installed services"));
             }
         }
     }

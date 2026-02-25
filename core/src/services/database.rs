@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 const ADMINER_VERSION: &str = "4.8.1";
@@ -16,26 +16,26 @@ pub struct DatabaseManager;
 
 impl DatabaseManager {
     /// Get adminer directory
-    pub fn get_adminer_dir(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_adminer_dir(bin_path: &Path) -> PathBuf {
         bin_path.join("adminer")
     }
 
     /// Get adminer file path
-    pub fn get_adminer_path(bin_path: &PathBuf) -> PathBuf {
+    pub fn get_adminer_path(bin_path: &Path) -> PathBuf {
         Self::get_adminer_dir(bin_path).join("index.php")
     }
 
     /// Check if adminer is installed
-    pub fn is_installed(bin_path: &PathBuf) -> bool {
+    pub fn is_installed(bin_path: &Path) -> bool {
         Self::get_adminer_path(bin_path).exists()
     }
 
     /// Download and install Adminer
-    pub async fn install(bin_path: &PathBuf) -> Result<String, String> {
+    pub async fn install(bin_path: &Path) -> Result<String, String> {
         let adminer_dir = Self::get_adminer_dir(bin_path);
         if !adminer_dir.exists() {
             fs::create_dir_all(&adminer_dir)
-                .map_err(|e| format!("Failed to create adminer dir: {}", e))?;
+                .map_err(|e| format!("Failed to create adminer dir: {e}"))?;
         }
 
         let adminer_path = Self::get_adminer_path(bin_path);
@@ -43,23 +43,23 @@ impl DatabaseManager {
         // Download Adminer
         let response = reqwest::get(ADMINER_DOWNLOAD_URL)
             .await
-            .map_err(|e| format!("Failed to download Adminer: {}", e))?;
+            .map_err(|e| format!("Failed to download Adminer: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("Failed to download Adminer: HTTP {}", response.status()));
         }
 
         let bytes = response.bytes().await
-            .map_err(|e| format!("Failed to read Adminer: {}", e))?;
+            .map_err(|e| format!("Failed to read Adminer: {e}"))?;
 
         fs::write(&adminer_path, &bytes)
-            .map_err(|e| format!("Failed to save Adminer: {}", e))?;
+            .map_err(|e| format!("Failed to save Adminer: {e}"))?;
 
         // Create a custom wrapper with styling - NO hardcoded credentials
         // Users must enter their own credentials for security
         // Added PHP 8.4 compatibility with error suppression
         let wrapper_content = format!(r#"<?php
-// Adminer {} - Database Management
+// Adminer {ADMINER_VERSION} - Database Management
 // Orbit Local Server wrapper
 // PHP 8.4 Compatible
 
@@ -129,16 +129,16 @@ function adminer_object() {{
     return new AdminerCustom;
 }}
 
-@include __DIR__ . '/adminer-{}.php';
-"#, ADMINER_VERSION, ADMINER_VERSION);
+@include __DIR__ . '/adminer-{ADMINER_VERSION}.php';
+"#);
 
         // Rename original file and create wrapper
-        let adminer_original = adminer_dir.join(format!("adminer-{}.php", ADMINER_VERSION));
+        let adminer_original = adminer_dir.join(format!("adminer-{ADMINER_VERSION}.php"));
         fs::rename(&adminer_path, &adminer_original)
-            .map_err(|e| format!("Failed to rename adminer: {}", e))?;
+            .map_err(|e| format!("Failed to rename adminer: {e}"))?;
 
         fs::write(&adminer_path, wrapper_content)
-            .map_err(|e| format!("Failed to create wrapper: {}", e))?;
+            .map_err(|e| format!("Failed to create wrapper: {e}"))?;
 
         // Create .user.ini for PHP 8.4 compatibility
         let user_ini_path = adminer_dir.join(".user.ini");
@@ -164,23 +164,23 @@ upload_max_filesize = 128M
 post_max_size = 128M
 "#;
         fs::write(&user_ini_path, user_ini_content)
-            .map_err(|e| format!("Failed to create .user.ini: {}", e))?;
+            .map_err(|e| format!("Failed to create .user.ini: {e}"))?;
 
-        Ok(format!("Adminer {} installed successfully", ADMINER_VERSION))
+        Ok(format!("Adminer {ADMINER_VERSION} installed successfully"))
     }
 
     /// Uninstall Adminer
-    pub fn uninstall(bin_path: &PathBuf) -> Result<(), String> {
+    pub fn uninstall(bin_path: &Path) -> Result<(), String> {
         let adminer_dir = Self::get_adminer_dir(bin_path);
         if adminer_dir.exists() {
             fs::remove_dir_all(&adminer_dir)
-                .map_err(|e| format!("Failed to remove adminer: {}", e))?;
+                .map_err(|e| format!("Failed to remove adminer: {e}"))?;
         }
         Ok(())
     }
 
     /// Get status
-    pub fn get_status(bin_path: &PathBuf) -> DatabaseStatus {
+    pub fn get_status(bin_path: &Path) -> DatabaseStatus {
         let installed = Self::is_installed(bin_path);
         let adminer_path = Self::get_adminer_path(bin_path).to_string_lossy().to_string();
 
@@ -199,7 +199,7 @@ post_max_size = 128M
     }
 
     /// Create nginx config for adminer
-    pub fn create_nginx_config(bin_path: &PathBuf, php_port: u16) -> Result<String, String> {
+    pub fn create_nginx_config(bin_path: &Path, php_port: u16) -> Result<String, String> {
         let adminer_dir = Self::get_adminer_dir(bin_path);
 
         if !adminer_dir.exists() {
@@ -253,25 +253,25 @@ error_reporting=E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING";
         // Create sites-enabled directory if it doesn't exist
         if !nginx_conf_dir.exists() {
             fs::create_dir_all(&nginx_conf_dir)
-                .map_err(|e| format!("Failed to create nginx sites-enabled dir: {}", e))?;
+                .map_err(|e| format!("Failed to create nginx sites-enabled dir: {e}"))?;
         }
 
         let config_path = nginx_conf_dir.join("adminer.conf");
 
         fs::write(&config_path, &config)
-            .map_err(|e| format!("Failed to write nginx config: {}", e))?;
+            .map_err(|e| format!("Failed to write nginx config: {e}"))?;
 
         Ok(config_path.to_string_lossy().to_string())
     }
 
     /// Remove nginx config for adminer
-    pub fn remove_nginx_config(bin_path: &PathBuf) -> Result<(), String> {
+    pub fn remove_nginx_config(bin_path: &Path) -> Result<(), String> {
         let nginx_conf_dir = bin_path.join("nginx").join("conf").join("sites-enabled");
         let config_path = nginx_conf_dir.join("adminer.conf");
 
         if config_path.exists() {
             fs::remove_file(&config_path)
-                .map_err(|e| format!("Failed to remove nginx config: {}", e))?;
+                .map_err(|e| format!("Failed to remove nginx config: {e}"))?;
         }
 
         Ok(())

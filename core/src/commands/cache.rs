@@ -25,7 +25,7 @@ pub async fn install_redis(app: AppHandle) -> Result<String, String> {
 
     // Create directory
     fs::create_dir_all(&redis_dir)
-        .map_err(|e| format!("Failed to create Redis directory: {}", e))?;
+        .map_err(|e| format!("Failed to create Redis directory: {e}"))?;
 
     // Download Redis from registry
     let url = CacheManager::get_redis_download_url().await;
@@ -65,7 +65,7 @@ pub fn uninstall_redis(app: AppHandle) -> Result<String, String> {
     }
 
     fs::remove_dir_all(&redis_dir)
-        .map_err(|e| format!("Failed to remove Redis: {}", e))?;
+        .map_err(|e| format!("Failed to remove Redis: {e}"))?;
 
     Ok("Redis uninstalled successfully".to_string())
 }

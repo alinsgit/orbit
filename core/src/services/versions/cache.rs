@@ -64,7 +64,7 @@ impl VersionCacheManager {
 
     pub async fn clear_all(app: &AppHandle) -> Result<(), String> {
         let store = app.store(CACHE_KEY).map_err(|e| e.to_string())?;
-        let json_value = serde_json::to_value(&VersionCache::default()).map_err(|e| e.to_string())?;
+        let json_value = serde_json::to_value(VersionCache::default()).map_err(|e| e.to_string())?;
         store.set("data", json_value);
         store.save().map_err(|e| e.to_string())?;
         Ok(())

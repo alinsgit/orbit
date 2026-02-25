@@ -13,7 +13,7 @@ pub async fn scaffold_project(
     // We expect the frontend to pass absolute safe workspace path
     let work_dir = PathBuf::from(&workspace_path);
     if !work_dir.exists() {
-        return Err(format!("Workspace directory '{}' does not exist.", workspace_path));
+        return Err(format!("Workspace directory '{workspace_path}' does not exist."));
     }
     
     let npx_path = "npx";
@@ -25,19 +25,19 @@ pub async fn scaffold_project(
     
     match project_type.as_str() {
         "nextjs" => {
-            args.push(format!("{} create-next-app@latest {} --typescript --tailwind --eslint --app --src-dir --import-alias @/*", npx_path, project_name));
+            args.push(format!("{npx_path} create-next-app@latest {project_name} --typescript --tailwind --eslint --app --src-dir --import-alias @/*"));
         },
         "nuxt" => {
-            args.push(format!("{} nuxi@latest init {}", npx_path, project_name));
+            args.push(format!("{npx_path} nuxi@latest init {project_name}"));
         },
         "vue" => {
-            args.push(format!("{} create-vue@latest {} --yes", npx_path, project_name));
+            args.push(format!("{npx_path} create-vue@latest {project_name} --yes"));
         },
         "astro" => {
-            args.push(format!("{} create-astro@latest {} --yes", npx_path, project_name));
+            args.push(format!("{npx_path} create-astro@latest {project_name} --yes"));
         },
         "laravel" => {
-            args.push(format!("{} {} create-project laravel/laravel {}", php_path, composer_path, project_name));
+            args.push(format!("{php_path} {composer_path} create-project laravel/laravel {project_name}"));
         },
         "wordpress" => {
             let php_script = format!(
@@ -46,13 +46,13 @@ pub async fn scaffold_project(
                 if ($zip->open('wp.zip') === TRUE) {{ \
                     $zip->extractTo('.'); \
                     $zip->close(); \
-                    rename('wordpress', '{}'); \
+                    rename('wordpress', '{project_name}'); \
                     unlink('wp.zip'); \
-                }}", project_name
+                }}"
             );
-            args.push(format!("{} -r \"{}\"", php_path, php_script));
+            args.push(format!("{php_path} -r \"{php_script}\""));
         },
-        _ => return Err(format!("Unsupported project type: {}", project_type)),
+        _ => return Err(format!("Unsupported project type: {project_type}")),
     }
     
     if cfg!(windows) {
@@ -74,12 +74,12 @@ pub async fn scaffold_project(
     // Run the scaffolding command synchronously but captured.
     // In the future for long tasks, emit progress events using PTY or IPC.
     let output = command.output()
-        .map_err(|e| format!("Failed to start project creation: {}", e))?;
+        .map_err(|e| format!("Failed to start project creation: {e}"))?;
         
     if output.status.success() {
-        Ok(format!("Successfully created project: {}", project_name))
+        Ok(format!("Successfully created project: {project_name}"))
     } else {
         let err_text = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Scaffolding failed: {}", err_text))
+        Err(format!("Scaffolding failed: {err_text}"))
     }
 }

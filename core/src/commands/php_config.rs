@@ -33,7 +33,7 @@ pub fn get_php_config(app: AppHandle, version: String) -> Result<PhpConfig, Stri
         .join(&version);
 
     if !bin_path.exists() {
-        return Err(format!("PHP {} not found", version));
+        return Err(format!("PHP {version} not found"));
     }
 
     let ini_path = bin_path.join("php.ini");
@@ -59,8 +59,8 @@ pub fn get_php_config(app: AppHandle, version: String) -> Result<PhpConfig, Stri
                         .unwrap_or(&name)
                         .to_string();
 
-                    let enabled = ini_content.contains(&format!("extension={}", ext_name))
-                        && !ini_content.contains(&format!(";extension={}", ext_name));
+                    let enabled = ini_content.contains(&format!("extension={ext_name}"))
+                        && !ini_content.contains(&format!(";extension={ext_name}"));
 
                     extensions.push(PhpExtension {
                         name: ext_name,
@@ -142,10 +142,10 @@ pub fn set_php_extension(
     }
 
     let mut content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
-    let disabled = format!(";extension={}", extension);
-    let enabled_str = format!("extension={}", extension);
+    let disabled = format!(";extension={extension}");
+    let enabled_str = format!("extension={extension}");
 
     if enabled {
         // Enable extension
@@ -153,7 +153,7 @@ pub fn set_php_extension(
             content = content.replace(&disabled, &enabled_str);
         } else if !content.contains(&enabled_str) {
             // Add if not present
-            content = format!("{}\n{}", content, enabled_str);
+            content = format!("{content}\n{enabled_str}");
         }
     } else {
         // Disable extension
@@ -162,7 +162,7 @@ pub fn set_php_extension(
         }
     }
 
-    fs::write(&ini_path, content).map_err(|e| format!("Failed to write php.ini: {}", e))?;
+    fs::write(&ini_path, content).map_err(|e| format!("Failed to write php.ini: {e}"))?;
 
     Ok(format!(
         "Extension {} {}",
@@ -198,13 +198,13 @@ pub fn set_php_setting(
     }
 
     let content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     let new_content = update_ini_value(&content, &key, &value);
 
-    fs::write(&ini_path, new_content).map_err(|e| format!("Failed to write php.ini: {}", e))?;
+    fs::write(&ini_path, new_content).map_err(|e| format!("Failed to write php.ini: {e}"))?;
 
-    Ok(format!("Setting {} updated to {}", key, value))
+    Ok(format!("Setting {key} updated to {value}"))
 }
 
 /// Parse a value from ini content
@@ -232,11 +232,11 @@ fn update_ini_value(content: &str, key: &str, value: &str) -> String {
         let trimmed = line.trim();
 
         // Check for commented version
-        if trimmed.starts_with(';') {
-            if let Some((k, _)) = trimmed[1..].trim().split_once('=') {
+        if let Some(uncommented) = trimmed.strip_prefix(';') {
+            if let Some((k, _)) = uncommented.trim().split_once('=') {
                 if k.trim() == key {
                     // Replace commented line with active one
-                    result.push(format!("{} = {}", key, value));
+                    result.push(format!("{key} = {value}"));
                     found = true;
                     continue;
                 }
@@ -246,7 +246,7 @@ fn update_ini_value(content: &str, key: &str, value: &str) -> String {
         // Check for active version
         if let Some((k, _)) = trimmed.split_once('=') {
             if k.trim() == key {
-                result.push(format!("{} = {}", key, value));
+                result.push(format!("{key} = {value}"));
                 found = true;
                 continue;
             }
@@ -257,7 +257,7 @@ fn update_ini_value(content: &str, key: &str, value: &str) -> String {
 
     // Add if not found
     if !found {
-        result.push(format!("{} = {}", key, value));
+        result.push(format!("{key} = {value}"));
     }
 
     result.join("\n")
@@ -278,10 +278,10 @@ pub fn get_php_ini_raw(app: AppHandle, version: String) -> Result<String, String
         .join("php.ini");
 
     if !ini_path.exists() {
-        return Err(format!("php.ini not found for PHP {}", version));
+        return Err(format!("php.ini not found for PHP {version}"));
     }
 
-    fs::read_to_string(&ini_path).map_err(|e| format!("Failed to read php.ini: {}", e))
+    fs::read_to_string(&ini_path).map_err(|e| format!("Failed to read php.ini: {e}"))
 }
 
 /// Save raw php.ini content
@@ -314,7 +314,7 @@ pub fn save_php_ini_raw(app: AppHandle, version: String, content: String) -> Res
         fs::copy(&ini_path, &backup_path).ok();
     }
 
-    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {}", e))?;
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {e}"))?;
 
     Ok("php.ini saved successfully".to_string())
 }
@@ -334,11 +334,11 @@ pub fn configure_php_mailpit(app: AppHandle, version: String, enabled: bool, smt
         .join("php.ini");
 
     if !ini_path.exists() {
-        return Err(format!("php.ini not found for PHP {}", version));
+        return Err(format!("php.ini not found for PHP {version}"));
     }
 
     let mut content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     // Remove existing SMTP settings if present
     let lines: Vec<&str> = content.lines().collect();
@@ -367,8 +367,7 @@ pub fn configure_php_mailpit(app: AppHandle, version: String, enabled: bool, smt
     if enabled {
         // Add Mailpit SMTP settings
         let mailpit_config = format!(
-            "\n\n; === Orbit Mailpit Settings ===\nSMTP = 127.0.0.1\nsmtp_port = {}\nsendmail_from = orbit@localhost\n; === End Orbit Mailpit Settings ===\n",
-            smtp_port
+            "\n\n; === Orbit Mailpit Settings ===\nSMTP = 127.0.0.1\nsmtp_port = {smtp_port}\nsendmail_from = orbit@localhost\n; === End Orbit Mailpit Settings ===\n"
         );
         content.push_str(&mailpit_config);
     }
@@ -377,10 +376,10 @@ pub fn configure_php_mailpit(app: AppHandle, version: String, enabled: bool, smt
     let backup_path = ini_path.with_extension("ini.bak");
     fs::copy(&ini_path, &backup_path).ok();
 
-    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {}", e))?;
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {e}"))?;
 
     if enabled {
-        Ok(format!("PHP configured to use Mailpit (SMTP port {})", smtp_port))
+        Ok(format!("PHP configured to use Mailpit (SMTP port {smtp_port})"))
     } else {
         Ok("Mailpit integration disabled".to_string())
     }
@@ -405,7 +404,7 @@ pub fn get_php_mailpit_status(app: AppHandle, version: String) -> Result<bool, S
     }
 
     let content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     Ok(content.contains("; === Orbit Mailpit Settings ==="))
 }
@@ -425,7 +424,7 @@ pub fn configure_php_redis_session(app: AppHandle, version: String, enabled: boo
         .join("php.ini");
 
     if !ini_path.exists() {
-        return Err(format!("php.ini not found for PHP {}", version));
+        return Err(format!("php.ini not found for PHP {version}"));
     }
 
     // Check if redis extension is available
@@ -444,7 +443,7 @@ pub fn configure_php_redis_session(app: AppHandle, version: String, enabled: boo
     }
 
     let mut content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     // Remove existing Redis session settings if present
     let lines: Vec<&str> = content.lines().collect();
@@ -472,8 +471,7 @@ pub fn configure_php_redis_session(app: AppHandle, version: String, enabled: boo
     if enabled {
         // Add Redis session settings
         let redis_config = format!(
-            "\n\n; === Orbit Redis Session Settings ===\nsession.save_handler = redis\nsession.save_path = \"tcp://127.0.0.1:{}\"\n; === End Orbit Redis Session Settings ===\n",
-            redis_port
+            "\n\n; === Orbit Redis Session Settings ===\nsession.save_handler = redis\nsession.save_path = \"tcp://127.0.0.1:{redis_port}\"\n; === End Orbit Redis Session Settings ===\n"
         );
         content.push_str(&redis_config);
     }
@@ -482,10 +480,10 @@ pub fn configure_php_redis_session(app: AppHandle, version: String, enabled: boo
     let backup_path = ini_path.with_extension("ini.bak");
     fs::copy(&ini_path, &backup_path).ok();
 
-    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {}", e))?;
+    fs::write(&ini_path, &content).map_err(|e| format!("Failed to save php.ini: {e}"))?;
 
     if enabled {
-        Ok(format!("PHP sessions configured to use Redis (port {})", redis_port))
+        Ok(format!("PHP sessions configured to use Redis (port {redis_port})"))
     } else {
         Ok("Redis session integration disabled".to_string())
     }
@@ -510,7 +508,7 @@ pub fn get_php_redis_session_status(app: AppHandle, version: String) -> Result<b
     }
 
     let content = fs::read_to_string(&ini_path)
-        .map_err(|e| format!("Failed to read php.ini: {}", e))?;
+        .map_err(|e| format!("Failed to read php.ini: {e}"))?;
 
     Ok(content.contains("; === Orbit Redis Session Settings ==="))
 }

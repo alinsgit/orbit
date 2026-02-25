@@ -181,7 +181,7 @@ impl ComposerManager {
 
         // Create directory
         fs::create_dir_all(&composer_dir)
-            .map_err(|e| format!("Failed to create Composer directory: {}", e))?;
+            .map_err(|e| format!("Failed to create Composer directory: {e}"))?;
 
         let composer_path = composer_dir.join("composer.phar");
 
@@ -199,7 +199,7 @@ php "{}" %*
 
         let batch_path = composer_dir.join("composer.bat");
         fs::write(&batch_path, batch_content)
-            .map_err(|e| format!("Failed to create Composer batch file: {}", e))?;
+            .map_err(|e| format!("Failed to create Composer batch file: {e}"))?;
 
         Ok(())
     }
@@ -210,7 +210,7 @@ php "{}" %*
 
         if composer_dir.exists() {
             fs::remove_dir_all(&composer_dir)
-                .map_err(|e| format!("Failed to remove Composer: {}", e))?;
+                .map_err(|e| format!("Failed to remove Composer: {e}"))?;
         }
 
         Ok(())
@@ -233,7 +233,7 @@ php "{}" %*
 
         let output = command
             .output()
-            .map_err(|e| format!("Failed to run Composer: {}", e))?;
+            .map_err(|e| format!("Failed to run Composer: {e}"))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -241,7 +241,7 @@ php "{}" %*
         if output.status.success() {
             Ok(stdout.to_string())
         } else {
-            Err(format!("{}\n{}", stdout, stderr))
+            Err(format!("{stdout}\n{stderr}"))
         }
     }
 
@@ -278,10 +278,10 @@ php "{}" %*
         }
 
         let content = fs::read_to_string(&composer_json)
-            .map_err(|e| format!("Failed to read composer.json: {}", e))?;
+            .map_err(|e| format!("Failed to read composer.json: {e}"))?;
 
         let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse composer.json: {}", e))?;
+            .map_err(|e| format!("Failed to parse composer.json: {e}"))?;
 
         let name = json.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
         let description = json.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
@@ -325,7 +325,7 @@ php "{}" %*
         let output = hidden_command(&php_exe)
             .args([composer_path.to_string_lossy().as_ref(), "self-update", "--no-ansi"])
             .output()
-            .map_err(|e| format!("Failed to update Composer: {}", e))?;
+            .map_err(|e| format!("Failed to update Composer: {e}"))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -333,7 +333,7 @@ php "{}" %*
             Ok(stdout.to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("{}\n{}", stdout, stderr))
+            Err(format!("{stdout}\n{stderr}"))
         }
     }
 }

@@ -44,7 +44,7 @@ impl NginxManager {
 
         if !sites_dir.exists() {
             std::fs::create_dir_all(&sites_dir)
-                .map_err(|e| format!("Failed to create sites dir: {}", e))?;
+                .map_err(|e| format!("Failed to create sites dir: {e}"))?;
         }
 
         Ok(sites_dir)
@@ -63,7 +63,7 @@ impl NginxManager {
 
         if !logs_dir.exists() {
             std::fs::create_dir_all(&logs_dir)
-                .map_err(|e| format!("Failed to create logs dir: {}", e))?;
+                .map_err(|e| format!("Failed to create logs dir: {e}"))?;
         }
 
         Ok(logs_dir)
@@ -79,14 +79,14 @@ impl NginxManager {
             .current_dir(nginx_dir)
             .arg("-t")
             .output()
-            .map_err(|e| format!("Failed to run nginx: {}", e))?;
+            .map_err(|e| format!("Failed to run nginx: {e}"))?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         if output.status.success() || stderr.contains("syntax is ok") {
             Ok("Configuration test successful".to_string())
         } else {
-            Err(format!("Configuration error: {}", stderr))
+            Err(format!("Configuration error: {stderr}"))
         }
     }
 
@@ -103,7 +103,7 @@ impl NginxManager {
             .current_dir(nginx_dir)
             .args(["-s", "reload"])
             .output()
-            .map_err(|e| format!("Failed to reload nginx: {}", e))?;
+            .map_err(|e| format!("Failed to reload nginx: {e}"))?;
 
         if output.status.success() {
             Ok("Nginx reloaded successfully".to_string())
@@ -113,7 +113,7 @@ impl NginxManager {
             if stderr.contains("error") || stderr.contains("No such file") {
                 return Err("Nginx is not running. Start it first.".to_string());
             }
-            Err(format!("Reload failed: {}", stderr))
+            Err(format!("Reload failed: {stderr}"))
         }
     }
 
@@ -128,13 +128,13 @@ impl NginxManager {
             .current_dir(nginx_dir)
             .args(["-s", "stop"])
             .output()
-            .map_err(|e| format!("Failed to stop nginx: {}", e))?;
+            .map_err(|e| format!("Failed to stop nginx: {e}"))?;
 
         if output.status.success() {
             Ok("Nginx stopped".to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("Stop failed: {}", stderr))
+            Err(format!("Stop failed: {stderr}"))
         }
     }
 
@@ -175,7 +175,7 @@ impl NginxManager {
         // Ensure sites-enabled directory exists
         if !sites_dir.exists() {
             std::fs::create_dir_all(&sites_dir)
-                .map_err(|e| format!("Failed to create sites-enabled: {}", e))?;
+                .map_err(|e| format!("Failed to create sites-enabled: {e}"))?;
         }
 
         // Check if main config exists
@@ -183,18 +183,18 @@ impl NginxManager {
             // Create a basic nginx.conf
             let content = Self::generate_main_config();
             std::fs::write(&main_conf, content)
-                .map_err(|e| format!("Failed to write nginx.conf: {}", e))?;
+                .map_err(|e| format!("Failed to write nginx.conf: {e}"))?;
         } else {
             // Check if sites-enabled is included
             let content = std::fs::read_to_string(&main_conf)
-                .map_err(|e| format!("Failed to read nginx.conf: {}", e))?;
+                .map_err(|e| format!("Failed to read nginx.conf: {e}"))?;
 
             if !content.contains("sites-enabled") {
                 // Need to add include directive
                 // Find the http block and add include
                 let new_content = Self::add_sites_include(&content);
                 std::fs::write(&main_conf, new_content)
-                    .map_err(|e| format!("Failed to update nginx.conf: {}", e))?;
+                    .map_err(|e| format!("Failed to update nginx.conf: {e}"))?;
             }
         }
 
@@ -202,14 +202,14 @@ impl NginxManager {
         let fastcgi_params = config_dir.join("fastcgi_params");
         if !fastcgi_params.exists() {
             std::fs::write(&fastcgi_params, FASTCGI_PARAMS)
-                .map_err(|e| format!("Failed to write fastcgi_params: {}", e))?;
+                .map_err(|e| format!("Failed to write fastcgi_params: {e}"))?;
         }
 
         // Ensure mime.types exists
         let mime_types = config_dir.join("mime.types");
         if !mime_types.exists() {
             std::fs::write(&mime_types, MIME_TYPES)
-                .map_err(|e| format!("Failed to write mime.types: {}", e))?;
+                .map_err(|e| format!("Failed to write mime.types: {e}"))?;
         }
 
         Ok(())

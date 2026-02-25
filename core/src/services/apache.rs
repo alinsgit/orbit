@@ -33,7 +33,7 @@ impl ApacheManager {
 
         if !vhosts_dir.exists() {
             fs::create_dir_all(&vhosts_dir)
-                .map_err(|e| format!("Failed to create vhosts dir: {}", e))?;
+                .map_err(|e| format!("Failed to create vhosts dir: {e}"))?;
         }
 
         Ok(vhosts_dir)
@@ -62,14 +62,14 @@ impl ApacheManager {
             .arg("-t")
             .current_dir(&apache_path)
             .output()
-            .map_err(|e| format!("Failed to run httpd: {}", e))?;
+            .map_err(|e| format!("Failed to run httpd: {e}"))?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         if output.status.success() || stderr.contains("Syntax OK") {
             Ok("Syntax OK".to_string())
         } else {
-            Err(format!("Config error: {}", stderr))
+            Err(format!("Config error: {stderr}"))
         }
     }
 
@@ -91,7 +91,7 @@ impl ApacheManager {
             .arg("restart")
             .current_dir(&apache_path)
             .output()
-            .map_err(|e| format!("Failed to reload Apache: {}", e))?;
+            .map_err(|e| format!("Failed to reload Apache: {e}"))?;
 
         if output.status.success() {
             Ok("Apache reloaded".to_string())
@@ -101,7 +101,7 @@ impl ApacheManager {
             if stderr.is_empty() {
                 Ok("Apache reload signal sent".to_string())
             } else {
-                Err(format!("Reload error: {}", stderr))
+                Err(format!("Reload error: {stderr}"))
             }
         }
     }
@@ -116,7 +116,7 @@ impl ApacheManager {
         }
 
         let content = fs::read_to_string(&httpd_conf)
-            .map_err(|e| format!("Failed to read httpd.conf: {}", e))?;
+            .map_err(|e| format!("Failed to read httpd.conf: {e}"))?;
 
         // Check if vhosts include already exists
         let include_line = "Include conf/vhosts/*.conf";
@@ -138,7 +138,7 @@ impl ApacheManager {
         );
 
         fs::write(&httpd_conf, new_content)
-            .map_err(|e| format!("Failed to write httpd.conf: {}", e))?;
+            .map_err(|e| format!("Failed to write httpd.conf: {e}"))?;
 
         // Ensure vhosts directory exists
         Self::get_vhosts_dir(app)?;

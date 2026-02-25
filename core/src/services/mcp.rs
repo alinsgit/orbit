@@ -136,7 +136,7 @@ impl McpManager {
 
         // Create directory
         fs::create_dir_all(&mcp_dir)
-            .map_err(|e| format!("Failed to create MCP directory: {}", e))?;
+            .map_err(|e| format!("Failed to create MCP directory: {e}"))?;
 
         let url = Self::get_download_url().await;
         let exe_path = Self::get_exe_path(app)?;
@@ -155,7 +155,7 @@ impl McpManager {
 
         if mcp_dir.exists() {
             fs::remove_dir_all(&mcp_dir)
-                .map_err(|e| format!("Failed to remove MCP: {}", e))?;
+                .map_err(|e| format!("Failed to remove MCP: {e}"))?;
         }
 
         // Clean up PATH entry
@@ -238,10 +238,10 @@ impl McpManager {
             .create(true)
             .append(true)
             .open(&log_path)
-            .map_err(|e| format!("Failed to open log file: {}", e))?;
+            .map_err(|e| format!("Failed to open log file: {e}"))?;
         let log_err = log_file
             .try_clone()
-            .map_err(|e| format!("Failed to clone log handle: {}", e))?;
+            .map_err(|e| format!("Failed to clone log handle: {e}"))?;
 
         hidden_command(&exe_path)
             .arg("--standby")
@@ -249,7 +249,7 @@ impl McpManager {
             .stdout(std::process::Stdio::from(log_file))
             .stderr(std::process::Stdio::from(log_err))
             .spawn()
-            .map_err(|e| format!("Failed to start MCP server: {}", e))?;
+            .map_err(|e| format!("Failed to start MCP server: {e}"))?;
 
         // Wait for process to appear (up to 3 seconds)
         for _ in 0..6 {
@@ -268,7 +268,7 @@ impl McpManager {
         hidden_command("taskkill")
             .args(["/F", "/IM", "orbit-mcp.exe"])
             .output()
-            .map_err(|e| format!("Failed to stop MCP server: {}", e))?;
+            .map_err(|e| format!("Failed to stop MCP server: {e}"))?;
         Ok(())
     }
 

@@ -50,7 +50,7 @@ pub fn validate_domain(domain: &str) -> Result<(), ValidationError> {
     for pattern in dangerous_patterns {
         if domain.contains(pattern) {
             return Err(ValidationError(format!(
-                "Domain contains forbidden character: '{}'", pattern
+                "Domain contains forbidden character: '{pattern}'"
             )));
         }
     }
@@ -67,7 +67,7 @@ pub fn validate_port(port: u16) -> Result<(), ValidationError> {
     // On Windows, these don't require admin privileges for local use
     if port < 80 {
         return Err(ValidationError(format!(
-            "Port {} is too low. Use port 80, 443, or >= 1024", port
+            "Port {port} is too low. Use port 80, 443, or >= 1024"
         )));
     }
     Ok(())
@@ -109,7 +109,7 @@ pub fn validate_site_path(path: &str, _allowed_base: Option<&Path>) -> Result<Pa
     // If the path exists, canonicalize it
     if path_buf.exists() {
         let canonical = path_buf.canonicalize()
-            .map_err(|e| ValidationError(format!("Failed to resolve path: {}", e)))?;
+            .map_err(|e| ValidationError(format!("Failed to resolve path: {e}")))?;
 
         // If allowed_base is specified, ensure path is under it
         if let Some(base) = _allowed_base {
@@ -149,10 +149,10 @@ pub fn validate_log_path(path: &str, allowed_base: &Path) -> Result<PathBuf, Val
 
     // Canonicalize both paths
     let canonical_path = path_buf.canonicalize()
-        .map_err(|e| ValidationError(format!("Failed to resolve path: {}", e)))?;
+        .map_err(|e| ValidationError(format!("Failed to resolve path: {e}")))?;
 
     let canonical_base = allowed_base.canonicalize()
-        .map_err(|e| ValidationError(format!("Failed to resolve base path: {}", e)))?;
+        .map_err(|e| ValidationError(format!("Failed to resolve base path: {e}")))?;
 
     // Ensure path is under allowed base
     if !canonical_path.starts_with(&canonical_base) {
@@ -168,7 +168,7 @@ pub fn validate_log_path(path: &str, allowed_base: &Path) -> Result<PathBuf, Val
         let allowed_extensions = ["log", "err", "txt", "out"];
         if !allowed_extensions.contains(&ext_str.as_str()) {
             return Err(ValidationError(format!(
-                "Invalid log file extension: .{}", ext_str
+                "Invalid log file extension: .{ext_str}"
             )));
         }
     } else {
@@ -215,21 +215,21 @@ pub fn validate_php_version(version: &str) -> Result<(), ValidationError> {
     // Version should start with a digit
     if !version.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
         return Err(ValidationError(format!(
-            "Invalid PHP version: '{}'. Should start with a number", version
+            "Invalid PHP version: '{version}'. Should start with a number"
         )));
     }
 
     // Only allow safe characters: digits, dots, hyphens (for versions like "8.4-dev")
     if !version.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') {
         return Err(ValidationError(format!(
-            "Invalid PHP version: '{}'. Only numbers, dots, and hyphens allowed", version
+            "Invalid PHP version: '{version}'. Only numbers, dots, and hyphens allowed"
         )));
     }
 
     // Must contain at least one dot (e.g., 8.4, 8.5.1)
     if !version.contains('.') {
         return Err(ValidationError(format!(
-            "Invalid PHP version: '{}'. Expected format like 8.4 or 8.5.1", version
+            "Invalid PHP version: '{version}'. Expected format like 8.4 or 8.5.1"
         )));
     }
 
@@ -246,7 +246,7 @@ pub fn validate_ini_key(key: &str) -> Result<(), ValidationError> {
     let key_regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_\.]*$").unwrap();
     if !key_regex.is_match(key) {
         return Err(ValidationError(format!(
-            "Invalid INI key: '{}'. Only alphanumeric, underscore, and dot allowed", key
+            "Invalid INI key: '{key}'. Only alphanumeric, underscore, and dot allowed"
         )));
     }
 
@@ -257,7 +257,7 @@ pub fn validate_ini_key(key: &str) -> Result<(), ValidationError> {
     ];
     if dangerous_keys.contains(&key) {
         return Err(ValidationError(format!(
-            "Modifying '{}' is not allowed for security reasons", key
+            "Modifying '{key}' is not allowed for security reasons"
         )));
     }
 

@@ -89,7 +89,7 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
                             // Calculate PHP port from version
                             let php_port = parse_php_port(&actual_version);
                             services.push(InstalledService {
-                                name: format!("php-{}", version_str),
+                                name: format!("php-{version_str}"),
                                 version: actual_version,
                                 path: exe_path.to_string_lossy().to_string(),
                                 service_type: "php".to_string(),
@@ -310,7 +310,7 @@ fn parse_nginx_version(exe_path: &std::path::PathBuf) -> Result<String, String> 
     // nginx -v writes to stderr, not stdout
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let combined = format!("{}{}", stdout, stderr);
+    let combined = format!("{stdout}{stderr}");
 
     // Look for "nginx/x.x.x" pattern
     if let Some(pos) = combined.find("nginx/") {
@@ -336,7 +336,7 @@ fn parse_php_version(exe_path: &std::path::PathBuf) -> Result<String, String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let combined = format!("{stdout}{stderr}");
 
     // Look for "PHP x.x.x" pattern
     if let Some(pos) = combined.find("PHP ") {
@@ -362,7 +362,7 @@ fn parse_mariadb_version(exe_path: &std::path::PathBuf) -> Result<String, String
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let combined = format!("{stdout}{stderr}");
 
     // Look for version pattern like "11.4.2-MariaDB" or "Ver 11.4.2"
     // Common output: "mysqld  Ver 11.4.2-MariaDB for Win64 on AMD64"
@@ -415,7 +415,7 @@ fn parse_python_version(exe_path: &std::path::PathBuf) -> Result<String, String>
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let combined = format!("{stdout}{stderr}");
 
     // Output is like "Python 3.13.2"
     if let Some(pos) = combined.find("Python ") {
@@ -513,8 +513,8 @@ fn parse_apache_port(bin_path: &std::path::Path) -> Option<u16> {
         if trimmed.starts_with('#') {
             continue;
         }
-        if trimmed.starts_with("Listen") {
-            let after = trimmed[6..].trim();
+        if let Some(after) = trimmed.strip_prefix("Listen") {
+            let after = after.trim();
             let port_str: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
             if let Ok(port) = port_str.parse::<u16>() {
                 return Some(port);
@@ -670,7 +670,7 @@ fn parse_apache_version(exe_path: &std::path::PathBuf) -> Result<String, String>
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let combined = format!("{stdout}{stderr}");
 
     // Output is like "Server version: Apache/2.4.62 (Win64)"
     if let Some(pos) = combined.find("Apache/") {

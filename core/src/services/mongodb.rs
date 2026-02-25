@@ -10,7 +10,7 @@ impl MongoDBManager {
     pub fn initialize(data_dir: &PathBuf) -> Result<(), String> {
         if !data_dir.exists() {
             fs::create_dir_all(data_dir)
-                .map_err(|e| format!("Failed to create mongodb data directory: {}", e))?;
+                .map_err(|e| format!("Failed to create mongodb data directory: {e}"))?;
             log::info!("MongoDB data directory created.");
         }
         Ok(())
@@ -62,7 +62,7 @@ impl MongoDBManager {
             .arg(database)
             .arg("--eval").arg(js_command)
             .output()
-            .map_err(|e| format!("Failed to run mongosh: {}. Is MongoDB running?", e))?;
+            .map_err(|e| format!("Failed to run mongosh: {e}. Is MongoDB running?"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -78,7 +78,7 @@ impl MongoDBManager {
 
         // Parse JSON array of strings
         let names: Vec<String> = serde_json::from_str(&output)
-            .map_err(|e| format!("Failed to parse database list: {} — raw: {}", e, output))?;
+            .map_err(|e| format!("Failed to parse database list: {e} — raw: {output}"))?;
 
         Ok(names)
     }
@@ -92,7 +92,7 @@ impl MongoDBManager {
         let output = Self::run_command(bin_dir, database, "JSON.stringify(db.getCollectionNames())")?;
 
         let names: Vec<String> = serde_json::from_str(&output)
-            .map_err(|e| format!("Failed to parse collection list: {} — raw: {}", e, output))?;
+            .map_err(|e| format!("Failed to parse collection list: {e} — raw: {output}"))?;
 
         Ok(names)
     }
@@ -114,7 +114,7 @@ impl MongoDBManager {
 
         let system_dbs = ["admin", "local", "config"];
         if system_dbs.contains(&database) {
-            return Err(format!("Cannot drop system database '{}'", database));
+            return Err(format!("Cannot drop system database '{database}'"));
         }
 
         Self::run_command(bin_dir, database, "JSON.stringify(db.dropDatabase())")

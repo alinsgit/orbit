@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::fs;
 use std::io::Write;
 
 pub struct ConfigManager;
 
 impl ConfigManager {
-    pub fn ensure_nginx_config(nginx_root: &PathBuf) -> Result<(), String> {
+    pub fn ensure_nginx_config(nginx_root: &Path) -> Result<(), String> {
         let conf_dir = nginx_root.join("conf");
         if !conf_dir.exists() {
             fs::create_dir_all(&conf_dir).map_err(|e| e.to_string())?;
@@ -156,7 +156,7 @@ types {
     }
 
     #[allow(dead_code)]
-    pub fn ensure_mariadb_config(mariadb_root: &PathBuf) -> Result<(), String> {
+    pub fn ensure_mariadb_config(mariadb_root: &Path) -> Result<(), String> {
         let data_dir = mariadb_root.join("data");
         if !data_dir.exists() {
             fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
@@ -169,7 +169,7 @@ types {
 
             let content = format!(
                 r#"[mysqld]
-datadir={}
+datadir={data_path_str}
 port=3306
 bind-address=127.0.0.1
 
@@ -178,8 +178,7 @@ port=3306
 host=127.0.0.1
 
 [mariadb]
-"#,
-                data_path_str
+"#
             );
             let mut file = fs::File::create(&conf_path).map_err(|e| e.to_string())?;
             file.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
@@ -187,7 +186,7 @@ host=127.0.0.1
         Ok(())
     }
 
-    pub fn ensure_php_config(php_root: &PathBuf) -> Result<(), String> {
+    pub fn ensure_php_config(php_root: &Path) -> Result<(), String> {
         let php_ini_path = php_root.join("php.ini");
         if !php_ini_path.exists() {
             // Check for php.ini-development
@@ -254,7 +253,7 @@ extension=zip
         Ok(())
     }
 
-    pub fn ensure_apache_config(apache_root: &PathBuf) -> Result<(), String> {
+    pub fn ensure_apache_config(apache_root: &Path) -> Result<(), String> {
         let conf_dir = apache_root.join("conf");
         if !conf_dir.exists() {
             fs::create_dir_all(&conf_dir).map_err(|e| e.to_string())?;
