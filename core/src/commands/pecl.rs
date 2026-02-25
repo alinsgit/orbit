@@ -8,9 +8,7 @@ use crate::services::download::download_file;
 use crate::services::validation::validate_php_version;
 use serde::{Deserialize, Serialize};
 use std::fs;
-#[cfg(target_os = "windows")]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 use tauri::{command, AppHandle, Manager};
@@ -412,9 +410,10 @@ async fn install_extension_unix(
     _php_version: &str,
     extension_name: &str,
 ) -> Result<String, String> {
-    let _php_exe = bin_path.join("bin").join("php");
+    let php_exe = bin_path.join("bin").join("php");
     let pecl_exe = bin_path.join("bin").join("pecl");
-    let _phpize_exe = bin_path.join("bin").join("phpize");
+    #[allow(unused)]
+    let phpize_exe = bin_path.join("bin").join("phpize");
 
     // Check if pecl exists
     if !pecl_exe.exists() {
