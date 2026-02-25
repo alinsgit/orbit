@@ -194,6 +194,56 @@ pub struct ImportResult {
     pub errors: Vec<String>,
 }
 
+// Per-site nginx config read/write
+
+#[command]
+pub fn read_site_config(app: AppHandle, domain: String) -> Result<String, String> {
+    let sites_dir = NginxManager::get_sites_dir(&app)?;
+    let conf_path = sites_dir.join(format!("{}.conf", domain));
+
+    if !conf_path.exists() {
+        return Err(format!("No nginx config found for '{}'", domain));
+    }
+
+    fs::read_to_string(&conf_path)
+        .map_err(|e| format!("Failed to read config: {}", e))
+}
+
+#[command]
+pub fn write_site_config(app: AppHandle, domain: String, content: String) -> Result<String, String> {
+    let sites_dir = NginxManager::get_sites_dir(&app)?;
+    let conf_path = sites_dir.join(format!("{}.conf", domain));
+
+    if !conf_path.exists() {
+        return Err(format!("No nginx config found for '{}'", domain));
+    }
+
+    // Backup old config
+    let backup = fs::read_to_string(&conf_path).ok();
+
+    // Write new config
+    fs::write(&conf_path, &content)
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    // Validate with nginx -t
+    match NginxManager::test_config(&app) {
+        Ok(_) => {
+            // Reload nginx if running
+            if NginxManager::is_running() {
+                let _ = NginxManager::reload(&app);
+            }
+            Ok("Config saved and validated successfully".to_string())
+        }
+        Err(e) => {
+            // Rollback on validation failure
+            if let Some(old_content) = backup {
+                let _ = fs::write(&conf_path, old_content);
+            }
+            Err(format!("Config validation failed (rolled back): {}", e))
+        }
+    }
+}
+
 // Site app process management commands
 
 #[command]

@@ -24,3 +24,6 @@ pub mod wizards;
 pub mod tunnel;
 pub mod mcp;
 pub mod cli;
+pub mod meilisearch;
+pub mod mongodb;
+pub mod blueprints;

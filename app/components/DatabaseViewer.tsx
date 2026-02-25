@@ -18,6 +18,7 @@ import {
   type InstalledService,
 } from '../lib/api';
 import NativeDatabaseManager from './database/NativeDatabaseManager';
+import MongoDBManager from './database/MongoDBManager';
 
 type MainTab = 'manage' | 'tools';
 type DatabaseTool = 'adminer' | 'phpmyadmin';
@@ -335,7 +336,7 @@ export default function DatabaseViewer() {
               <p className="text-sm text-content-secondary">
                 {engineTab === 'mariadb' && 'Manage your MariaDB databases'}
                 {engineTab === 'postgresql' && 'PostgreSQL Overview'}
-                {engineTab === 'mongodb' && 'MongoDB Overview'}
+                {engineTab === 'mongodb' && 'Manage your MongoDB databases'}
               </p>
             </div>
           </div>
@@ -358,7 +359,7 @@ export default function DatabaseViewer() {
               PostgreSQL
             </button>
             <button
-              onClick={() => setEngineTab('mongodb')}
+              onClick={() => { setEngineTab('mongodb'); setMainTab('manage'); }}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 engineTab === 'mongodb' ? 'bg-surface-inset text-content shadow' : 'text-content-secondary hover:text-content'
               }`}
@@ -368,8 +369,8 @@ export default function DatabaseViewer() {
           </div>
         </div>
 
-        {/* SQL Engines Sub Tabs */}
-        {(engineTab === 'mariadb' || engineTab === 'postgresql') && (
+        {/* Sub Tabs */}
+        {(engineTab === 'mariadb' || engineTab === 'postgresql' || engineTab === 'mongodb') && (
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setMainTab('manage')}
@@ -382,17 +383,19 @@ export default function DatabaseViewer() {
               <Wrench className="w-4 h-4" />
               Quick Manage
             </button>
-            <button
-              onClick={() => setMainTab('tools')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                mainTab === 'tools'
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-surface-raised text-content-secondary hover:text-content'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-              Web Tools
-            </button>
+            {engineTab !== 'mongodb' && (
+              <button
+                onClick={() => setMainTab('tools')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  mainTab === 'tools'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-surface-raised text-content-secondary hover:text-content'
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                Web Tools
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -629,38 +632,7 @@ export default function DatabaseViewer() {
 
 
         {engineTab === 'mongodb' && (
-          <div className="p-6 h-full overflow-y-auto space-y-6">
-            
-            <div className="bg-surface-raised rounded-xl p-4 space-y-3">
-              <h3 className="text-sm font-medium text-content-secondary mb-3">MongoDB Engine</h3>
-              <p className="text-sm text-content-muted">
-                MongoDB is natively managed through standard TCP socket connections over the background mongod daemon. Visual Quick Manage is available for MariaDB and PostgreSQL; use external tools (like MongoDB Compass) to manage your NoSQL schemas natively.
-              </p>
-            </div>
-
-            <div className="bg-surface-raised rounded-xl p-4">
-              <h3 className="text-sm font-medium text-content-secondary mb-3">Connection Information</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-content-muted">Connection String (URI):</span>
-                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">mongodb://127.0.0.1:27017</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-content-muted">Host:</span>
-                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">127.0.0.1</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-content-muted">Port:</span>
-                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">27017</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-content-muted">Default Auth:</span>
-                  <code className="text-content-secondary bg-surface px-2 py-0.5 rounded">Disabled</code>
-                </div>
-              </div>
-            </div>
-
-          </div>
+          <MongoDBManager />
         )}
 
       </div>

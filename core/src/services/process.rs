@@ -61,6 +61,8 @@ fn get_service_port(service_name: &str) -> Option<u16> {
         Some(6379)
     } else if service_name.contains("mailpit") {
         Some(8025)
+    } else if service_name.contains("meilisearch") {
+        Some(7700)
     } else {
         None
     }
@@ -84,6 +86,8 @@ fn get_process_names(service_name: &str) -> Vec<&'static str> {
         vec!["redis-server.exe"]
     } else if service_name.contains("mailpit") {
         vec!["mailpit.exe"]
+    } else if service_name.contains("meilisearch") {
+        vec!["meilisearch.exe"]
     } else {
         vec![]
     }
@@ -370,6 +374,7 @@ impl ServiceManager {
             "nginx.exe", "php-cgi.exe", "mariadbd.exe", "mysqld.exe",
             "postgres.exe", "mongod.exe", "httpd.exe", "redis-server.exe",
             "mailpit.exe",
+            "meilisearch.exe",
         ];
 
         let mut sys = sysinfo::System::new();
@@ -413,4 +418,61 @@ impl ServiceManager {
         Ok(())
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_service_port_web_servers() {
+        assert_eq!(get_service_port("nginx"), Some(80));
+        assert_eq!(get_service_port("apache"), Some(80));
+        assert_eq!(get_service_port("httpd"), Some(80));
+    }
+
+    #[test]
+    fn test_get_service_port_databases() {
+        assert_eq!(get_service_port("mariadb"), Some(3306));
+        assert_eq!(get_service_port("mysql"), Some(3306));
+        assert_eq!(get_service_port("postgres"), Some(5432));
+        assert_eq!(get_service_port("postgresql"), Some(5432));
+        assert_eq!(get_service_port("mongo"), Some(27017));
+        assert_eq!(get_service_port("mongodb"), Some(27017));
+        assert_eq!(get_service_port("redis"), Some(6379));
+    }
+
+    #[test]
+    fn test_get_service_port_php() {
+        assert_eq!(get_service_port("php-8.4"), Some(9004));
+        assert_eq!(get_service_port("php-8.0"), Some(9000));
+        assert_eq!(get_service_port("php-7.4"), Some(9004));
+        assert_eq!(get_service_port("php-8.5"), Some(9005));
+        assert_eq!(get_service_port("php-8.2"), Some(9002));
+        assert_eq!(get_service_port("php-8"), Some(9004)); // length < 2, default 9004
+        assert_eq!(get_service_port("php"), Some(9004));
+    }
+
+    #[test]
+    fn test_get_service_port_other() {
+        assert_eq!(get_service_port("mailpit"), Some(8025));
+        assert_eq!(get_service_port("meilisearch"), Some(7700));
+        assert_eq!(get_service_port("unknown"), None);
+        assert_eq!(get_service_port("random-service"), None);
+    }
+
+    #[test]
+    fn test_get_process_names() {
+        assert_eq!(get_process_names("nginx"), vec!["nginx.exe"]);
+        assert_eq!(get_process_names("apache"), vec!["httpd.exe"]);
+        assert_eq!(get_process_names("mariadb"), vec!["mariadbd.exe", "mysqld.exe"]);
+        assert_eq!(get_process_names("postgres"), vec!["postgres.exe"]);
+        assert_eq!(get_process_names("mongo"), vec!["mongod.exe"]);
+        assert_eq!(get_process_names("redis"), vec!["redis-server.exe"]);
+        assert_eq!(get_process_names("php-8.4"), vec!["php-cgi.exe"]);
+        assert_eq!(get_process_names("mailpit"), vec!["mailpit.exe"]);
+        assert_eq!(get_process_names("meilisearch"), vec!["meilisearch.exe"]);
+        let empty: Vec<&'static str> = vec![];
+        assert_eq!(get_process_names("unknown"), empty);
+    }
 }

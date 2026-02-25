@@ -7,6 +7,7 @@ import { ServiceConfigDrawer } from './ServiceConfigDrawer';
 import { ServiceOverview } from './ServiceOverview';
 import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
+import { MeilisearchManager } from './MeilisearchManager';
 import { McpManager } from './McpManager';
 import { CliManager } from './CliManager';
 import { getServiceIcon } from '../lib/serviceIcons';
@@ -405,21 +406,28 @@ export function ServiceManager() {
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Status indicator */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${service.status === 'running'
-                      ? 'bg-emerald-500/10 text-emerald-500'
-                      : service.status === 'starting' || service.status === 'stopping'
-                        ? 'bg-amber-500/10 text-amber-500'
-                        : 'bg-surface-inset text-content-secondary'
-                      }`}>
-                      <div className={`w-2 h-2 rounded-full ${service.status === 'running'
-                        ? 'bg-emerald-500'
+                    {!isStartable(service.service_type) ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400">
+                        <div className="w-2 h-2 rounded-full bg-blue-400" />
+                        INSTALLED
+                      </div>
+                    ) : (
+                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${service.status === 'running'
+                        ? 'bg-emerald-500/10 text-emerald-500'
                         : service.status === 'starting' || service.status === 'stopping'
-                          ? 'bg-amber-500 animate-pulse'
-                          : 'bg-content-muted'
-                        }`} />
-                      {service.status.toUpperCase()}
-                      {service.port && <span className="font-mono">:{service.port}</span>}
-                    </div>
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-surface-inset text-content-secondary'
+                        }`}>
+                        <div className={`w-2 h-2 rounded-full ${service.status === 'running'
+                          ? 'bg-emerald-500'
+                          : service.status === 'starting' || service.status === 'stopping'
+                            ? 'bg-amber-500 animate-pulse'
+                            : 'bg-content-muted'
+                          }`} />
+                        {service.status.toUpperCase()}
+                        {service.port && <span className="font-mono">:{service.port}</span>}
+                      </div>
+                    )}
 
                     {/* Configure button (for services with settings) */}
                     {hasConfiguration(service.service_type) && (
@@ -496,24 +504,26 @@ export function ServiceManager() {
                       </button>
                     )}
 
-                    {/* Start/Stop button */}
-                    <button
-                      onClick={() => handleToggleService(service.name, service.status)}
-                      disabled={processing === service.name || service.status === 'starting' || service.status === 'stopping'}
-                      className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${service.status === 'running'
-                        ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500'
-                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
-                        }`}
-                      title={service.status === 'running' ? 'Stop' : 'Start'}
-                    >
-                      {processing === service.name ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : service.status === 'running' ? (
-                        <Square size={16} />
-                      ) : (
-                        <Play size={16} />
-                      )}
-                    </button>
+                    {/* Start/Stop button — only for daemons */}
+                    {isStartable(service.service_type) && (
+                      <button
+                        onClick={() => handleToggleService(service.name, service.status)}
+                        disabled={processing === service.name || service.status === 'starting' || service.status === 'stopping'}
+                        className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${service.status === 'running'
+                          ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500'
+                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
+                          }`}
+                        title={service.status === 'running' ? 'Stop' : 'Start'}
+                      >
+                        {processing === service.name ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : service.status === 'running' ? (
+                          <Square size={16} />
+                        ) : (
+                          <Play size={16} />
+                        )}
+                      </button>
+                    )}
 
                     {/* Uninstall button */}
                     <button
@@ -583,6 +593,7 @@ export function ServiceManager() {
           <div className="space-y-6">
             <ComposerManager />
             <MailManager />
+            <MeilisearchManager />
             <McpManager />
             <CliManager />
           </div>

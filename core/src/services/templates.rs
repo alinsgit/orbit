@@ -1035,7 +1035,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_template_render() {
+    fn test_template_render_basic() {
         let mut vars = HashMap::new();
         vars.insert("domain", "test.local".to_string());
         vars.insert("port", "8080".to_string());
@@ -1046,6 +1046,115 @@ mod tests {
 
         assert!(result.contains("server_name  test.local;"));
         assert!(result.contains("listen       8080;"));
+        assert!(result.contains("root         \"C:/projects/test\";"));
         assert!(result.contains("fastcgi_pass   127.0.0.1:9001;"));
+    }
+
+    #[test]
+    fn test_template_render_all_vars() {
+        let mut vars = HashMap::new();
+        vars.insert("domain", "secure.local".to_string());
+        vars.insert("port", "80".to_string());
+        vars.insert("ssl_port", "443".to_string());
+        vars.insert("path", "/var/www/html".to_string());
+        vars.insert("php_port", "9004".to_string());
+        vars.insert("ssl_cert", "/certs/cert.pem".to_string());
+        vars.insert("ssl_key", "/certs/key.pem".to_string());
+
+        let result = TemplateEngine::render(TEMPLATE_HTTPS, &vars);
+
+        assert!(result.contains("server_name  secure.local;"));
+        assert!(result.contains("listen       80;"));
+        assert!(result.contains("listen       443 ssl;"));
+        assert!(result.contains("root         \"/var/www/html\";"));
+        assert!(result.contains("fastcgi_pass   127.0.0.1:9004;"));
+        assert!(result.contains("ssl_certificate      \"/certs/cert.pem\";"));
+        assert!(result.contains("ssl_certificate_key  \"/certs/key.pem\";"));
+    }
+
+    #[test]
+    fn test_template_render_missing_vars() {
+        let vars = HashMap::new();
+        let template = "server_name {{domain}};";
+        let result = TemplateEngine::render(template, &vars);
+        assert_eq!(result, "server_name {{domain}};"); // remains as-is
+    }
+
+    #[test]
+    fn test_template_render_multiple_occurrences() {
+        let mut vars = HashMap::new();
+        vars.insert("domain", "test.local".to_string());
+        let template = "server_name {{domain}}; access_log logs/{{domain}}.log;";
+        let result = TemplateEngine::render(template, &vars);
+        assert_eq!(result, "server_name test.local; access_log logs/test.local.log;");
+    }
+
+    #[test]
+    fn test_template_render_empty() {
+        let vars = HashMap::new();
+        let result = TemplateEngine::render("", &vars);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_get_nginx_template_variants() {
+        assert!(!SiteTemplate::Http.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::Https.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::Static.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::Laravel.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::WordPress.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::LiteCart.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::ReverseProxy.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::Django.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::SvelteKit.get_nginx_template().is_empty());
+        assert!(!SiteTemplate::Remix.get_nginx_template().is_empty());
+    }
+
+    #[test]
+    fn test_get_apache_template_variants() {
+        assert!(!SiteTemplate::Http.get_apache_template().is_empty());
+        assert!(!SiteTemplate::Https.get_apache_template().is_empty());
+        assert!(!SiteTemplate::Static.get_apache_template().is_empty());
+        assert!(!SiteTemplate::Laravel.get_apache_template().is_empty());
+        assert!(!SiteTemplate::WordPress.get_apache_template().is_empty());
+        assert!(!SiteTemplate::LiteCart.get_apache_template().is_empty());
+        assert!(!SiteTemplate::ReverseProxy.get_apache_template().is_empty());
+        assert!(!SiteTemplate::Django.get_apache_template().is_empty());
+        assert!(!SiteTemplate::SvelteKit.get_apache_template().is_empty());
+        assert!(!SiteTemplate::Remix.get_apache_template().is_empty());
+    }
+
+    #[test]
+    fn test_get_template_alias() {
+        let t = SiteTemplate::Laravel;
+        assert_eq!(t.get_template(), t.get_nginx_template());
+    }
+
+    #[test]
+    fn test_nginx_template_content() {
+        let t = SiteTemplate::Laravel.get_nginx_template();
+        assert!(t.contains("{{domain}}"));
+        assert!(t.contains("{{port}}"));
+        assert!(t.contains("{{path}}/public"));
+        assert!(t.contains("{{php_port}}"));
+
+        let t = SiteTemplate::ReverseProxy.get_nginx_template();
+        assert!(t.contains("{{dev_port}}"));
+
+        let t = SiteTemplate::WordPress.get_nginx_template();
+        assert!(t.contains("wp-config.php"));
+    }
+
+    #[test]
+    fn test_apache_template_content() {
+        let t = SiteTemplate::Laravel.get_apache_template();
+        assert!(t.contains("{{domain}}"));
+        assert!(t.contains("{{port}}"));
+        assert!(t.contains("{{path}}/public"));
+        assert!(t.contains("{{php_port}}"));
+
+        let t = SiteTemplate::ReverseProxy.get_apache_template();
+        assert!(t.contains("{{dev_port}}"));
+        assert!(t.contains("ProxyPass"));
     }
 }

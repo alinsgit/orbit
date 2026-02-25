@@ -46,6 +46,8 @@ import {
   exportDatabase,
   exportAllDatabases,
   importSql,
+  pgExportDatabase,
+  pgImportSql,
 } from '../../lib/api';
 
 type Tab = 'databases' | 'users';
@@ -299,7 +301,9 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
       });
       if (!path) return;
       setBackupLoading(`export-${dbName}`);
-      const result = await exportDatabase(dbName, path);
+      const result = dbEngine === 'postgresql'
+        ? await pgExportDatabase(dbName, path)
+        : await exportDatabase(dbName, path);
       showSuccess(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed');
@@ -334,7 +338,9 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
       });
       if (!path) return;
       setBackupLoading(`import-${dbName}`);
-      const result = await importSql(dbName, path as string);
+      const result = dbEngine === 'postgresql'
+        ? await pgImportSql(dbName, path as string)
+        : await importSql(dbName, path as string);
       showSuccess(result);
       await loadData();
     } catch (err) {
@@ -614,7 +620,6 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
             <h3 className="text-sm font-medium text-content-secondary">Databases</h3>
               <div className="flex gap-2">
                 {dbEngine === 'mariadb' && (
-                  <>
                     <button
                       onClick={handleExportAll}
                       disabled={backupLoading !== null || !databases.length}
@@ -628,6 +633,8 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                       )}
                       Export All
                     </button>
+                )}
+                {(dbEngine === 'mariadb' || dbEngine === 'postgresql') && (
                     <button
                       onClick={() => {
                         setSelectedDatabase(''); // Clear selection so they must pick
@@ -644,7 +651,6 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                       )}
                       Import
                     </button>
-                  </>
                 )}
                 <button
                   onClick={() => setDialog({ type: 'createDb' })}
@@ -675,7 +681,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                 <div className="flex items-center gap-1">
                   {!['mysql', 'information_schema', 'performance_schema', 'sys', 'postgres'].includes(db.name.toLowerCase()) && (
                     <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      {dbEngine === 'mariadb' && (
+                      {(dbEngine === 'mariadb' || dbEngine === 'postgresql') && (
                         <button
                           onClick={() => handleExportDatabase(db.name)}
                           disabled={backupLoading === `export-${db.name}`}
@@ -698,7 +704,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                         <Pencil className="w-4 h-4" />
                       </button>
 
-                      {dbEngine === 'mariadb' && (
+                      {(dbEngine === 'mariadb' || dbEngine === 'postgresql') && (
                         <button
                           onClick={() => handleImportSql(db.name)}
                           disabled={backupLoading === `import-${db.name}`}

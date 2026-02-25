@@ -86,7 +86,11 @@ function adminer_object() {{
         }}
 
         // Auto-login credentials for local development
+        // Detects engine from URL parameter (?pgsql= for PostgreSQL)
         function credentials() {{
+            if (isset($_GET['pgsql']) || (isset($_GET['server']) && strpos($_GET['server'], '5432') !== false)) {{
+                return array('127.0.0.1:5432', 'postgres', '');
+            }}
             return array('127.0.0.1', 'root', 'root');
         }}
 
@@ -116,7 +120,10 @@ function adminer_object() {{
         }}
 
         function servers() {{
-            return array('127.0.0.1' => 'Local MariaDB');
+            return array(
+                '127.0.0.1' => 'Local MariaDB',
+                '127.0.0.1:5432' => 'Local PostgreSQL'
+            );
         }}
     }}
     return new AdminerCustom;

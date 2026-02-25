@@ -3,7 +3,7 @@ import {
   FolderOpen, Plus, Trash2, Globe, ExternalLink, Loader2, Shield,
   AlertTriangle, RefreshCw, CheckCircle2, XCircle, Settings2,
   FileCode, Layers, Database, ShoppingCart, Sparkles, CheckCircle, FileDown, FileUp,
-  Play, Square
+  Play, Square, Code, X, Save, Rocket, Check
 } from 'lucide-react';
 import {
   getSites, createSite, deleteSite, updateSite, regenerateSiteConfig,
@@ -11,7 +11,9 @@ import {
   addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
   getSslStatus, getWorkspacePath, startTunnel, stopTunnel, getTunnelUrl,
   installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus,
-  scaffoldBasicProject, startSiteApp, stopSiteApp, getSiteAppStatus
+  scaffoldBasicProject, startSiteApp, stopSiteApp, getSiteAppStatus,
+  readSiteConfig, writeSiteConfig,
+  listBlueprints, createFromBlueprint, Blueprint,
 } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -148,6 +150,22 @@ export function SitesManager() {
   // Tunnel State
   const [activeTunnel, setActiveTunnel] = useState<{ domain: string; url: string } | null>(null);
   const [tunnelingDomain, setTunnelingDomain] = useState<string | null>(null);
+
+  // Per-site config editor
+  const [configEditorDomain, setConfigEditorDomain] = useState<string | null>(null);
+  const [configEditorContent, setConfigEditorContent] = useState('');
+  const [configEditorLoading, setConfigEditorLoading] = useState(false);
+  const [configEditorSaving, setConfigEditorSaving] = useState(false);
+
+
+  // Blueprint wizard
+  const [addMode, setAddMode] = useState<'manual' | 'blueprint'>('manual');
+  const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
+  const [selectedBlueprint, setSelectedBlueprint] = useState<Blueprint | null>(null);
+  const [blueprintDomain, setBlueprintDomain] = useState('');
+  const [blueprintPath, setBlueprintPath] = useState('');
+  const [blueprintPhpVersion, setBlueprintPhpVersion] = useState('');
+  const [blueprintCreating, setBlueprintCreating] = useState(false);
 
   // Check SSL status
   const loadSslStatus = async () => {
@@ -571,6 +589,116 @@ export function SitesManager() {
   };
 
   // Handle regenerate config
+  const handleOpenConfigEditor = async (domain: string) => {
+    setConfigEditorDomain(domain);
+    setConfigEditorLoading(true);
+    try {
+      const content = await readSiteConfig(domain);
+      setConfigEditorContent(content);
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to read config: ${e}` });
+      setConfigEditorDomain(null);
+    } finally {
+      setConfigEditorLoading(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!configEditorDomain) return;
+    setConfigEditorSaving(true);
+    try {
+      await writeSiteConfig(configEditorDomain, configEditorContent);
+      addToast({ type: 'success', message: 'Config saved and validated!' });
+      setConfigEditorDomain(null);
+      await refreshSites();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `${e}` });
+    } finally {
+      setConfigEditorSaving(false);
+    }
+  };
+
+  // Blueprint handlers
+  const loadBlueprints = async () => {
+    try {
+      const list = await listBlueprints();
+      setBlueprints(list);
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to load blueprints: ${e}` });
+    }
+  };
+
+  const handleOpenBlueprintMode = async () => {
+    setAddMode('blueprint');
+    setShowAddForm(true);
+    if (blueprints.length === 0) {
+      await loadBlueprints();
+    }
+  };
+
+  const selectBlueprintFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (selected) {
+      setBlueprintPath(selected as string);
+    }
+  };
+
+  const handleBlueprintScaffold = async () => {
+    if (!selectedBlueprint || !blueprintDomain) return;
+    try {
+      const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '' } });
+      const wp = await store.get<string>('workspacePath') || '';
+      if (!wp) {
+        addToast({ type: 'error', message: 'Set a Workspace Path in Settings first.' });
+        return;
+      }
+      const projectName = blueprintDomain.replace(/\..*$/, '');
+      const fullPath = `${wp}/${projectName}`;
+      setBlueprintPath(fullPath);
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to get workspace: ${e}` });
+    }
+  };
+
+  const handleCreateFromBlueprint = async () => {
+    if (!selectedBlueprint || !blueprintDomain || !blueprintPath) return;
+    setBlueprintCreating(true);
+    try {
+      const result = await createFromBlueprint(
+        selectedBlueprint.name,
+        blueprintDomain,
+        blueprintPath,
+        blueprintPhpVersion || undefined
+      );
+
+      if (result.warnings.length > 0) {
+        result.warnings.forEach(w => addToast({ type: 'warning', message: w }));
+      }
+
+      addToast({ type: 'success', message: `Site "${blueprintDomain}" created from ${selectedBlueprint.name} blueprint!` });
+
+      // Open terminal with scaffold commands
+      if (result.scaffold_commands.length > 0) {
+        const scaffoldCmd = result.scaffold_commands.join(' && ');
+        openTerminalForSite(blueprintDomain, blueprintPath, scaffoldCmd);
+        addToast({ type: 'info', message: 'Running scaffold commands in terminal...' });
+      }
+
+      // Reset form
+      setSelectedBlueprint(null);
+      setBlueprintDomain('');
+      setBlueprintPath('');
+      setBlueprintPhpVersion('');
+      setShowAddForm(false);
+      setAddMode('manual');
+      await refreshSites();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Blueprint creation failed: ${e}` });
+    } finally {
+      setBlueprintCreating(false);
+    }
+  };
+
   const handleRegenerateConfig = async (domain: string, webServer?: WebServer) => {
     setProcessing(domain);
     try {
@@ -739,6 +867,8 @@ export function SitesManager() {
             </button>
           </div>
 
+
+
           {/* Nginx Status & Reload */}
           <div className="flex items-center gap-2 px-3 py-2 bg-surface-raised rounded-lg border border-edge">
             <div className={`w-2 h-2 rounded-full ${isNginxRunning ? 'bg-emerald-500' : 'bg-red-500'}`} />
@@ -800,11 +930,230 @@ export function SitesManager() {
       {/* Add Form */}
       {showAddForm && (
         <div className="bg-surface-raised border border-edge rounded-xl p-5 mb-6">
-          <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <Plus size={18} className="text-emerald-500" />
-            Add New Site
-          </h3>
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1 mb-4 bg-surface-inset rounded-lg p-1">
+            <button
+              onClick={() => setAddMode('manual')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${addMode === 'manual'
+                ? 'bg-surface-raised text-content shadow-sm'
+                : 'text-content-muted hover:text-content-secondary'
+                }`}
+            >
+              <Settings2 size={14} />
+              Manual
+            </button>
+            <button
+              onClick={handleOpenBlueprintMode}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${addMode === 'blueprint'
+                ? 'bg-surface-raised text-content shadow-sm'
+                : 'text-content-muted hover:text-content-secondary'
+                }`}
+            >
+              <Rocket size={14} />
+              From Blueprint
+            </button>
+          </div>
 
+          {/* Blueprint Mode */}
+          {addMode === 'blueprint' && (
+            <div className="space-y-4">
+              {!selectedBlueprint ? (
+                <>
+                  <p className="text-sm text-content-secondary">Choose a blueprint to create a fully configured project with one click.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {blueprints.map(bp => {
+                      const hasServices = bp.services.every(s => {
+                        if (s === 'php') return phpVersions.length > 0;
+                        return services.some(svc => svc.service_type === s);
+                      });
+                      return (
+                        <button
+                          key={bp.name}
+                          onClick={() => {
+                            setSelectedBlueprint(bp);
+                            setBlueprintPhpVersion(phpVersions[0] || '');
+                          }}
+                          className={`text-left p-4 rounded-lg border transition-all cursor-pointer ${hasServices
+                            ? 'border-edge hover:border-emerald-500/50 hover:bg-surface'
+                            : 'border-edge opacity-60'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-sm">{bp.name}</span>
+                            {!hasServices && (
+                              <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">missing services</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-content-muted mb-2">{bp.description}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {bp.services.map(s => (
+                              <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                s === 'php' ? 'bg-purple-500/10 text-purple-400' :
+                                s === 'nodejs' ? 'bg-green-500/10 text-green-400' :
+                                s === 'python' ? 'bg-blue-500/10 text-blue-400' :
+                                s === 'nginx' ? 'bg-emerald-500/10 text-emerald-400' :
+                                s === 'mariadb' ? 'bg-orange-500/10 text-orange-400' :
+                                s === 'redis' ? 'bg-red-500/10 text-red-400' :
+                                'bg-surface-inset text-content-muted'
+                              }`}>{s}</span>
+                            ))}
+                            {bp.dev_command && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">dev server</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Selected Blueprint Form */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <button
+                      onClick={() => setSelectedBlueprint(null)}
+                      className="p-1.5 hover:bg-surface-inset rounded-lg transition-colors text-content-muted hover:text-content"
+                    >
+                      <X size={16} />
+                    </button>
+                    <div>
+                      <h4 className="font-medium flex items-center gap-2">
+                        <Rocket size={16} className="text-emerald-500" />
+                        {selectedBlueprint.name}
+                      </h4>
+                      <p className="text-xs text-content-muted">{selectedBlueprint.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Domain */}
+                    <div>
+                      <label className="block text-sm text-content-secondary mb-1">Domain</label>
+                      <input
+                        type="text"
+                        value={blueprintDomain}
+                        onChange={(e) => setBlueprintDomain(e.target.value)}
+                        placeholder="myproject.test"
+                        className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {/* PHP Version (only for PHP blueprints) */}
+                    {selectedBlueprint.services.includes('php') ? (
+                      <div>
+                        <label className="block text-sm text-content-secondary mb-1">PHP Version</label>
+                        {phpVersions.length === 0 ? (
+                          <p className="text-sm text-amber-500 py-2">No PHP installed</p>
+                        ) : (
+                          <select
+                            value={blueprintPhpVersion}
+                            onChange={(e) => setBlueprintPhpVersion(e.target.value)}
+                            className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                          >
+                            {phpVersions.map(v => (
+                              <option key={v} value={v}>PHP {v}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+                  </div>
+
+                  {/* Path */}
+                  <div>
+                    <label className="block text-sm text-content-secondary mb-1">Project Path</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={blueprintPath}
+                        onChange={(e) => setBlueprintPath(e.target.value)}
+                        placeholder="C:/projects/myproject"
+                        className="flex-1 px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        onClick={selectBlueprintFolder}
+                        className="px-3 py-2 bg-surface-inset hover:bg-hover rounded-lg transition-colors cursor-pointer"
+                        title="Select Folder"
+                      >
+                        <FolderOpen size={16} />
+                      </button>
+                      <button
+                        onClick={handleBlueprintScaffold}
+                        disabled={!blueprintDomain}
+                        className="px-3 py-2 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                        title="Auto-generate path from workspace"
+                      >
+                        <Sparkles size={16} />
+                        Auto
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* What will happen */}
+                  <div className="bg-surface rounded-lg border border-edge p-3 space-y-2">
+                    <p className="text-xs font-medium text-content-secondary">This blueprint will:</p>
+                    <ul className="text-xs text-content-muted space-y-1">
+                      <li className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Create site with <strong>{selectedBlueprint.template}</strong> template</li>
+                      {selectedBlueprint.scaffold.map((cmd, i) => (
+                        <li key={i} className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Run: <code className="bg-surface-inset px-1 rounded text-[11px]">{cmd}</code></li>
+                      ))}
+                      {selectedBlueprint.env_template && (
+                        <li className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Generate <code className="bg-surface-inset px-1 rounded text-[11px]">.env</code> file</li>
+                      )}
+                      {selectedBlueprint.dev_command && (
+                        <li className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Configure dev server: <code className="bg-surface-inset px-1 rounded text-[11px]">{selectedBlueprint.dev_command}</code></li>
+                      )}
+                    </ul>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => { setSelectedBlueprint(null); setBlueprintDomain(''); setBlueprintPath(''); }}
+                      className="px-4 py-2 bg-surface-inset hover:bg-hover rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleCreateFromBlueprint}
+                      disabled={blueprintCreating || !blueprintDomain || !blueprintPath}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                    >
+                      {blueprintCreating ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Rocket size={16} />
+                          Create Project
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Close button for blueprint mode */}
+              {!selectedBlueprint && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => { setShowAddForm(false); setAddMode('manual'); }}
+                    className="px-4 py-2 bg-surface-inset hover:bg-hover rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Manual Mode */}
+          {addMode === 'manual' && (
+          <div>
           <div className="grid grid-cols-2 gap-4 mb-4">
             {/* Domain */}
             <div>
@@ -985,6 +1334,8 @@ export function SitesManager() {
               )}
             </button>
           </div>
+          </div>
+          )}
         </div>
       )}
 
@@ -1171,9 +1522,16 @@ export function SitesManager() {
                         <button
                           onClick={() => startEditing(site)}
                           className="p-1.5 rounded-lg hover:bg-hover text-content-muted transition-colors cursor-pointer"
-                          title="Edit"
+                          title="Edit Site Settings"
                         >
                           <Settings2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleOpenConfigEditor(site.domain)}
+                          className="p-1.5 rounded-lg hover:bg-hover text-content-muted transition-colors cursor-pointer"
+                          title="Edit Nginx Config"
+                        >
+                          <Code size={14} />
                         </button>
                         <button
                           onClick={() => handleRegenerateConfig(site.domain, site.web_server)}
@@ -1301,6 +1659,58 @@ export function SitesManager() {
           </div>
         )}
       </div>
+
+      {/* Per-site Config Editor Modal */}
+      {configEditorDomain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-surface-raised border border-edge rounded-xl shadow-2xl w-[700px] max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-edge">
+              <div className="flex items-center gap-2">
+                <Code size={16} className="text-emerald-500" />
+                <h3 className="text-sm font-medium text-content">
+                  Nginx Config — <span className="text-emerald-400">{configEditorDomain}</span>
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={configEditorSaving || configEditorLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {configEditorSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  Save
+                </button>
+                <button
+                  onClick={() => setConfigEditorDomain(null)}
+                  className="p-1.5 text-content-muted hover:text-content hover:bg-surface rounded-lg transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            {/* Editor */}
+            <div className="flex-1 overflow-hidden p-1">
+              {configEditorLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 size={24} className="animate-spin text-content-muted" />
+                </div>
+              ) : (
+                <textarea
+                  value={configEditorContent}
+                  onChange={(e) => setConfigEditorContent(e.target.value)}
+                  className="w-full h-full min-h-[400px] bg-surface text-content text-sm font-mono p-4 rounded-lg border border-edge focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                  spellCheck={false}
+                />
+              )}
+            </div>
+            {/* Footer hint */}
+            <div className="px-5 py-2 border-t border-edge text-xs text-content-muted">
+              Changes are validated with <code className="bg-surface px-1 rounded">nginx -t</code> before saving. Invalid config will be rolled back automatically.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

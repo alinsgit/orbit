@@ -279,6 +279,17 @@ fn scan_services(bin_path: &PathBuf) -> Vec<ServiceInfo> {
         });
     }
 
+    // Meilisearch
+    let meilisearch_exe = bin_path.join("meilisearch").join("meilisearch.exe");
+    if meilisearch_exe.exists() {
+        services.push(ServiceInfo {
+            name: "meilisearch".to_string(),
+            version: "installed".to_string(),
+            path: meilisearch_exe.to_string_lossy().to_string(),
+            service_type: "meilisearch".to_string(),
+        });
+    }
+
     // Composer
     let composer_phar = bin_path.join("composer").join("composer.phar");
     if composer_phar.exists() {
@@ -422,6 +433,8 @@ fn get_service_port(name: &str) -> Option<u16> {
         }
     } else if name.contains("mailpit") {
         Some(8025)
+    } else if name.contains("meilisearch") {
+        Some(7700)
     } else if name.contains("postgresql") {
         Some(5432)
     } else if name.contains("mongodb") {
@@ -444,6 +457,8 @@ fn get_process_image_names(name: &str) -> Vec<&'static str> {
         vec!["httpd.exe"]
     } else if name.contains("mailpit") {
         vec!["mailpit.exe"]
+    } else if name.contains("meilisearch") {
+        vec!["meilisearch.exe"]
     } else if name.contains("postgresql") {
         vec!["postgres.exe"]
     } else if name.contains("mongodb") {
@@ -467,6 +482,7 @@ fn require_service(name: &str) -> Result<(), String> {
         "postgresql" => "PostgreSQL",
         "redis" => "Redis",
         "mailpit" => "Mailpit",
+        "meilisearch" => "Meilisearch",
         _ => name,
     };
     if !is_service_running(name) {
@@ -514,6 +530,14 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
         }
         "apache" => (exe_path.clone(), vec![]),
         "mailpit" => (exe_path.clone(), vec![]),
+        "meilisearch" => {
+            let db_path = exe_path.parent().unwrap_or(std::path::Path::new(".")).join("data.ms");
+            (exe_path.clone(), vec![
+                "--http-addr".to_string(), "127.0.0.1:7700".to_string(),
+                "--db-path".to_string(), db_path.display().to_string(),
+                "--no-analytics".to_string(),
+            ])
+        }
         "postgresql" => {
             let data_dir = bin_dir.join("data").join("postgres");
             (exe_path.clone(), vec!["-D".to_string(), data_dir.display().to_string()])
@@ -538,6 +562,11 @@ fn start_service_process(service: &ServiceInfo) -> Result<u32, String> {
     let mut cmd = hidden_command(&exe);
     for arg in &args {
         cmd.arg(arg);
+    }
+
+    // Set working directory to exe's parent (needed for Redis relative config path)
+    if let Some(parent) = exe.parent() {
+        cmd.current_dir(parent);
     }
 
     match cmd.spawn() {
@@ -762,9 +791,10 @@ fn generate_site_nginx_config(
     };
 
     let php_block = if let Some(ver) = php_version {
-        let cleaned: String = ver.chars().filter(|c| c.is_ascii_digit()).collect();
-        let port_num: u32 = cleaned.parse().unwrap_or(84);
-        let php_port = 9000 + port_num;
+        // PHP port = 9000 + minor version (e.g. 8.4 → 9004, 8.3 → 9003)
+        let parts: Vec<&str> = ver.split('.').collect();
+        let minor: u32 = if parts.len() >= 2 { parts[1].parse().unwrap_or(4) } else { 4 };
+        let php_port = 9000 + minor;
         format!(r#"
     location ~ \.php$ {{
         fastcgi_pass 127.0.0.1:{php_port};
@@ -884,6 +914,17 @@ fn scan_log_files(bin_dir: &PathBuf) -> Vec<LogFile> {
         });
     }
 
+    // Meilisearch log
+    let meilisearch_log = bin_dir.join("meilisearch").join("meilisearch.log");
+    if meilisearch_log.exists() {
+        let size = fs::metadata(&meilisearch_log).map(|m| m.len()).unwrap_or(0);
+        logs.push(LogFile {
+            name: "meilisearch/meilisearch.log".to_string(),
+            path: meilisearch_log,
+            size,
+        });
+    }
+
     // Apache logs
     let apache_log_dir = bin_dir.join("apache").join("logs");
     if apache_log_dir.exists() {
@@ -967,6 +1008,7 @@ fn resolve_service_name(name: &str) -> String {
         "mongo" => "mongodb".to_string(),
         "node" => "nodejs".to_string(),
         "mail" => "mailpit".to_string(),
+        "meili" | "search" => "meilisearch".to_string(),
         other => other.to_string(),
     }
 }
@@ -1093,7 +1135,7 @@ fn handle_tools_list(id: &Value) -> Value {
         },
         {
             "name": "start_service",
-            "description": "Start a service. Only works for services that have a server process (nginx, php, mariadb, redis, apache, mailpit, postgresql, mongodb).",
+            "description": "Start a service. Only works for services that have a server process (nginx, php, mariadb, redis, apache, mailpit, meilisearch, postgresql, mongodb).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1322,6 +1364,28 @@ fn handle_tools_list(id: &Value) -> Value {
                     "table": { "type": "string", "description": "Table name" }
                 },
                 "required": ["database", "table"]
+            }
+        },
+        {
+            "name": "pg_create_database",
+            "description": "Create a new PostgreSQL database with UTF8 encoding.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Database name to create" }
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "pg_drop_database",
+            "description": "Drop (delete) a PostgreSQL database. This action is irreversible!",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Database name to drop" }
+                },
+                "required": ["name"]
             }
         },
         {
@@ -1586,7 +1650,7 @@ fn handle_tools_list(id: &Value) -> Value {
         // ─── Batch Operations ────────────────────────────
         {
             "name": "start_all_services",
-            "description": "Start all installed server services (nginx, php, mariadb, redis, apache, mailpit, postgresql, mongodb).",
+            "description": "Start all installed server services (nginx, php, mariadb, redis, apache, mailpit, meilisearch, postgresql, mongodb).",
             "inputSchema": {
                 "type": "object",
                 "properties": {},
@@ -1674,7 +1738,7 @@ fn handle_tools_list(id: &Value) -> Value {
         // ─── Service Install/Uninstall ──────────────────
         {
             "name": "install_service",
-            "description": "Install a service from the Orbit registry. Downloads and extracts the service binary. Supported: nginx, php, mariadb, postgresql, mongodb, redis, nodejs, python, bun, deno, go, apache, mailpit, composer, rust.",
+            "description": "Install a service from the Orbit registry. Downloads and extracts the service binary. Supported: nginx, php, mariadb, postgresql, mongodb, redis, nodejs, python, bun, deno, go, apache, mailpit, meilisearch, composer, rust.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1914,6 +1978,14 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
             let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
             let table = args.get("table").and_then(|v| v.as_str()).unwrap_or("");
             tool_pg_describe_table(db, table)
+        }
+        "pg_create_database" => {
+            let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_pg_create_database(name)
+        }
+        "pg_drop_database" => {
+            let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_pg_drop_database(name)
         }
         "pg_execute_query" => {
             let db = args.get("database").and_then(|v| v.as_str()).unwrap_or("");
@@ -2709,6 +2781,33 @@ fn tool_pg_execute_query(database: &str, query: &str) -> Result<String, String> 
     run_psql_query(Some(database), query)
 }
 
+fn tool_pg_create_database(name: &str) -> Result<String, String> {
+    require_service("postgresql")?;
+    if name.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err("Invalid database name: only alphanumeric and underscore allowed".to_string());
+    }
+    let query = format!("CREATE DATABASE \"{}\" ENCODING 'UTF8'", name);
+    run_psql_query(None, &query)?;
+    Ok(format!("Database '{}' created successfully", name))
+}
+
+fn tool_pg_drop_database(name: &str) -> Result<String, String> {
+    require_service("postgresql")?;
+    if name.is_empty() {
+        return Err("Database name is required".to_string());
+    }
+    let system_dbs = ["postgres", "template0", "template1"];
+    if system_dbs.contains(&name.to_lowercase().as_str()) {
+        return Err(format!("Cannot drop system database '{}'", name));
+    }
+    let query = format!("DROP DATABASE \"{}\"", name);
+    run_psql_query(None, &query)?;
+    Ok(format!("Database '{}' dropped successfully", name))
+}
+
 // ─── MongoDB Tools ───────────────────────────────────────────────
 
 fn find_mongosh_client(bin_dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
@@ -2806,6 +2905,16 @@ fn tool_create_site(
 ) -> Result<String, String> {
     if domain.is_empty() || path.is_empty() {
         return Err("Domain and path are required".to_string());
+    }
+
+    // Validate domain — only allow alphanumeric, dots, hyphens
+    if !domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+        return Err("Invalid domain name: only alphanumeric characters, dots, and hyphens allowed".to_string());
+    }
+
+    // Validate path — reject path traversal attempts
+    if path.contains("..") {
+        return Err("Invalid path: path traversal not allowed".to_string());
     }
 
     let bin_dir = get_bin_dir();
@@ -3513,7 +3622,7 @@ fn tool_write_site_config(domain: &str, content: &str) -> Result<String, String>
 fn tool_start_all_services() -> Result<String, String> {
     let bin_dir = get_bin_dir();
     let services = scan_services(&bin_dir);
-    let startable = ["nginx", "php", "mariadb", "redis", "apache", "mailpit", "postgresql", "mongodb"];
+    let startable = ["nginx", "php", "mariadb", "redis", "apache", "mailpit", "meilisearch", "postgresql", "mongodb"];
 
     let targets: Vec<&ServiceInfo> = services.iter()
         .filter(|s| startable.contains(&s.service_type.as_str()))
@@ -3544,7 +3653,7 @@ fn tool_start_all_services() -> Result<String, String> {
 fn tool_stop_all_services() -> Result<String, String> {
     let bin_dir = get_bin_dir();
     let services = scan_services(&bin_dir);
-    let startable = ["nginx", "php", "mariadb", "redis", "apache", "mailpit", "postgresql", "mongodb"];
+    let startable = ["nginx", "php", "mariadb", "redis", "apache", "mailpit", "meilisearch", "postgresql", "mongodb"];
 
     let targets: Vec<&ServiceInfo> = services.iter()
         .filter(|s| startable.contains(&s.service_type.as_str()) && is_service_running(&s.name))
