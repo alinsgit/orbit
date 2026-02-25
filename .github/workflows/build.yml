@@ -11,12 +11,13 @@ on:
       - main
   workflow_dispatch:
 
+# master push → quality only, tag push → quality + build
+
 permissions:
   contents: write
 
 jobs:
   quality:
-    if: "!startsWith(github.ref, 'refs/tags/')"
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +50,8 @@ jobs:
         run: cd core && cargo build
 
   build:
+    needs: quality
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
