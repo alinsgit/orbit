@@ -15,6 +15,7 @@ export function HostsEditorModal({ onClose }: HostsEditorModalProps) {
 
   useEffect(() => {
     fetchHosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchHosts = async () => {

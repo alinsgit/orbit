@@ -37,6 +37,7 @@ export function ComposerManager() {
 
   useEffect(() => {
     loadStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleInstall = async () => {
@@ -45,7 +46,7 @@ export function ComposerManager() {
       await installComposer()
       addToast({ type: 'success', message: 'Composer installed successfully' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to install Composer' })
     } finally {
       setActionLoading(null)
@@ -58,7 +59,7 @@ export function ComposerManager() {
       await uninstallComposer()
       addToast({ type: 'success', message: 'Composer uninstalled' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to uninstall Composer' })
     } finally {
       setActionLoading(null)
@@ -71,7 +72,7 @@ export function ComposerManager() {
       await updateComposer()
       addToast({ type: 'success', message: 'Composer updated successfully' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to update Composer' })
     } finally {
       setActionLoading(null)

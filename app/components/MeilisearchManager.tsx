@@ -40,6 +40,7 @@ export function MeilisearchManager() {
 
   useEffect(() => {
     loadStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleInstall = async () => {
@@ -48,7 +49,7 @@ export function MeilisearchManager() {
       await installMeilisearch()
       addToast({ type: 'success', message: 'Meilisearch installed successfully' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to install Meilisearch' })
     } finally {
       setActionLoading(null)
@@ -62,7 +63,7 @@ export function MeilisearchManager() {
       await uninstallMeilisearch()
       addToast({ type: 'success', message: 'Meilisearch uninstalled' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to uninstall Meilisearch' })
     } finally {
       setActionLoading(null)
@@ -75,7 +76,7 @@ export function MeilisearchManager() {
       await startMeilisearch()
       addToast({ type: 'success', message: 'Meilisearch started' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to start Meilisearch' })
     } finally {
       setActionLoading(null)
@@ -88,7 +89,7 @@ export function MeilisearchManager() {
       await stopMeilisearch()
       addToast({ type: 'success', message: 'Meilisearch stopped' })
       await loadStatus()
-    } catch (err) {
+    } catch (_err) {
       addToast({ type: 'error', message: 'Failed to stop Meilisearch' })
     } finally {
       setActionLoading(null)

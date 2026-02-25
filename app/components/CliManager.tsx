@@ -43,6 +43,7 @@ export function CliManager() {
 
     useEffect(() => {
         loadStatus()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const handleInstall = async () => {
@@ -51,7 +52,7 @@ export function CliManager() {
             await installCli()
             addToast({ type: 'success', message: 'CLI installed successfully. Restart terminal to use orbit-cli.' })
             await loadStatus()
-        } catch (err) {
+        } catch (_err) {
             addToast({ type: 'error', message: 'Failed to install CLI' })
         } finally {
             setActionLoading(null)
@@ -64,7 +65,7 @@ export function CliManager() {
             await uninstallCli()
             addToast({ type: 'success', message: 'CLI uninstalled' })
             await loadStatus()
-        } catch (err) {
+        } catch (_err) {
             addToast({ type: 'error', message: 'Failed to uninstall CLI' })
         } finally {
             setActionLoading(null)
@@ -78,7 +79,7 @@ export function CliManager() {
             addToast({ type: 'success', message: 'CLI updated successfully. Restart terminal to use new version.' })
             setUpdateInfo(null)
             await loadStatus()
-        } catch (err) {
+        } catch (_err) {
             addToast({ type: 'error', message: 'Failed to update CLI' })
         } finally {
             setActionLoading(null)

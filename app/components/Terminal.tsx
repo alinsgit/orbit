@@ -121,6 +121,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
     const projectRoot = getProjectRoot(path);
     createTab(domain, domain, projectRoot, command);
     clearPendingTerminalSite();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingTerminalSite]);
 
   // Create a new tab
@@ -137,6 +138,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
     requestAnimationFrame(() => {
       initXterm(tabId, cwd, initialCommand);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Initialize xterm for a tab
@@ -293,13 +295,14 @@ export function Terminal({ className, onClose }: TerminalProps) {
 
   // Cleanup all on unmount
   useEffect(() => {
+    const xterms = xtermsRef.current;
     return () => {
-      xtermsRef.current.forEach((entry, tabId) => {
+      xterms.forEach((entry, tabId) => {
         entry.unlisten?.();
         entry.term.dispose();
         closeTerminal(tabId).catch(console.error);
       });
-      xtermsRef.current.clear();
+      xterms.clear();
     };
   }, []);
 

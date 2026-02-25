@@ -99,6 +99,7 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       setPhpIniLoaded(false); // Reset php.ini loaded state
       setRawConfigLoaded(false); // Reset raw config loaded state
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, serviceName, serviceType]);
 
   // Lazy load PECL extensions when section is expanded
@@ -107,6 +108,7 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
       loadPeclExtensions();
       setPeclLoaded(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedSections.pecl, serviceType, peclLoaded, peclLoading]);
 
   // Lazy load php.ini content when section is expanded
@@ -114,6 +116,7 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
     if (expandedSections.phpini && serviceType === 'php' && !phpIniLoaded && !phpIniLoading) {
       loadPhpIniRaw();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedSections.phpini, serviceType, phpIniLoaded, phpIniLoading]);
 
   // Lazy load raw config content when section is expanded (for MariaDB, Nginx, Apache)
@@ -121,6 +124,7 @@ export function ServiceConfigDrawer({ isOpen, onClose, serviceName, serviceType,
     if (expandedSections.rawconfig && ['nginx', 'mariadb', 'apache'].includes(serviceType) && !rawConfigLoaded && !rawConfigLoading) {
       loadRawConfig();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedSections.rawconfig, serviceType, rawConfigLoaded, rawConfigLoading]);
 
   const loadConfig = async () => {
