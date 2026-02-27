@@ -696,9 +696,11 @@ fn find_nginx_exe(bin_dir: &PathBuf) -> Result<PathBuf, String> {
 
 fn nginx_test_and_reload(bin_dir: &PathBuf) -> Result<(), String> {
     let nginx = find_nginx_exe(bin_dir)?;
+    let nginx_dir = nginx.parent().unwrap_or(bin_dir);
 
     // Test config
     let test_output = hidden_command(&nginx)
+        .current_dir(nginx_dir)
         .arg("-t")
         .output()
         .map_err(|e| format!("Failed to test nginx config: {}", e))?;
@@ -710,6 +712,7 @@ fn nginx_test_and_reload(bin_dir: &PathBuf) -> Result<(), String> {
 
     // Reload
     let reload_output = hidden_command(&nginx)
+        .current_dir(nginx_dir)
         .args(["-s", "reload"])
         .output()
         .map_err(|e| format!("Failed to reload nginx: {}", e))?;
@@ -3592,7 +3595,9 @@ fn tool_write_site_config(domain: &str, content: &str) -> Result<String, String>
     // Test nginx config
     if is_service_running("nginx") {
         let nginx = find_nginx_exe(&bin_dir)?;
+        let nginx_dir = nginx.parent().unwrap_or(&bin_dir);
         let test = hidden_command(&nginx)
+            .current_dir(nginx_dir)
             .arg("-t")
             .output()
             .map_err(|e| format!("Failed to test nginx config: {}", e))?;
@@ -3609,6 +3614,7 @@ fn tool_write_site_config(domain: &str, content: &str) -> Result<String, String>
 
         // Reload
         hidden_command(&nginx)
+            .current_dir(nginx_dir)
             .args(["-s", "reload"])
             .output()
             .ok();
@@ -4010,7 +4016,8 @@ fn tool_diagnose_service(name: &str) -> Result<String, String> {
         "nginx" => {
             // nginx -t
             let nginx_exe = PathBuf::from(&svc.path);
-            if let Ok(output) = hidden_command(&nginx_exe).arg("-t").output() {
+            let nginx_dir = nginx_exe.parent().unwrap_or(&bin_dir);
+            if let Ok(output) = hidden_command(&nginx_exe).current_dir(nginx_dir).arg("-t").output() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let config_ok = output.status.success();
                 details.insert("config_test".into(), json!(if config_ok { "ok" } else { "failed" }));

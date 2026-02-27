@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/alinsgit/orbit-libraries/main/schema.json",
-  "updated": "2026-02-25T16:25:57.958Z",
+  "updated": "2026-02-25T19:47:24.868Z",
   "version": "1.2.0",
   "services": {
     "php": {
@@ -225,54 +225,22 @@
       "name": "PostgreSQL",
       "description": "Advanced open source relational database",
       "availableVersions": [
-        "16",
-        "15",
-        "14"
+        "16"
       ],
       "versions": {
-        "14": {
-          "latest": "14.21",
-          "windows": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-14.21-1-windows-x64-binaries.zip",
-            "filename": "postgresql-14.21-windows-x64.zip"
-          },
-          "macos_arm64": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-14.21-1-osx-binaries.zip",
-            "filename": "postgresql-14.21-osx.zip"
-          },
-          "macos_x64": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-14.21-1-osx-binaries.zip",
-            "filename": "postgresql-14.21-osx.zip"
-          }
-        },
-        "15": {
-          "latest": "15.16",
-          "windows": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-15.16-1-windows-x64-binaries.zip",
-            "filename": "postgresql-15.16-windows-x64.zip"
-          },
-          "macos_arm64": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-15.16-1-osx-binaries.zip",
-            "filename": "postgresql-15.16-osx.zip"
-          },
-          "macos_x64": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-15.16-1-osx-binaries.zip",
-            "filename": "postgresql-15.16-osx.zip"
-          }
-        },
         "16": {
-          "latest": "16.12",
+          "latest": "16.2",
           "windows": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.12-1-windows-x64-binaries.zip",
-            "filename": "postgresql-16.12-windows-x64.zip"
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.2-1-windows-x64-binaries.zip",
+            "filename": "postgresql-16.2-1-windows-x64-binaries.zip"
           },
           "macos_arm64": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.12-1-osx-binaries.zip",
-            "filename": "postgresql-16.12-osx.zip"
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.2-1-osx-binaries.zip",
+            "filename": "postgresql-16.2-1-osx-binaries.zip"
           },
-          "macos_x64": {
-            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.12-1-osx-binaries.zip",
-            "filename": "postgresql-16.12-osx.zip"
+          "linux": {
+            "url": "https://get.enterprisedb.com/postgresql/postgresql-16.2-1-linux-x64-binaries.tar.gz",
+            "filename": "postgresql-16.2-1-linux-x64-binaries.tar.gz"
           }
         }
       }
@@ -480,21 +448,21 @@
     "deno": {
       "name": "Deno",
       "description": "Next-generation JavaScript runtime",
-      "latest": "2.7.0",
+      "latest": "2.7.1",
       "windows": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.1/deno-x86_64-pc-windows-msvc.zip",
         "filename": "deno-x86_64-pc-windows-msvc.zip"
       },
       "macos_arm64": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-aarch64-apple-darwin.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.1/deno-aarch64-apple-darwin.zip",
         "filename": "deno-aarch64-apple-darwin.zip"
       },
       "macos_x64": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-x86_64-apple-darwin.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.1/deno-x86_64-apple-darwin.zip",
         "filename": "deno-x86_64-apple-darwin.zip"
       },
       "linux": {
-        "url": "https://github.com/denoland/deno/releases/download/v2.7.0/deno-x86_64-unknown-linux-gnu.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.7.1/deno-x86_64-unknown-linux-gnu.zip",
         "filename": "deno-x86_64-unknown-linux-gnu.zip"
       }
     },
@@ -569,6 +537,23 @@
       "all_platforms": {
         "url": "https://getcomposer.org/download/2.9.5/composer.phar",
         "filename": "composer.phar"
+      }
+    },
+    "mongosh": {
+      "name": "MongoDB Shell",
+      "description": "MongoDB interactive shell (mongosh) - required for database management",
+      "latest": "2.3.8",
+      "windows": {
+        "url": "https://downloads.mongodb.com/compass/mongosh-2.3.8-win32-x64.zip",
+        "filename": "mongosh-2.3.8-win32-x64.zip"
+      },
+      "macos_arm64": {
+        "url": "https://downloads.mongodb.com/compass/mongosh-2.3.8-darwin-arm64.zip",
+        "filename": "mongosh-2.3.8-darwin-arm64.zip"
+      },
+      "linux": {
+        "url": "https://downloads.mongodb.com/compass/mongosh-2.3.8-linux-x64.tgz",
+        "filename": "mongosh-2.3.8-linux-x64.tgz"
       }
     },
     "ngrok": {

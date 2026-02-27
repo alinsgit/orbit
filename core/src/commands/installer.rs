@@ -50,6 +50,7 @@ pub async fn download_service(
         "redis" => (bin_path.join("redis"), true),             // Redis-x.x.x-Windows-.../ folder inside
         "deno" => (bin_path.join("deno"), false),            // flat deno.exe inside
         "rust" => (bin_path.join("rust"), false),            // raw executable, handled separately below
+        "mongosh" => (bin_path.join("mongosh_temp"), true),  // extract to temp, merged into mongodb/bin/ in post-install
         _ => (bin_path.join("misc").join(&service_type), false),
     };
 
@@ -98,6 +99,24 @@ pub async fn download_service(
                 configure_php(&extract_target)?;
             } else if service_type == "apache" {
                 configure_apache(&extract_target)?;
+            } else if service_type == "mongosh" {
+                // mongosh zip extracts to mongosh_temp/bin/mongosh.exe
+                // Merge bin/ contents into mongodb/bin/ so find_mongosh_client can locate it
+                let mongosh_bin_src = extract_target.join("bin");
+                let mongodb_bin = bin_path.join("mongodb").join("bin");
+                if mongosh_bin_src.exists() && mongodb_bin.exists() {
+                    for entry in std::fs::read_dir(&mongosh_bin_src)
+                        .map_err(|e| format!("Failed to read mongosh bin: {e}"))?
+                    {
+                        let entry = entry.map_err(|e| format!("Failed to read dir entry: {e}"))?;
+                        let dest = mongodb_bin.join(entry.file_name());
+                        std::fs::copy(entry.path(), &dest)
+                            .map_err(|e| format!("Failed to copy mongosh file: {e}"))?;
+                    }
+                }
+                // Clean up temp extraction dir
+                let _ = std::fs::remove_dir_all(&extract_target);
+                return Ok("MongoDB Shell (mongosh) installed to mongodb/bin/".to_string());
             }
             // Note: PostgreSQL ZIP extracts to postgresql/pgsql/bin/ (nested).
             // Scanner and service.rs handle both flattened and nested structures.

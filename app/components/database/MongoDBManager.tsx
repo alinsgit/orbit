@@ -8,6 +8,7 @@ import {
   Server,
   HardDrive,
   ArrowLeft,
+  Download,
 } from 'lucide-react';
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
@@ -15,6 +16,8 @@ import {
   mongoListCollections,
   mongoDbStats,
   mongoDropDatabase,
+  getAvailableVersions,
+  downloadService,
 } from '../../lib/api';
 
 interface DbStats {
@@ -41,6 +44,7 @@ export default function MongoDBManager() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [installingShell, setInstallingShell] = useState(false);
 
   const loadDatabases = useCallback(async () => {
     setLoading(true);
@@ -112,15 +116,52 @@ export default function MongoDBManager() {
     }
   };
 
+  const isMissingShell = error?.includes('not found');
+
+  const handleInstallShell = async () => {
+    setInstallingShell(true);
+    setError(null);
+    try {
+      const versions = await getAvailableVersions('mongosh');
+      if (!versions.length) throw new Error('Could not fetch mongosh version info');
+      const v = versions[0];
+      await downloadService(v.download_url, v.filename, 'mongosh');
+      setSuccess('MongoDB Shell installed. Refreshing...');
+      setTimeout(() => loadDatabases(), 800);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInstallingShell(false);
+    }
+  };
+
   const systemDbs = ['admin', 'local', 'config'];
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
       {/* Messages */}
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-500/10 text-red-400 rounded-lg text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          {error}
+        <div className="flex items-start gap-2 p-3 bg-red-500/10 text-red-400 rounded-lg text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            {error}
+            {isMissingShell && (
+              <div className="mt-2">
+                <button
+                  onClick={handleInstallShell}
+                  disabled={installingShell}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {installingShell ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  {installingShell ? 'Installing...' : 'Install MongoDB Shell'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {success && (
