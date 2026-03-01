@@ -1,12 +1,13 @@
 use tauri::{command, AppHandle, Manager};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use crate::services::hidden_command;
 
 // ── Service directory resolution (cross-platform) ───────────────────────────
 
 /// Resolve the bin directory for a given service type.
 /// On Unix, PHP lives under `bin/<ver>/bin/`; on Windows it's flat `bin/<ver>/`.
-fn service_dir(bin_path: &PathBuf, service_type: &str) -> Option<PathBuf> {
+fn service_dir(bin_path: &Path, service_type: &str) -> Option<PathBuf> {
     match service_type {
         "nginx" => Some(bin_path.join("nginx")),
         "mariadb" => {
@@ -105,7 +106,7 @@ fn win_is_in_path(path: &str) -> bool {
         let lower = path.to_lowercase();
         paths.iter().any(|p| {
             let pl = p.to_lowercase();
-            pl == lower || pl.starts_with(&format!("{}\\", lower))
+            pl == lower || pl.starts_with(&format!("{lower}\\"))
         })
     }).unwrap_or(false)
 }
@@ -159,7 +160,7 @@ fn unix_add(path_str: &str, service: &str) -> Result<String, String> {
     if added_to.is_empty() {
         Ok("Already in PATH config".to_string())
     } else {
-        Ok(format!("Added — restart your terminal or run: source ~/.bashrc"))
+        Ok("Added — restart your terminal or run: source ~/.bashrc".to_string())
     }
 }
 
@@ -355,10 +356,11 @@ pub fn check_path_status(app: AppHandle) -> Result<PathStatus, String> {
 
 /// Remove all orbit bin dirs from PATH (legacy bulk remove).
 #[command]
+#[allow(clippy::needless_return)]
 pub fn remove_from_path(app: AppHandle) -> Result<String, String> {
     let bin_path = app.path().app_local_data_dir()
         .map_err(|e| e.to_string())?.join("bin");
-    let bin_str  = bin_path.to_string_lossy().to_string();
+    let bin_str = bin_path.to_string_lossy().to_string();
 
     #[cfg(windows)]
     {
@@ -392,7 +394,7 @@ pub fn remove_from_path(app: AppHandle) -> Result<String, String> {
                 }
             }
         }
-        return Ok(format!("Removed orbit PATH entries from {total_removed} shell config file(s)"));
+        Ok(format!("Removed orbit PATH entries from {total_removed} shell config file(s)"))
     }
 }
 
@@ -412,6 +414,7 @@ pub fn get_user_path() -> Result<Vec<String>, String> {
 
 /// Overwrite the user PATH with the provided list of directories.
 #[command]
+#[allow(clippy::needless_return)]
 pub fn save_user_path(paths: Vec<String>) -> Result<String, String> {
     let clean: Vec<String> = paths.into_iter()
         .map(|s| s.trim().to_string())

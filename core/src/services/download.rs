@@ -186,7 +186,7 @@ pub fn extract_tar_gz(tar_path: &Path, extract_path: &Path, strip_root: bool) ->
         None
     };
 
-    log::info!("Extracting tar.gz, strip prefix: {:?}", root_prefix);
+    log::info!("Extracting tar.gz, strip prefix: {root_prefix:?}");
 
     for entry in archive.entries().map_err(|e| format!("Failed to read tar entries: {e}"))? {
         let mut entry = entry.map_err(|e| format!("Failed to read tar entry: {e}"))?;
