@@ -42,7 +42,7 @@ export function McpManager() {
       setStatus(result)
       // Check for updates if installed
       if (result.installed) {
-        checkMcpUpdate().then(setUpdateInfo).catch(() => {})
+        checkMcpUpdate().then(setUpdateInfo).catch(() => { })
       }
     } catch (err) {
       addToast({ type: 'error', message: 'Failed to load MCP status' })
@@ -73,7 +73,7 @@ export function McpManager() {
   const handleUninstall = async () => {
     try {
       setActionLoading('uninstall')
-      await stopMcp().catch(() => {})
+      await stopMcp().catch(() => { })
       await uninstallMcp()
       addToast({ type: 'success', message: 'MCP server uninstalled' })
       await loadStatus()
@@ -126,8 +126,7 @@ export function McpManager() {
 
   const getConfigSnippet = (): string => {
     const serverConfig = {
-      command: "orbit-mcp",
-      args: [] as string[]
+      command: "orbit-mcp"
     }
 
     switch (activeConfig) {
@@ -224,7 +223,7 @@ export function McpManager() {
             <span className={`px-2 py-1 rounded text-xs font-medium ${status.running
               ? 'bg-emerald-500/20 text-emerald-400'
               : 'bg-yellow-500/20 text-yellow-400'
-            }`}>
+              }`}>
               {status.running ? 'Running' : 'Stopped'}
             </span>
           ) : (
@@ -256,7 +255,7 @@ export function McpManager() {
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${activeConfig === tab.key
                     ? 'bg-purple-500/20 text-purple-400'
                     : 'text-content-muted hover:text-content-secondary hover:bg-hover'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
