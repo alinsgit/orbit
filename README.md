@@ -13,7 +13,7 @@ AI-ready local development environment for **Windows, Linux and macOS**. 16 serv
 - **Multi-version PHP** — Run multiple PHP versions side by side with per-site selection
 - **Log Viewer** — Real-time log monitoring with filtering by service and level
 - **Integrated Terminal** — Built-in terminal with PTY support
-- **PATH Management** — Add/remove service directories from system PATH
+- **PATH Management** — Service directories added to system PATH automatically on install
 - **Autostart** — Per-service autostart on app launch
 
 ## Supported Services
@@ -26,56 +26,27 @@ Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js
 |---------|---------|-------|----------------------|
 | Service management | ✅ | ✅ | ✅ |
 | PHP (pre-built) | ✅ | ✅ | ✅ |
-| Nginx, MariaDB, Redis | ✅ | via system pkg | via Homebrew |
 | PATH management | Registry (persistent) | `~/.bashrc` / `~/.zshrc` | `~/.zshrc` / `~/.bash_profile` |
 | MCP | ✅ | ✅ | ✅ |
 | CLI | ✅ | ✅ | ✅ |
 
 ## MCP Integration
 
-Orbit exposes 51 tools via the Model Context Protocol, organized across 10 domains:
+Orbit exposes 51 tools via the Model Context Protocol for Claude Code, Cursor, Windsurf and any MCP-compatible client.
 
-| Domain | Tools |
-|--------|-------|
-| Services | list, status, start, stop, restart, start all, stop all, install, uninstall |
-| Sites | list, create, delete, get config, read/write vhost config |
-| MariaDB | list databases, create, drop, list tables, describe, execute query, export, import |
-| PostgreSQL | list databases, list tables, describe, execute query |
-| Logs | list, read, clear |
-| PHP Config | list extensions, toggle extension, get/set config |
-| SSL | generate certificate, list certificates |
-| Redis | execute command, server info |
-| Composer | require, install, run script |
-| Mailpit | list emails, get email, delete all |
-| Config Files | read/write service config, read/write site config |
-| Hosts | list, add, remove |
-| System | system info, run orbit command |
-
-### MCP Configuration
-
-Add to your AI tool's MCP config:
-
-**Claude Code** (`~/.claude.json`) / **Cursor** / **Windsurf**:
+After installing MCP from the Orbit app, add the following to your AI tool's config:
 
 ```json
 {
   "mcpServers": {
     "orbit": {
-      "command": "/path/to/orbit-mcp"
+      "command": "orbit-mcp"
     }
   }
 }
 ```
 
-Platform-specific binary paths after installation:
-
-| Platform | Path |
-|----------|------|
-| Windows | `%LOCALAPPDATA%\com.orbit.dev\bin\mcp\orbit-mcp.exe` |
-| Linux | `~/.local/share/com.orbit.dev/bin/mcp/orbit-mcp` |
-| macOS | `~/Library/Application Support/com.orbit.dev/bin/mcp/orbit-mcp` |
-
-> The Orbit app displays the correct path for your platform under **Settings → MCP**.
+> Orbit automatically adds `orbit-mcp` to your system PATH on install — no full path needed.
 
 ## CLI
 
