@@ -356,7 +356,7 @@ pub fn check_path_status(app: AppHandle) -> Result<PathStatus, String> {
 
 /// Remove all orbit bin dirs from PATH (legacy bulk remove).
 #[command]
-#[allow(clippy::needless_return)]
+#[allow(clippy::needless_return, unused_variables)]
 pub fn remove_from_path(app: AppHandle) -> Result<String, String> {
     #[cfg(windows)]
     let bin_path = app.path().app_local_data_dir()
