@@ -208,8 +208,12 @@ impl PhpRegistry {
                 let path = entry.path();
                 if path.is_dir() {
                     if let Some(version) = path.file_name().and_then(|n| n.to_str()) {
-                        // Check if php-cgi.exe exists
+                        // Platform-aware php-cgi binary name
+                        #[cfg(windows)]
                         let php_cgi = path.join("php-cgi.exe");
+                        #[cfg(not(windows))]
+                        let php_cgi = path.join("bin").join("php-cgi");
+
                         if php_cgi.exists() {
                             self.register_php(version, path.to_string_lossy().as_ref());
                             count += 1;

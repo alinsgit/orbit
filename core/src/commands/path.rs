@@ -1,464 +1,444 @@
 use tauri::{command, AppHandle, Manager};
+use std::path::PathBuf;
 use crate::services::hidden_command;
 
-/// Add a specific service to user PATH environment variable
-#[command]
-pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<String, String> {
-    let bin_path = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("bin");
+// ── Service directory resolution (cross-platform) ───────────────────────────
 
-    if !bin_path.exists() {
-        return Err("Bin directory does not exist".to_string());
-    }
-
-    // Get the path for this specific service
-    let service_path = match service_type.as_str() {
-        "nginx" => bin_path.join("nginx"),
+/// Resolve the bin directory for a given service type.
+/// On Unix, PHP lives under `bin/<ver>/bin/`; on Windows it's flat `bin/<ver>/`.
+fn service_dir(bin_path: &PathBuf, service_type: &str) -> Option<PathBuf> {
+    match service_type {
+        "nginx" => Some(bin_path.join("nginx")),
         "mariadb" => {
-            let mariadb_bin = bin_path.join("mariadb").join("bin");
-            if mariadb_bin.exists() {
-                mariadb_bin
-            } else {
-                bin_path.join("mariadb")
-            }
+            let b = bin_path.join("mariadb").join("bin");
+            Some(if b.exists() { b } else { bin_path.join("mariadb") })
         }
         s if s.starts_with("php") => {
-            let version = s.strip_prefix("php-").unwrap_or("8.4");
-            bin_path.join("php").join(version)
+            let ver = s.strip_prefix("php-").unwrap_or("8.4");
+            let base = bin_path.join("php").join(ver);
+            #[cfg(not(windows))]
+            let path = base.join("bin"); // our tar.gz extracts bin/php into <ver>/bin/
+            #[cfg(windows)]
+            let path = base;             // Windows zip is flat
+            Some(path)
         }
         "apache" => {
-            let apache_bin = bin_path.join("apache").join("bin");
-            if apache_bin.exists() {
-                apache_bin
-            } else {
-                bin_path.join("apache")
-            }
+            let b = bin_path.join("apache").join("bin");
+            Some(if b.exists() { b } else { bin_path.join("apache") })
         }
-        "redis" => bin_path.join("redis"),
+        "redis"    => Some(bin_path.join("redis")),
         "postgresql" => {
-            let pg_base = bin_path.join("postgresql");
-            let pg_bin = pg_base.join("pgsql").join("bin");
-            if pg_bin.exists() { pg_bin } else { pg_base.join("bin") }
+            let pg = bin_path.join("postgresql");
+            let b  = pg.join("pgsql").join("bin");
+            Some(if b.exists() { b } else { pg.join("bin") })
         }
         "mongodb" => {
-            let mongo_bin = bin_path.join("mongodb").join("bin");
-            if mongo_bin.exists() { mongo_bin } else { bin_path.join("mongodb") }
+            let b = bin_path.join("mongodb").join("bin");
+            Some(if b.exists() { b } else { bin_path.join("mongodb") })
         }
-        "nodejs" => bin_path.join("nodejs"),
-        "python" => bin_path.join("python"),
-        "bun" => bin_path.join("bun"),
-        "go" => bin_path.join("go").join("bin"),
-        "deno" => bin_path.join("deno"),
-        "composer" => bin_path.join("composer"),
-        "rust" => bin_path.join("rust"),
-        "mailpit" => bin_path.join("mailpit"),
-        "mcp" => bin_path.join("mcp"),
-        "cli" => bin_path.join("cli"),
-        _ => return Err(format!("Unknown service type: {service_type}")),
-    };
-
-    if !service_path.exists() {
-        return Err(format!("Service path does not exist: {}", service_path.display()));
+        "nodejs"   => Some(bin_path.join("nodejs")),
+        "python"   => Some(bin_path.join("python")),
+        "bun"      => Some(bin_path.join("bun")),
+        "go"       => Some(bin_path.join("go").join("bin")),
+        "deno"     => Some(bin_path.join("deno")),
+        "composer" => Some(bin_path.join("composer")),
+        "rust"     => Some(bin_path.join("rust")),
+        "mailpit"  => Some(bin_path.join("mailpit")),
+        "mcp"      => Some(bin_path.join("mcp")),
+        "cli"      => Some(bin_path.join("cli")),
+        _          => None,
     }
+}
 
-    let path_str = service_path.to_string_lossy().to_string();
+// ── Windows helpers ─────────────────────────────────────────────────────────
 
-    // PowerShell script to add to user PATH
-    let ps_script = format!(
-        r#"
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $pathToAdd = '{}'
-        $existingPaths = $userPath -split ';'
+#[cfg(windows)]
+fn run_ps(script: &str) -> Result<String, String> {
+    let out = hidden_command("powershell")
+        .args(["-NoProfile", "-Command", script])
+        .output()
+        .map_err(|e| format!("Failed to run PowerShell: {e}"))?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
 
-        if ($existingPaths -notcontains $pathToAdd) {{
-            $newUserPath = ($existingPaths + $pathToAdd) -join ';'
-            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+#[cfg(windows)]
+fn win_add(path: &str) -> Result<String, String> {
+    run_ps(&format!(r#"
+        $p   = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $add = '{}'
+        $arr = $p -split ';'
+        if ($arr -notcontains $add) {{
+            [Environment]::SetEnvironmentVariable('Path', ($arr + $add) -join ';', 'User')
             Write-Output "Added to PATH"
-        }} else {{
-            Write-Output "Already in PATH"
-        }}
-        "#,
-        path_str.replace("'", "''")
-    );
-
-    let output = hidden_command("powershell")
-        .args(["-NoProfile", "-Command", &ps_script])
-        .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(format!("{}: {}", path_str, stdout.trim()))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {stderr}"))
-    }
+        }} else {{ Write-Output "Already in PATH" }}
+    "#, path.replace("'", "''")))
 }
 
-/// Remove a specific service from user PATH environment variable
-#[command]
-pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<String, String> {
-    let bin_path = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("bin");
-
-    // Get the path pattern for this specific service
-    let path_pattern = match service_type.as_str() {
-        "nginx" => bin_path.join("nginx").to_string_lossy().to_string(),
-        "mariadb" => bin_path.join("mariadb").to_string_lossy().to_string(),
-        s if s.starts_with("php") => {
-            let version = s.strip_prefix("php-").unwrap_or("8.4");
-            bin_path.join("php").join(version).to_string_lossy().to_string()
-        }
-        "apache" => bin_path.join("apache").to_string_lossy().to_string(),
-        "redis" => bin_path.join("redis").to_string_lossy().to_string(),
-        "postgresql" => bin_path.join("postgresql").to_string_lossy().to_string(),
-        "mongodb" => bin_path.join("mongodb").to_string_lossy().to_string(),
-        "nodejs" => bin_path.join("nodejs").to_string_lossy().to_string(),
-        "python" => bin_path.join("python").to_string_lossy().to_string(),
-        "bun" => bin_path.join("bun").to_string_lossy().to_string(),
-        "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
-        "deno" => bin_path.join("deno").to_string_lossy().to_string(),
-        "composer" => bin_path.join("composer").to_string_lossy().to_string(),
-        "rust" => bin_path.join("rust").to_string_lossy().to_string(),
-        "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
-        "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
-        "cli" => bin_path.join("cli").to_string_lossy().to_string(),
-        _ => return Err(format!("Unknown service type: {service_type}")),
-    };
-
-    // PowerShell script to remove from user PATH
-    let ps_script = format!(
-        r#"
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $pathToRemove = '{}'
-        $existingPaths = $userPath -split ';'
-
-        $filteredPaths = $existingPaths | Where-Object {{
-            $_ -ne $pathToRemove -and -not ($_ -like "$pathToRemove\*")
-        }}
-
-        $removedCount = $existingPaths.Count - $filteredPaths.Count
-
-        if ($removedCount -gt 0) {{
-            $newUserPath = $filteredPaths -join ';'
-            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+#[cfg(windows)]
+fn win_remove(pattern: &str) -> Result<String, String> {
+    run_ps(&format!(r#"
+        $p   = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $pat = '{}'
+        $arr = $p -split ';'
+        $filtered = $arr | Where-Object {{ $_ -ne $pat -and -not ($_ -like "$pat\*") }}
+        $removed  = $arr.Count - $filtered.Count
+        if ($removed -gt 0) {{
+            [Environment]::SetEnvironmentVariable('Path', ($filtered -join ';'), 'User')
             Write-Output "Removed from PATH"
-        }} else {{
-            Write-Output "Not in PATH"
-        }}
-        "#,
-        path_pattern.replace("'", "''")
-    );
+        }} else {{ Write-Output "Not in PATH" }}
+    "#, pattern.replace("'", "''")))
+}
 
-    let output = hidden_command("powershell")
-        .args(["-NoProfile", "-Command", &ps_script])
-        .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
+#[cfg(windows)]
+fn win_get_user_path() -> Result<Vec<String>, String> {
+    let raw = run_ps("[Environment]::GetEnvironmentVariable('Path', 'User')")?;
+    Ok(raw.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+}
 
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(format!("{}: {}", path_pattern, stdout.trim()))
+#[cfg(windows)]
+fn win_is_in_path(path: &str) -> bool {
+    win_get_user_path().map(|paths| {
+        let lower = path.to_lowercase();
+        paths.iter().any(|p| {
+            let pl = p.to_lowercase();
+            pl == lower || pl.starts_with(&format!("{}\\", lower))
+        })
+    }).unwrap_or(false)
+}
+
+// ── Unix helpers ────────────────────────────────────────────────────────────
+
+#[cfg(not(windows))]
+fn home_dir() -> PathBuf {
+    std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/tmp"))
+}
+
+/// Shell RC files we manage PATH entries in.
+#[cfg(not(windows))]
+fn rc_files() -> Vec<PathBuf> {
+    let home = home_dir();
+    [".bashrc", ".zshrc", ".bash_profile", ".profile"]
+        .iter()
+        .map(|f| home.join(f))
+        // Only include files that already exist (don't create e.g. .zshrc on bash-only systems)
+        .filter(|p| p.exists())
+        .collect()
+}
+
+/// Unique comment marker for orbit-managed PATH entries.
+#[cfg(not(windows))]
+fn orbit_marker(service: &str) -> String {
+    format!("# orbit-path:{service}")
+}
+
+/// Append `export PATH="<path>:$PATH"` to shell RC files (idempotent).
+#[cfg(not(windows))]
+fn unix_add(path_str: &str, service: &str) -> Result<String, String> {
+    use std::io::Write;
+    let marker  = orbit_marker(service);
+    let line    = format!("export PATH=\"{path_str}:$PATH\"  {marker}");
+    let mut added_to = vec![];
+
+    for rc in rc_files() {
+        let content = std::fs::read_to_string(&rc).unwrap_or_default();
+        if content.contains(&marker) {
+            continue; // already present
+        }
+        let mut f = std::fs::OpenOptions::new()
+            .create(true).append(true).open(&rc)
+            .map_err(|e| format!("Cannot write {}: {e}", rc.display()))?;
+        writeln!(f, "\n{line}")
+            .map_err(|e| format!("Write error {}: {e}", rc.display()))?;
+        added_to.push(rc.to_string_lossy().to_string());
+    }
+
+    if added_to.is_empty() {
+        Ok("Already in PATH config".to_string())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {stderr}"))
+        Ok(format!("Added — restart your terminal or run: source ~/.bashrc"))
     }
 }
 
-/// Check if a specific service is in PATH
-#[command]
-pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result<ServicePathStatus, String> {
-    let bin_path = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("bin");
+/// Remove orbit-managed PATH lines for `service` from RC files.
+#[cfg(not(windows))]
+fn unix_remove(service: &str) -> Result<String, String> {
+    let marker  = orbit_marker(service);
+    let mut removed = false;
 
-    // Get the path for this specific service
-    let service_path = match service_type.as_str() {
-        "nginx" => bin_path.join("nginx").to_string_lossy().to_string(),
-        "mariadb" => {
-            let mariadb_bin = bin_path.join("mariadb").join("bin");
-            if mariadb_bin.exists() {
-                mariadb_bin.to_string_lossy().to_string()
-            } else {
-                bin_path.join("mariadb").to_string_lossy().to_string()
+    for rc in rc_files() {
+        if let Ok(content) = std::fs::read_to_string(&rc) {
+            if !content.contains(&marker) {
+                continue;
             }
+            // Filter lines that carry our marker (including the blank line before)
+            let new: String = content.lines()
+                .filter(|l| !l.contains(&marker))
+                .collect::<Vec<_>>()
+                .join("\n");
+            std::fs::write(&rc, new)
+                .map_err(|e| format!("Cannot write {}: {e}", rc.display()))?;
+            removed = true;
         }
-        s if s.starts_with("php") => {
-            let version = s.strip_prefix("php-").unwrap_or("8.4");
-            bin_path.join("php").join(version).to_string_lossy().to_string()
-        }
-        "apache" => {
-            let apache_bin = bin_path.join("apache").join("bin");
-            if apache_bin.exists() {
-                apache_bin.to_string_lossy().to_string()
-            } else {
-                bin_path.join("apache").to_string_lossy().to_string()
-            }
-        }
-        "redis" => bin_path.join("redis").to_string_lossy().to_string(),
-        "postgresql" => {
-            let pg_base = bin_path.join("postgresql");
-            let pg_bin = pg_base.join("pgsql").join("bin");
-            if pg_bin.exists() { pg_bin.to_string_lossy().to_string() } else { pg_base.join("bin").to_string_lossy().to_string() }
-        }
-        "mongodb" => {
-            let mongo_bin = bin_path.join("mongodb").join("bin");
-            if mongo_bin.exists() { mongo_bin.to_string_lossy().to_string() } else { bin_path.join("mongodb").to_string_lossy().to_string() }
-        }
-        "nodejs" => bin_path.join("nodejs").to_string_lossy().to_string(),
-        "python" => bin_path.join("python").to_string_lossy().to_string(),
-        "bun" => bin_path.join("bun").to_string_lossy().to_string(),
-        "go" => bin_path.join("go").join("bin").to_string_lossy().to_string(),
-        "deno" => bin_path.join("deno").to_string_lossy().to_string(),
-        "composer" => bin_path.join("composer").to_string_lossy().to_string(),
-        "rust" => bin_path.join("rust").to_string_lossy().to_string(),
-        "mailpit" => bin_path.join("mailpit").to_string_lossy().to_string(),
-        "mcp" => bin_path.join("mcp").to_string_lossy().to_string(),
-        "cli" => bin_path.join("cli").to_string_lossy().to_string(),
-        _ => return Err(format!("Unknown service type: {service_type}")),
-    };
+    }
 
-    // Get current user PATH
-    let output = hidden_command("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "[Environment]::GetEnvironmentVariable('Path', 'User')",
-        ])
-        .output()
-        .map_err(|e| format!("Failed to get PATH: {e}"))?;
+    Ok(if removed { "Removed from PATH config".to_string() } else { "Not found in PATH config".to_string() })
+}
 
-    let user_path = String::from_utf8_lossy(&output.stdout).to_lowercase();
-    let service_path_lower = service_path.to_lowercase();
-
-    let in_path = user_path.split(';').any(|p| {
-        p.trim() == service_path_lower || p.trim().starts_with(&format!("{service_path_lower}\\"))
-    });
-
-    Ok(ServicePathStatus {
-        in_path,
-        service_path,
-        service_type,
+/// Check if a path is present in the orbit-managed RC files.
+#[cfg(not(windows))]
+fn unix_is_in_path_rc(service: &str) -> bool {
+    let marker = orbit_marker(service);
+    rc_files().iter().any(|rc| {
+        std::fs::read_to_string(rc).map(|c| c.contains(&marker)).unwrap_or(false)
     })
 }
 
-/// Add all installed services to PATH (bulk operation)
+/// Check if a path is currently active in $PATH (current session).
+#[cfg(not(windows))]
+fn unix_is_in_current_path(path_str: &str) -> bool {
+    std::env::var("PATH")
+        .map(|p| p.split(':').any(|e| e == path_str))
+        .unwrap_or(false)
+}
+
+// ── Tauri commands ──────────────────────────────────────────────────────────
+
+/// Add a specific service to the user PATH.
 #[command]
-pub fn add_to_path(app: AppHandle) -> Result<String, String> {
-    let bin_path = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("bin");
+pub fn add_service_to_path(app: AppHandle, service_type: String) -> Result<String, String> {
+    let bin_path = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?.join("bin");
 
     if !bin_path.exists() {
         return Err("Bin directory does not exist".to_string());
     }
 
-    // Collect all paths to add
-    let mut paths_to_add: Vec<String> = Vec::new();
+    let svc_path = service_dir(&bin_path, &service_type)
+        .ok_or_else(|| format!("Unknown service type: {service_type}"))?;
 
-    // 1. Nginx
-    let nginx_path = bin_path.join("nginx");
-    if nginx_path.exists() {
-        paths_to_add.push(nginx_path.to_string_lossy().to_string());
+    if !svc_path.exists() {
+        return Err(format!("Service path does not exist: {}", svc_path.display()));
     }
 
-    // 2. MariaDB bin
-    let mariadb_bin = bin_path.join("mariadb").join("bin");
-    if mariadb_bin.exists() {
-        paths_to_add.push(mariadb_bin.to_string_lossy().to_string());
-    } else {
-        // Flat structure
-        let mariadb_path = bin_path.join("mariadb");
-        if mariadb_path.exists() {
-            paths_to_add.push(mariadb_path.to_string_lossy().to_string());
+    let path_str = svc_path.to_string_lossy().to_string();
+
+    #[cfg(windows)]
+    return win_add(&path_str).map(|msg| format!("{path_str}: {msg}"));
+
+    #[cfg(not(windows))]
+    return unix_add(&path_str, &service_type).map(|msg| format!("{path_str}: {msg}"));
+}
+
+/// Remove a specific service from the user PATH.
+#[command]
+pub fn remove_service_from_path(app: AppHandle, service_type: String) -> Result<String, String> {
+    let bin_path = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?.join("bin");
+
+    let svc_path = service_dir(&bin_path, &service_type)
+        .ok_or_else(|| format!("Unknown service type: {service_type}"))?;
+
+    let path_str = svc_path.to_string_lossy().to_string();
+
+    #[cfg(windows)]
+    return win_remove(&path_str).map(|msg| format!("{path_str}: {msg}"));
+
+    #[cfg(not(windows))]
+    return unix_remove(&service_type).map(|msg| format!("{path_str}: {msg}"));
+}
+
+/// Check if a specific service directory is in the user PATH.
+#[command]
+pub fn check_service_path_status(app: AppHandle, service_type: String) -> Result<ServicePathStatus, String> {
+    let bin_path = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?.join("bin");
+
+    let svc_path = service_dir(&bin_path, &service_type)
+        .ok_or_else(|| format!("Unknown service type: {service_type}"))?;
+
+    let path_str = svc_path.to_string_lossy().to_string();
+
+    #[cfg(windows)]
+    let in_path = win_is_in_path(&path_str);
+
+    #[cfg(not(windows))]
+    let in_path = unix_is_in_path_rc(&service_type) || unix_is_in_current_path(&path_str);
+
+    Ok(ServicePathStatus { in_path, service_path: path_str, service_type })
+}
+
+/// Add all installed services to the user PATH.
+#[command]
+pub fn add_to_path(app: AppHandle) -> Result<String, String> {
+    let bin_path = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?.join("bin");
+
+    if !bin_path.exists() {
+        return Err("Bin directory does not exist".to_string());
+    }
+
+    let services = [
+        "nginx", "mariadb", "nodejs", "python", "bun", "go",
+        "deno", "composer", "rust", "mailpit", "mcp", "cli",
+    ];
+
+    let mut added: Vec<String> = vec![];
+
+    // Fixed services
+    for svc in &services {
+        if let Some(p) = service_dir(&bin_path, svc) {
+            if p.exists() {
+                #[cfg(windows)]
+                win_add(&p.to_string_lossy()).ok();
+                #[cfg(not(windows))]
+                unix_add(&p.to_string_lossy(), svc).ok();
+                added.push(svc.to_string());
+            }
         }
     }
 
-    // 3. PHP versions
+    // PHP versions (enumerate installed)
     let php_root = bin_path.join("php");
     if php_root.exists() {
         if let Ok(entries) = std::fs::read_dir(&php_root) {
             for entry in entries.flatten() {
                 if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    paths_to_add.push(entry.path().to_string_lossy().to_string());
+                    if let Some(ver) = entry.file_name().to_str() {
+                        let svc_type = format!("php-{ver}");
+                        if let Some(p) = service_dir(&bin_path, &svc_type) {
+                            if p.exists() {
+                                #[cfg(windows)]
+                                win_add(&p.to_string_lossy()).ok();
+                                #[cfg(not(windows))]
+                                unix_add(&p.to_string_lossy(), &svc_type).ok();
+                                added.push(svc_type);
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    // 4. Node.js
-    let nodejs_path = bin_path.join("nodejs");
-    if nodejs_path.exists() {
-        paths_to_add.push(nodejs_path.to_string_lossy().to_string());
-    }
-
-    // 5. Python
-    let python_path = bin_path.join("python");
-    if python_path.exists() {
-        paths_to_add.push(python_path.to_string_lossy().to_string());
-    }
-
-    // 6. Bun
-    let bun_path = bin_path.join("bun");
-    if bun_path.exists() {
-        paths_to_add.push(bun_path.to_string_lossy().to_string());
-    }
-
-    // 7. Go
-    let go_path = bin_path.join("go").join("bin");
-    if go_path.exists() {
-        paths_to_add.push(go_path.to_string_lossy().to_string());
-    }
-
-    // 8. Deno
-    let deno_path = bin_path.join("deno");
-    if deno_path.exists() {
-        paths_to_add.push(deno_path.to_string_lossy().to_string());
-    }
-
-    // 9. CLI
-    let cli_path = bin_path.join("cli");
-    if cli_path.exists() {
-        paths_to_add.push(cli_path.to_string_lossy().to_string());
-    }
-
-    if paths_to_add.is_empty() {
-        return Err("No services found to add to PATH".to_string());
-    }
-
-    // Build PowerShell script to add to user PATH
-    let paths_string = paths_to_add.join(";");
-
-    let ps_script = format!(
-        r#"
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $pathsToAdd = '{}'
-        $newPaths = $pathsToAdd -split ';'
-        $existingPaths = $userPath -split ';'
-
-        $addedPaths = @()
-        foreach ($path in $newPaths) {{
-            if ($existingPaths -notcontains $path) {{
-                $addedPaths += $path
-            }}
-        }}
-
-        if ($addedPaths.Count -gt 0) {{
-            $newUserPath = ($existingPaths + $addedPaths) -join ';'
-            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
-            Write-Output "Added $($addedPaths.Count) path(s)"
-        }} else {{
-            Write-Output "All paths already in PATH"
-        }}
-        "#,
-        paths_string.replace("'", "''")
-    );
-
-    let output = hidden_command("powershell")
-        .args(["-NoProfile", "-Command", &ps_script])
-        .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(format!(
-            "PATH updated successfully. Added: {}\n{}",
-            paths_to_add.join(", "),
-            stdout.trim()
-        ))
+    if added.is_empty() {
+        Err("No installed services found to add".to_string())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {stderr}"))
+        Ok(format!("PATH updated for: {}", added.join(", ")))
     }
 }
 
-/// Check if services are in PATH (legacy)
+/// Check if orbit bin dirs are in PATH (legacy bulk check).
 #[command]
 pub fn check_path_status(app: AppHandle) -> Result<PathStatus, String> {
-    let bin_path = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("bin");
+    let bin_path = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?.join("bin");
+    let bin_str  = bin_path.to_string_lossy().to_string();
 
-    // Get current user PATH
-    let output = hidden_command("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "[Environment]::GetEnvironmentVariable('Path', 'User')",
-        ])
-        .output()
-        .map_err(|e| format!("Failed to get PATH: {e}"))?;
+    #[cfg(windows)]
+    let in_path = {
+        let user_path = win_get_user_path().unwrap_or_default().join(";").to_lowercase();
+        user_path.contains(&bin_str.to_lowercase())
+    };
 
-    let user_path = String::from_utf8_lossy(&output.stdout).to_lowercase();
-    let bin_path_str = bin_path.to_string_lossy().to_lowercase();
+    #[cfg(not(windows))]
+    let in_path = {
+        let env_path = std::env::var("PATH").unwrap_or_default();
+        env_path.split(':').any(|p| p.starts_with(&bin_str))
+    };
 
-    let in_path = user_path.contains(&bin_path_str);
-
-    Ok(PathStatus {
-        in_path,
-        bin_dir: bin_path.to_string_lossy().to_string(),
-    })
+    Ok(PathStatus { in_path, bin_dir: bin_str })
 }
 
-/// Remove bin directories from user PATH environment variable (legacy)
+/// Remove all orbit bin dirs from PATH (legacy bulk remove).
 #[command]
 pub fn remove_from_path(app: AppHandle) -> Result<String, String> {
-    let bin_path = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("bin");
+    let bin_path = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?.join("bin");
+    let bin_str  = bin_path.to_string_lossy().to_string();
 
-    let bin_path_str = bin_path.to_string_lossy().to_string();
+    #[cfg(windows)]
+    {
+        let ps = format!(r#"
+            $p   = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $bin = '{}'
+            $arr = $p -split ';'
+            $filtered = $arr | Where-Object {{ -not ($_ -like "$bin*") }}
+            $removed  = $arr.Count - $filtered.Count
+            if ($removed -gt 0) {{
+                [Environment]::SetEnvironmentVariable('Path', ($filtered -join ';'), 'User')
+                Write-Output "Removed $removed path(s)"
+            }} else {{ Write-Output "No paths to remove" }}
+        "#, bin_str.replace("'", "''"));
+        return run_ps(&ps).map(|msg| format!("PATH cleaned. {msg}"));
+    }
 
-    // PowerShell script to remove paths containing our bin directory
-    let ps_script = format!(
-        r#"
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $binPath = '{}'
-        $existingPaths = $userPath -split ';'
-
-        $filteredPaths = $existingPaths | Where-Object {{
-            -not ($_ -like "$binPath*")
-        }}
-
-        $removedCount = $existingPaths.Count - $filteredPaths.Count
-
-        if ($removedCount -gt 0) {{
-            $newUserPath = $filteredPaths -join ';'
-            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
-            Write-Output "Removed $removedCount path(s)"
-        }} else {{
-            Write-Output "No paths to remove"
-        }}
-        "#,
-        bin_path_str.replace("'", "''")
-    );
-
-    let output = hidden_command("powershell")
-        .args(["-NoProfile", "-Command", &ps_script])
-        .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(format!("PATH cleaned. {}", stdout.trim()))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {stderr}"))
+    #[cfg(not(windows))]
+    {
+        // Remove all orbit-managed lines from RC files
+        let mut total_removed = 0usize;
+        for rc in rc_files() {
+            if let Ok(content) = std::fs::read_to_string(&rc) {
+                let new: String = content.lines()
+                    .filter(|l| !l.contains("# orbit-path:"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if new.len() != content.len() {
+                    std::fs::write(&rc, new).ok();
+                    total_removed += 1;
+                }
+            }
+        }
+        return Ok(format!("Removed orbit PATH entries from {total_removed} shell config file(s)"));
     }
 }
+
+/// Return the user PATH as a list of directory strings.
+#[command]
+pub fn get_user_path() -> Result<Vec<String>, String> {
+    #[cfg(windows)]
+    return win_get_user_path();
+
+    #[cfg(not(windows))]
+    {
+        // Return current session PATH entries
+        let path = std::env::var("PATH").map_err(|_| "PATH not set".to_string())?;
+        Ok(path.split(':').map(|s| s.to_string()).filter(|s| !s.is_empty()).collect())
+    }
+}
+
+/// Overwrite the user PATH with the provided list of directories.
+#[command]
+pub fn save_user_path(paths: Vec<String>) -> Result<String, String> {
+    let clean: Vec<String> = paths.into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    #[cfg(windows)]
+    {
+        let new_path = clean.join(";");
+        let ps = format!(r#"
+            [Environment]::SetEnvironmentVariable('Path', '{}', 'User')
+            Write-Output "User PATH updated successfully."
+        "#, new_path.replace("'", "''"));
+        return run_ps(&ps).map(|_| "PATH saved successfully.".to_string());
+    }
+
+    #[cfg(not(windows))]
+    {
+        // On Unix, PATH is managed via shell RC files.
+        // We can't directly set "user PATH" like Windows registry.
+        // Return an informative message instead.
+        let _ = clean;
+        Err("On Linux/macOS, PATH is managed through shell config files (~/.bashrc, ~/.zshrc). Use add_service_to_path instead.".to_string())
+    }
+}
+
+// ── Structs ─────────────────────────────────────────────────────────────────
 
 #[derive(serde::Serialize)]
 pub struct PathStatus {
@@ -472,62 +452,3 @@ pub struct ServicePathStatus {
     pub service_path: String,
     pub service_type: String,
 }
-
-/// Retrieve the raw User PATH as a list of directories
-#[command]
-pub fn get_user_path() -> Result<Vec<String>, String> {
-    let output = hidden_command("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "[Environment]::GetEnvironmentVariable('Path', 'User')",
-        ])
-        .output()
-        .map_err(|e| format!("Failed to get PATH: {e}"))?;
-
-    let path_str = String::from_utf8_lossy(&output.stdout).to_string();
-    
-    // Split by ';' on Windows, filter out empty strings
-    let paths: Vec<String> = path_str
-        .split(';')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    Ok(paths)
-}
-
-/// Overwrite the User PATH with a new list of directories
-#[command]
-pub fn save_user_path(paths: Vec<String>) -> Result<String, String> {
-    // Filter out invalid or purely empty paths to prevent accidental corruption
-    let clean_paths: Vec<String> = paths
-        .into_iter()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    let new_path_str = clean_paths.join(";");
-
-    let ps_script = format!(
-        r#"
-        $newPath = '{}'
-        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-        Write-Output "User PATH updated successfully."
-        "#,
-        new_path_str.replace("'", "''")
-    );
-
-    let output = hidden_command("powershell")
-        .args(["-NoProfile", "-Command", &ps_script])
-        .output()
-        .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
-
-    if output.status.success() {
-        Ok("PATH saved successfully.".into())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to update PATH: {stderr}"))
-    }
-}
-

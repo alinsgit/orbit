@@ -155,6 +155,104 @@ pub fn extract_zip(zip_path: &Path, extract_path: &Path) -> Result<(), String> {
     extract_zip_with_strip(zip_path, extract_path, true)
 }
 
+/// Extracts a .tar.gz file, optionally stripping a common root folder
+pub fn extract_tar_gz(tar_path: &Path, extract_path: &Path, strip_root: bool) -> Result<(), String> {
+    use flate2::read::GzDecoder;
+    use tar::Archive;
+
+    let file = std::fs::File::open(tar_path)
+        .map_err(|e| format!("Failed to open tar.gz: {e}"))?;
+    let gz = GzDecoder::new(file);
+    let mut archive = Archive::new(gz);
+
+    // First pass: detect root folder prefix to strip
+    let root_prefix: Option<String> = if strip_root {
+        let file2 = std::fs::File::open(tar_path)
+            .map_err(|e| format!("Failed to re-open tar.gz: {e}"))?;
+        let gz2 = GzDecoder::new(file2);
+        let mut archive2 = Archive::new(gz2);
+        let mut prefix: Option<String> = None;
+        for entry in archive2.entries().map_err(|e| format!("Failed to read entries: {e}"))? {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
+            let path = entry.path().map_err(|e| format!("Failed to get path: {e}"))?;
+            let path_str = path.to_string_lossy().to_string();
+            if let Some(slash) = path_str.find('/') {
+                prefix = Some(format!("{}/", &path_str[..slash]));
+                break;
+            }
+        }
+        prefix
+    } else {
+        None
+    };
+
+    log::info!("Extracting tar.gz, strip prefix: {:?}", root_prefix);
+
+    for entry in archive.entries().map_err(|e| format!("Failed to read tar entries: {e}"))? {
+        let mut entry = entry.map_err(|e| format!("Failed to read tar entry: {e}"))?;
+        let entry_path = entry.path().map_err(|e| format!("Failed to get entry path: {e}"))?;
+        let path_str = entry_path.to_string_lossy().to_string();
+
+        // Strip root prefix if detected
+        let relative = if let Some(ref prefix) = root_prefix {
+            if path_str.starts_with(prefix) {
+                path_str[prefix.len()..].to_string()
+            } else {
+                path_str.clone()
+            }
+        } else {
+            path_str.clone()
+        };
+
+        if relative.is_empty() {
+            continue;
+        }
+
+        let out_path = extract_path.join(&relative);
+
+        if entry.header().entry_type().is_dir() {
+            std::fs::create_dir_all(&out_path)
+                .map_err(|e| format!("Failed to create dir {out_path:?}: {e}"))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent dir: {e}"))?;
+            }
+            entry.unpack(&out_path)
+                .map_err(|e| format!("Failed to unpack {relative}: {e}"))?;
+
+            // Preserve Unix executable permissions
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(mode) = entry.header().mode() {
+                    let _ = std::fs::set_permissions(
+                        &out_path,
+                        std::fs::Permissions::from_mode(mode),
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Unified archive extractor: auto-selects zip or tar.gz based on file extension.
+pub fn extract_archive(archive_path: &Path, extract_path: &Path, strip_root: bool) -> Result<(), String> {
+    let name = archive_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
+        extract_tar_gz(archive_path, extract_path, strip_root)
+    } else {
+        extract_zip_with_strip(archive_path, extract_path, strip_root)
+    }
+}
+
+
+
 /// Extracts a zip file with configurable root folder stripping
 pub fn extract_zip_with_strip(zip_path: &Path, extract_path: &Path, strip_root: bool) -> Result<(), String> {
     use zip::ZipArchive;

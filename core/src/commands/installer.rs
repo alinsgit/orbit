@@ -1,6 +1,6 @@
 use tauri::command;
 use std::path::{Path, PathBuf};
-use crate::services::download::{download_file, extract_zip_with_strip};
+use crate::services::download::{download_file, extract_archive};
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -40,7 +40,10 @@ pub async fn download_service(
         "mongodb" => (bin_path.join("mongodb"), true),       // mongodb-win32-x86_64-.../ folder inside
         s if s.starts_with("php") => {
             let version = s.strip_prefix("php-").unwrap_or("latest");
-            (bin_path.join("php").join(version), false)      // PHP zips have flat structure
+            let target = bin_path.join("php").join(version);
+            // Windows PHP zips are flat (no root folder); Linux/macOS tar.gz have one
+            let strip = filename.ends_with(".tar.gz") || filename.ends_with(".tgz");
+            (target, strip)
         }
         "nodejs" => (bin_path.join("nodejs"), true),         // node-vx.x.x-win-x64/ folder inside
         "python" => (bin_path.join("python"), false),        // Python embed has flat structure
@@ -89,7 +92,7 @@ pub async fn download_service(
         }
     }
 
-    match extract_zip_with_strip(&dest_path, &extract_target, strip_root) {
+    match extract_archive(&dest_path, &extract_target, strip_root) {
         Ok(_) => {
             // Cleanup zip file after successful extraction
             let _ = std::fs::remove_file(&dest_path);
