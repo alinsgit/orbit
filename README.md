@@ -24,11 +24,20 @@ Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js
 
 | Feature | Windows | Linux | macOS (Apple Silicon) |
 |---------|---------|-------|----------------------|
-| Service management | ✅ | ✅ | ✅ |
-| PHP (pre-built) | ✅ | ✅ | ✅ |
-| PATH management | Registry (persistent) | `~/.bashrc` / `~/.zshrc` | `~/.zshrc` / `~/.bash_profile` |
-| MCP | ✅ | ✅ | ✅ |
-| CLI | ✅ | ✅ | ✅ |
+| PHP (pre-built binaries) | ✅ | ✅ | ✅ |
+| MariaDB, MongoDB, PostgreSQL | ✅ | ✅ | ✅ |
+| Node.js, Bun, Go, Deno | ✅ | ✅ | ✅ |
+| Nginx | ✅ | ✅ | ✅ |
+| Rust (via rustup) | ✅ | ✅ | ✅ |
+| Mailpit, Meilisearch, Ngrok | ✅ | ✅ | ✅ |
+| Composer | ✅ | ✅ | ✅ |
+| Python | ✅ | ✅ | ✅ |
+| Redis | ✅ | — | — |
+| Apache | ✅ | — | — |
+| PATH management | Registry | `~/.bashrc` / `~/.zshrc` | `~/.zshrc` / `~/.bash_profile` |
+| MCP + CLI | ✅ | ✅ | ✅ |
+
+> Redis and Apache are Windows-only installs. On Linux/macOS, native package managers (apt, brew) are preferred.
 
 ## MCP Integration
 
