@@ -16,7 +16,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "TAURI_DIR=core tauri"
+    "tauri": "TAURI_DIR=core tauri",
+    "bump": "node scripts/bump-version.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
