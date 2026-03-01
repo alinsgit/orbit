@@ -1,6 +1,6 @@
 # Orbit
 
-AI-ready local development environment for Windows. 16 services, MCP integration, CLI — all from a single interface.
+AI-ready local development environment for **Windows, Linux and macOS**. 16 services, MCP integration, CLI — all from a single interface.
 
 ## Features
 
@@ -13,12 +13,23 @@ AI-ready local development environment for Windows. 16 services, MCP integration
 - **Multi-version PHP** — Run multiple PHP versions side by side with per-site selection
 - **Log Viewer** — Real-time log monitoring with filtering by service and level
 - **Integrated Terminal** — Built-in terminal with PTY support
-- **PATH Management** — Add/remove services from system PATH per service
+- **PATH Management** — Add/remove service directories from system PATH
 - **Autostart** — Per-service autostart on app launch
 
 ## Supported Services
 
-Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js, Python, Bun, Deno, Go, Rust, Composer, Mailpit, Ngrok
+Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js, Python, Bun, Deno, Go, Rust, Composer, Mailpit, Meilisearch
+
+## Platform Support
+
+| Feature | Windows | Linux | macOS (Apple Silicon) |
+|---------|---------|-------|----------------------|
+| Service management | ✅ | ✅ | ✅ |
+| PHP (pre-built) | ✅ | ✅ | ✅ |
+| Nginx, MariaDB, Redis | ✅ | via system pkg | via Homebrew |
+| PATH management | Registry (persistent) | `~/.bashrc` / `~/.zshrc` | `~/.zshrc` / `~/.bash_profile` |
+| MCP | ✅ | ✅ | ✅ |
+| CLI | ✅ | ✅ | ✅ |
 
 ## MCP Integration
 
@@ -40,20 +51,31 @@ Orbit exposes 51 tools via the Model Context Protocol, organized across 10 domai
 | Hosts | list, add, remove |
 | System | system info, run orbit command |
 
-### Configuration
+### MCP Configuration
 
-Add to your AI tool's MCP config (Claude Code `~/.claude.json`, Cursor, Windsurf):
+Add to your AI tool's MCP config:
+
+**Claude Code** (`~/.claude.json`) / **Cursor** / **Windsurf**:
 
 ```json
 {
   "mcpServers": {
     "orbit": {
-      "command": "C:\\Users\\<USER>\\AppData\\Local\\com.orbit.dev\\bin\\mcp\\orbit-mcp.exe",
-      "args": []
+      "command": "/path/to/orbit-mcp"
     }
   }
 }
 ```
+
+Platform-specific binary paths after installation:
+
+| Platform | Path |
+|----------|------|
+| Windows | `%LOCALAPPDATA%\com.orbit.dev\bin\mcp\orbit-mcp.exe` |
+| Linux | `~/.local/share/com.orbit.dev/bin/mcp/orbit-mcp` |
+| macOS | `~/Library/Application Support/com.orbit.dev/bin/mcp/orbit-mcp` |
+
+> The Orbit app displays the correct path for your platform under **Settings → MCP**.
 
 ## CLI
 

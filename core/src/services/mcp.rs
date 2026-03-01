@@ -143,9 +143,6 @@ impl McpManager {
 
         crate::services::download::download_file(&url, &exe_path).await?;
 
-        // Add MCP directory to user PATH so AI tools can use just "orbit-mcp"
-        crate::commands::path::add_service_to_path(app.clone(), "mcp".to_string()).ok();
-
         Ok(())
     }
 
@@ -157,9 +154,6 @@ impl McpManager {
             fs::remove_dir_all(&mcp_dir)
                 .map_err(|e| format!("Failed to remove MCP: {e}"))?;
         }
-
-        // Clean up PATH entry
-        crate::commands::path::remove_service_from_path(app.clone(), "mcp".to_string()).ok();
 
         Ok(())
     }
