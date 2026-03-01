@@ -74,10 +74,14 @@ impl NginxManager {
         let nginx_path = Self::get_nginx_path(app)?;
         let nginx_dir = nginx_path.parent()
             .ok_or_else(|| "Invalid nginx path".to_string())?;
+        let nginx_conf = nginx_dir.join("conf").join("nginx.conf");
 
+        // Always pass -c explicitly so nginx doesn't fall back to its
+        // compiled-in prefix (which may point to a different app's directory)
         let output = hidden_command(&nginx_path)
             .current_dir(nginx_dir)
-            .arg("-t")
+            .args(["-t", "-c"])
+            .arg(&nginx_conf)
             .output()
             .map_err(|e| format!("Failed to run nginx: {e}"))?;
 

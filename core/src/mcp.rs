@@ -697,11 +697,13 @@ fn find_nginx_exe(bin_dir: &PathBuf) -> Result<PathBuf, String> {
 fn nginx_test_and_reload(bin_dir: &PathBuf) -> Result<(), String> {
     let nginx = find_nginx_exe(bin_dir)?;
     let nginx_dir = nginx.parent().unwrap_or(bin_dir);
+    let nginx_conf = nginx_dir.join("conf").join("nginx.conf");
 
-    // Test config
+    // Test config — always pass -c so nginx doesn't use its compiled-in prefix
     let test_output = hidden_command(&nginx)
         .current_dir(nginx_dir)
-        .arg("-t")
+        .args(["-t", "-c"])
+        .arg(&nginx_conf)
         .output()
         .map_err(|e| format!("Failed to test nginx config: {}", e))?;
 
@@ -4014,10 +4016,16 @@ fn tool_diagnose_service(name: &str) -> Result<String, String> {
     // Service-specific checks
     match svc.service_type.as_str() {
         "nginx" => {
-            // nginx -t
+            // nginx -t with explicit -c to avoid using the binary's compiled-in prefix
             let nginx_exe = PathBuf::from(&svc.path);
             let nginx_dir = nginx_exe.parent().unwrap_or(&bin_dir);
-            if let Ok(output) = hidden_command(&nginx_exe).current_dir(nginx_dir).arg("-t").output() {
+            let nginx_conf = nginx_dir.join("conf").join("nginx.conf");
+            if let Ok(output) = hidden_command(&nginx_exe)
+                .current_dir(nginx_dir)
+                .args(["-t", "-c"])
+                .arg(&nginx_conf)
+                .output()
+            {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let config_ok = output.status.success();
                 details.insert("config_test".into(), json!(if config_ok { "ok" } else { "failed" }));
