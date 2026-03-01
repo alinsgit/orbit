@@ -358,6 +358,7 @@ pub fn check_path_status(app: AppHandle) -> Result<PathStatus, String> {
 #[command]
 #[allow(clippy::needless_return)]
 pub fn remove_from_path(app: AppHandle) -> Result<String, String> {
+    #[cfg(windows)]
     let bin_path = app.path().app_local_data_dir()
         .map_err(|e| e.to_string())?.join("bin");
     #[cfg(windows)]
