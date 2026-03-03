@@ -24,14 +24,23 @@ import {
 import { useApp } from '../lib/AppContext'
 import { InfoTooltip } from './InfoTooltip'
 
-type ConfigTab = 'claude' | 'cursor' | 'windsurf'
+const CONFIG_SNIPPET = JSON.stringify(
+  { mcpServers: { orbit: { command: 'orbit-mcp' } } },
+  null,
+  2
+)
+
+const CONFIG_PATHS = [
+  { label: 'Claude Code', file: '~/.claude.json' },
+  { label: 'Cursor', file: '.cursor/mcp.json' },
+  { label: 'Windsurf', file: '~/.codeium/windsurf/mcp_config.json' },
+]
 
 export function McpManager() {
   const { addToast } = useApp()
   const [status, setStatus] = useState<McpStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [activeConfig, setActiveConfig] = useState<ConfigTab>('claude')
   const [copied, setCopied] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<BinaryUpdateInfo | null>(null)
 
@@ -40,7 +49,6 @@ export function McpManager() {
       setLoading(true)
       const result = await getMcpStatus()
       setStatus(result)
-      // Check for updates if installed
       if (result.installed) {
         checkMcpUpdate().then(setUpdateInfo).catch(() => { })
       }
@@ -116,7 +124,8 @@ export function McpManager() {
       await updateMcp()
       addToast({ type: 'success', message: 'MCP server updated successfully' })
       setUpdateInfo(null)
-      await loadStatus()
+      // Give binary time to settle before re-checking version
+      setTimeout(() => loadStatus(), 800)
     } catch (_err) {
       addToast({ type: 'error', message: 'Failed to update MCP server' })
     } finally {
@@ -124,56 +133,9 @@ export function McpManager() {
     }
   }
 
-  const getConfigSnippet = (): string => {
-    const serverConfig = {
-      command: "orbit-mcp"
-    }
-
-    switch (activeConfig) {
-      case 'claude':
-        return JSON.stringify({
-          mcpServers: {
-            orbit: serverConfig
-          }
-        }, null, 2)
-      case 'cursor':
-        return JSON.stringify({
-          mcpServers: {
-            orbit: serverConfig
-          }
-        }, null, 2)
-      case 'windsurf':
-        return JSON.stringify({
-          mcpServers: {
-            orbit: serverConfig
-          }
-        }, null, 2)
-    }
-  }
-
-  const getConfigInfo = (): { file: string; description: string } => {
-    switch (activeConfig) {
-      case 'claude':
-        return {
-          file: '~/.claude.json',
-          description: 'Add to your global Claude Code config'
-        }
-      case 'cursor':
-        return {
-          file: '.cursor/mcp.json',
-          description: 'Add to your project .cursor directory'
-        }
-      case 'windsurf':
-        return {
-          file: '~/.codeium/windsurf/mcp_config.json',
-          description: 'Add to your Windsurf global config'
-        }
-    }
-  }
-
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(getConfigSnippet())
+      await navigator.clipboard.writeText(CONFIG_SNIPPET)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -188,12 +150,6 @@ export function McpManager() {
       </div>
     )
   }
-
-  const configTabs: { key: ConfigTab; label: string }[] = [
-    { key: 'claude', label: 'Claude Code' },
-    { key: 'cursor', label: 'Cursor' },
-    { key: 'windsurf', label: 'Windsurf' },
-  ]
 
   return (
     <div className="bg-surface-raised border border-edge-subtle rounded-xl p-6">
@@ -244,26 +200,12 @@ export function McpManager() {
             </div>
           </div>
 
-          {/* Config snippets */}
+          {/* Config snippet */}
           <div className="mb-4">
             <p className="text-sm font-medium mb-2">Configuration</p>
-            <div className="flex gap-1 mb-2">
-              {configTabs.map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => { setActiveConfig(tab.key); setCopied(false) }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${activeConfig === tab.key
-                    ? 'bg-purple-500/20 text-purple-400'
-                    : 'text-content-muted hover:text-content-secondary hover:bg-hover'
-                    }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
             <div className="relative">
               <pre className="p-3 bg-surface-inset rounded-lg text-xs font-mono overflow-x-auto border border-edge-subtle">
-                {getConfigSnippet()}
+                {CONFIG_SNIPPET}
               </pre>
               <button
                 onClick={handleCopy}
@@ -273,9 +215,13 @@ export function McpManager() {
                 {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} className="text-content-muted" />}
               </button>
             </div>
-            <p className="text-xs text-content-muted mt-1.5">
-              {getConfigInfo().description} ({getConfigInfo().file})
-            </p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {CONFIG_PATHS.map(({ label, file }) => (
+                <span key={label} className="text-xs text-content-muted">
+                  <span className="text-content-secondary">{label}:</span> <code className="font-mono">{file}</code>
+                </span>
+              ))}
+            </div>
           </div>
         </>
       )}

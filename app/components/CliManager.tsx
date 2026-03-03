@@ -31,7 +31,7 @@ export function CliManager() {
             const result = await getCliStatus()
             setStatus(result)
             if (result.installed) {
-                checkCliUpdate().then(setUpdateInfo).catch(() => {})
+                checkCliUpdate().then(setUpdateInfo).catch(() => { })
             }
         } catch (err) {
             addToast({ type: 'error', message: 'Failed to load CLI status' })
@@ -78,7 +78,8 @@ export function CliManager() {
             await updateCli()
             addToast({ type: 'success', message: 'CLI updated successfully. Restart terminal to use new version.' })
             setUpdateInfo(null)
-            await loadStatus()
+            // Give binary time to settle before re-checking version
+            setTimeout(() => loadStatus(), 800)
         } catch (_err) {
             addToast({ type: 'error', message: 'Failed to update CLI' })
         } finally {

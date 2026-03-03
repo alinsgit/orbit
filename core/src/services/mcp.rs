@@ -293,8 +293,16 @@ impl McpManager {
             .ok()?;
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let ver = stdout.trim().to_string();
-            if ver.is_empty() { None } else { Some(ver) }
+            let raw = stdout.trim();
+            if raw.is_empty() {
+                return None;
+            }
+            // clap outputs "orbit-mcp 1.4.0" — extract just the version part
+            let version = raw.split_whitespace()
+                .find(|s| s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))
+                .unwrap_or(raw)
+                .to_string();
+            Some(version)
         } else {
             None
         }
