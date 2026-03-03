@@ -60,14 +60,14 @@ After installing MCP from the Orbit app, add the following to your AI tool's con
 ## CLI
 
 ```bash
-orbit status              # Show all services and their status
-orbit start nginx         # Start a service
-orbit stop mariadb        # Stop a service
-orbit install redis       # Install a service
-orbit logs nginx          # View service logs
-orbit db list             # List MariaDB databases
-orbit hosts list          # Show hosts file entries
-orbit config php 8.4      # Edit PHP config
+orbit-cli status              # Show all services and their status
+orbit-cli start nginx         # Start a service
+orbit-cli stop mariadb        # Stop a service
+orbit-cli install redis       # Install a service
+orbit-cli logs nginx          # View service logs
+orbit-cli db list             # List MariaDB databases
+orbit-cli hosts list          # Show hosts file entries
+orbit-cli config php 8.4      # Edit PHP config
 ```
 
 Supports aliases: `pg` for postgresql, `maria` for mariadb, `mongo` for mongodb, `node` for nodejs.
