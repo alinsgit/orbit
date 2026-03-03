@@ -44,6 +44,7 @@ export function McpManager() {
   const [copied, setCopied] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<BinaryUpdateInfo | null>(null)
 
+  // Full reload: status + update check
   const loadStatus = async () => {
     try {
       setLoading(true)
@@ -58,6 +59,14 @@ export function McpManager() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Silent reload: status only, no update check
+  const reloadStatusOnly = async () => {
+    try {
+      const result = await getMcpStatus()
+      setStatus(result)
+    } catch { }
   }
 
   useEffect(() => {
@@ -84,7 +93,8 @@ export function McpManager() {
       await stopMcp().catch(() => { })
       await uninstallMcp()
       addToast({ type: 'success', message: 'MCP server uninstalled' })
-      await loadStatus()
+      setUpdateInfo(null)
+      await reloadStatusOnly()
     } catch (_err) {
       addToast({ type: 'error', message: 'Failed to uninstall MCP server' })
     } finally {
@@ -123,9 +133,10 @@ export function McpManager() {
       setActionLoading('update')
       await updateMcp()
       addToast({ type: 'success', message: 'MCP server updated successfully' })
+      // Clear update badge immediately and don't re-check:
+      // binary version may not yet match tag until next cold check.
       setUpdateInfo(null)
-      // Give binary time to settle before re-checking version
-      setTimeout(() => loadStatus(), 800)
+      setTimeout(() => reloadStatusOnly(), 800)
     } catch (_err) {
       addToast({ type: 'error', message: 'Failed to update MCP server' })
     } finally {

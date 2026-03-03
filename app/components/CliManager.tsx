@@ -139,8 +139,9 @@ export function CliManager() {
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState<string | null>(null)
     const [updateInfo, setUpdateInfo] = useState<BinaryUpdateInfo | null>(null)
-    const [openCategory, setOpenCategory] = useState<string | null>('Services')
+    const [openCategory, setOpenCategory] = useState<string | null>(null)
 
+    // Full reload: status + update check
     const loadStatus = async () => {
         try {
             setLoading(true)
@@ -155,6 +156,14 @@ export function CliManager() {
         } finally {
             setLoading(false)
         }
+    }
+
+    // Silent reload: status only, no update check (used after install/update/uninstall)
+    const reloadStatusOnly = async () => {
+        try {
+            const result = await getCliStatus()
+            setStatus(result)
+        } catch { }
     }
 
     useEffect(() => {
@@ -180,7 +189,8 @@ export function CliManager() {
             setActionLoading('uninstall')
             await uninstallCli()
             addToast({ type: 'success', message: 'CLI uninstalled' })
-            await loadStatus()
+            setUpdateInfo(null)
+            await reloadStatusOnly()
         } catch (_err) {
             addToast({ type: 'error', message: 'Failed to uninstall CLI' })
         } finally {
@@ -193,8 +203,10 @@ export function CliManager() {
             setActionLoading('update')
             await updateCli()
             addToast({ type: 'success', message: 'CLI updated. Restart terminal to use new version.' })
+            // Clear update badge immediately and don't re-check:
+            // binary version may not yet match tag until next cold check.
             setUpdateInfo(null)
-            setTimeout(() => loadStatus(), 800)
+            setTimeout(() => reloadStatusOnly(), 800)
         } catch (_err) {
             addToast({ type: 'error', message: 'Failed to update CLI' })
         } finally {
