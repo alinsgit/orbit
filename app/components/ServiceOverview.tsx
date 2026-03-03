@@ -5,6 +5,10 @@ import { checkSystemRequirements } from '../lib/api'
 import { getServiceIcon } from '../lib/serviceIcons'
 import { open } from '@tauri-apps/plugin-shell'
 
+// Services that run as background daemons (can be started/stopped)
+const DAEMON_TYPES = ['nginx', 'php', 'mariadb', 'redis', 'apache', 'mailpit', 'postgresql', 'mongodb']
+const isDaemon = (serviceType: string) => DAEMON_TYPES.includes(serviceType)
+
 interface ServiceOverviewProps {
   onNavigateToInstall: () => void
 }
@@ -15,8 +19,6 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
     refreshServices,
     startServiceByName,
     stopServiceByName,
-    startAllServices,
-    stopAllServices,
   } = useApp()
 
   const [vcRedistMissing, setVcRedistMissing] = useState(false)
@@ -42,7 +44,12 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
   const handleStartAll = async () => {
     setStartingAll(true)
     try {
-      await startAllServices()
+      // Only start daemon-type services
+      for (const service of services) {
+        if (isDaemon(service.service_type) && service.status === 'stopped') {
+          await startServiceByName(service.name)
+        }
+      }
     } finally {
       setStartingAll(false)
     }
@@ -51,13 +58,19 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
   const handleStopAll = async () => {
     setStoppingAll(true)
     try {
-      await stopAllServices()
+      // Only stop daemon-type services
+      for (const service of services) {
+        if (isDaemon(service.service_type) && service.status === 'running') {
+          await stopServiceByName(service.name)
+        }
+      }
     } finally {
       setStoppingAll(false)
     }
   }
 
   const handleToggleService = async (service: ServiceWithStatus) => {
+    if (!isDaemon(service.service_type)) return
     if (service.status === 'running') {
       await stopServiceByName(service.name)
     } else if (service.status === 'stopped') {
@@ -65,8 +78,9 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
     }
   }
 
-  const runningCount = services.filter(s => s.status === 'running').length
-  const totalCount = services.length
+  // Only count daemon services for running/total
+  const daemonServices = services.filter(s => isDaemon(s.service_type))
+  const runningCount = daemonServices.filter(s => s.status === 'running').length
 
   return (
     <div>
@@ -75,7 +89,12 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
         <div>
           <h2 className="text-2xl font-bold mb-1">Overview</h2>
           <p className="text-content-secondary text-sm">
-            {runningCount}/{totalCount} services running
+            {runningCount}/{daemonServices.length} services running
+            {services.length > daemonServices.length && (
+              <span className="ml-2 text-content-muted">
+                · {services.length - daemonServices.length} dev tools installed
+              </span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -160,10 +179,12 @@ function ServiceCard({ service, onToggle }: {
   service: ServiceWithStatus
   onToggle: () => void
 }) {
+  const daemon = isDaemon(service.service_type)
   const isRunning = service.status === 'running'
   const isTransitioning = service.status === 'starting' || service.status === 'stopping'
 
-  const getStatusColor = () => {
+  const getDotColor = () => {
+    if (!daemon) return 'bg-blue-400'
     switch (service.status) {
       case 'running': return 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
       case 'starting': return 'bg-amber-500 animate-pulse'
@@ -185,22 +206,28 @@ function ServiceCard({ service, onToggle }: {
     <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 hover:border-edge transition-all duration-300 group">
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full transition-all duration-500 ${getStatusColor()}`} />
+          <div className={`w-3 h-3 rounded-full transition-all duration-500 ${getDotColor()}`} />
           <div className="flex items-center gap-2">
             <span className="text-xl">{getServiceIcon(service.service_type)}</span>
             <h3 className="font-semibold capitalize">{service.name}</h3>
           </div>
         </div>
-        <button
-          onClick={onToggle}
-          disabled={isTransitioning}
-          className={`px-3 py-1 rounded-md text-xs font-mono font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isRunning
-            ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
-            : 'bg-surface-inset text-content-secondary hover:bg-hover'
-            }`}
-        >
-          {getStatusText()}
-        </button>
+        {daemon ? (
+          <button
+            onClick={onToggle}
+            disabled={isTransitioning}
+            className={`px-3 py-1 rounded-md text-xs font-mono font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isRunning
+              ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+              : 'bg-surface-inset text-content-secondary hover:bg-hover'
+              }`}
+          >
+            {getStatusText()}
+          </button>
+        ) : (
+          <span className="px-3 py-1 rounded-md text-xs font-mono font-medium bg-blue-500/10 text-blue-400">
+            INSTALLED
+          </span>
+        )}
       </div>
       <div className="flex justify-between text-sm text-content-secondary">
         <span>v{service.version}</span>
