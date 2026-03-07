@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
-use sysinfo::{SystemExt, ProcessExt};
+use sysinfo::{System, ProcessesToUpdate};
 
 // Service types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -311,7 +311,7 @@ impl ServiceManager {
         }
 
         let mut sys = sysinfo::System::new();
-        sys.refresh_processes();
+        sys.refresh_processes(ProcessesToUpdate::All, true);
 
         let orbit_bin_dir = crate::services::paths::get_bin_dir().to_string_lossy().to_string();
         let clean_dir: String = orbit_bin_dir.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
@@ -376,7 +376,7 @@ impl ServiceManager {
         ];
 
         let mut sys = sysinfo::System::new();
-        sys.refresh_processes();
+        sys.refresh_processes(ProcessesToUpdate::All, true);
 
         for process in sys.processes().values() {
             let exe_path = format!("{:?}", process.exe());
