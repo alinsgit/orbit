@@ -817,7 +817,7 @@ export function SitesManager() {
                       <p className="text-content-muted">{sslStatus?.mkcert_installed ? 'Installed' : 'Missing'}</p>
                     </div>
                     {!sslStatus?.mkcert_installed && (
-                      <button onClick={handleInstallMkcert} disabled={sslLoading} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs rounded transition-colors disabled:opacity-50">
+                      <button onClick={handleInstallMkcert} disabled={sslLoading} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs rounded transition-colors disabled:opacity-50 text-white">
                         {sslLoading ? <Loader2 size={12} className="animate-spin" /> : 'Install'}
                       </button>
                     )}
@@ -831,7 +831,7 @@ export function SitesManager() {
                         <p className="text-content-muted">{sslStatus?.ca_installed ? 'Trusted' : 'Untrusted'}</p>
                       </div>
                       {!sslStatus?.ca_installed && (
-                        <button onClick={handleInstallCa} disabled={sslLoading} className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-xs rounded transition-colors disabled:opacity-50">
+                        <button onClick={handleInstallCa} disabled={sslLoading} className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-xs rounded transition-colors disabled:opacity-50 text-white">
                           {sslLoading ? <Loader2 size={12} className="animate-spin" /> : 'Install'}
                         </button>
                       )}
@@ -897,7 +897,7 @@ export function SitesManager() {
           {/* Add Site */}
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20 text-white"
           >
             <Plus size={16} />
             Add Site
@@ -1120,7 +1120,7 @@ export function SitesManager() {
                     <button
                       onClick={handleCreateFromBlueprint}
                       disabled={blueprintCreating || !blueprintDomain || !blueprintPath}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer text-white"
                     >
                       {blueprintCreating ? (
                         <>
@@ -1320,7 +1320,7 @@ export function SitesManager() {
             <button
               onClick={handleAddSite}
               disabled={loading || !newSite.domain || !newSite.path}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer text-white"
             >
               {loading ? (
                 <>
@@ -1490,7 +1490,7 @@ export function SitesManager() {
                       <button
                         onClick={handleUpdateSite}
                         disabled={processing === site.domain}
-                        className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm disabled:opacity-50 transition-colors cursor-pointer"
+                        className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm disabled:opacity-50 transition-colors cursor-pointer text-white"
                       >
                         {processing === site.domain ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Save'}
                       </button>

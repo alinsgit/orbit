@@ -150,7 +150,7 @@ export function ComposerManager() {
           <button
             onClick={handleInstall}
             disabled={actionLoading !== null}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
           >
             {actionLoading === 'install' ? (
               <RefreshCw size={16} className="animate-spin" />
@@ -164,7 +164,7 @@ export function ComposerManager() {
             <button
               onClick={handleUpdate}
               disabled={actionLoading !== null}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
             >
               {actionLoading === 'update' ? (
                 <RefreshCw size={16} className="animate-spin" />

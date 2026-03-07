@@ -749,7 +749,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
             <h3 className="text-sm font-medium text-content-secondary">Users</h3>
             <button
               onClick={() => setDialog({ type: 'createUser' })}
-              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm transition-colors text-white"
             >
               <Plus className="w-4 h-4" />
               Create User
@@ -847,7 +847,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
               <button
                 onClick={handleCreateDatabase}
                 disabled={!newDbName || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 text-white"
               >
                 {dialogLoading ? (
                   <>
@@ -910,7 +910,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
               <button
                 onClick={handleCreateUser}
                 disabled={!newUsername || !newUserPassword || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 text-white"
               >
                 {dialogLoading ? (
                   <>
@@ -951,7 +951,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
               <button
                 onClick={handleChangePassword}
                 disabled={!newPassword || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 text-white"
               >
                 {dialogLoading ? (
                   <>
@@ -1005,7 +1005,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
               <button
                 onClick={handleGrantPrivileges}
                 disabled={!selectedDatabase || dialogLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 text-white"
               >
                 {dialogLoading ? (
                   <>
@@ -1124,7 +1124,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                 <button
                   onClick={handleSaveEditDb}
                   disabled={dialogLoading}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 text-white"
                 >
                   {dialogLoading ? (
                     <>

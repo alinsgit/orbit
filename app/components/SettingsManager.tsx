@@ -233,7 +233,7 @@ export function SettingsManager() {
                 <button
                   onClick={handleChangeWorkspace}
                   disabled={workspaceLoading}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors flex items-center justify-center min-w-[120px]"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors flex items-center justify-center min-w-[120px] text-white"
                 >
                   {workspaceLoading ? <Loader2 size={16} className="animate-spin" /> : 'Change Folder'}
                 </button>
@@ -256,7 +256,7 @@ export function SettingsManager() {
                 <button
                   onClick={handleSaveNgrokToken}
                   disabled={ngrokTokenSaving || !ngrokToken}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors flex items-center justify-center min-w-[120px]"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors flex items-center justify-center min-w-[120px] text-white"
                 >
                   {ngrokTokenSaving ? <Loader2 size={16} className="animate-spin" /> : 'Save Token'}
                 </button>
@@ -340,7 +340,7 @@ export function SettingsManager() {
                 <button
                   onClick={handleClearAllCaches}
                   disabled={clearingCache}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium transition-colors text-white"
                 >
                   {clearingCache ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   Clear Caches
@@ -461,7 +461,7 @@ export function SettingsManager() {
                       </div>
                       <div className="w-full bg-surface-inset rounded-full h-1.5 overflow-hidden">
                         <div
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out"
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out text-white"
                           style={{ width: `${updateProgress}%` }}
                         />
                       </div>
@@ -471,7 +471,7 @@ export function SettingsManager() {
                 {!updating ? (
                   <button
                     onClick={handleInstallUpdate}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors flex-shrink-0 cursor-pointer"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors flex-shrink-0 cursor-pointer text-white"
                   >
                     <ArrowUpCircle size={16} />
                     Install & Restart

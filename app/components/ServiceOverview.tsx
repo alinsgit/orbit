@@ -119,7 +119,7 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
           <button
             onClick={handleStartAll}
             disabled={startingAll || stoppingAll}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20 disabled:opacity-50 text-white"
           >
             {startingAll ? <Loader2 size={16} className="animate-spin" /> : <Power size={16} />}
             {startingAll ? 'Starting...' : 'Start All'}

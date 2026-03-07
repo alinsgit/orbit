@@ -798,7 +798,7 @@ server {
                               <button
                                 onClick={() => handleUpdateSetting(key, phpConfig.settings[key] || '')}
                                 disabled={saving === key}
-                                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg transition-colors"
+                                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg transition-colors text-white"
                               >
                                 {saving === key ? (
                                   <Loader2 size={14} className="animate-spin" />
@@ -1168,7 +1168,7 @@ server {
                               <button
                                 onClick={handleCreateTemplate}
                                 disabled={templateSaving || !newTemplateName.trim()}
-                                className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-700 rounded-lg transition-colors"
+                                className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-700 rounded-lg transition-colors text-white"
                               >
                                 {templateSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                               </button>
@@ -1215,7 +1215,7 @@ server {
                                 <button
                                   onClick={handleSaveTemplate}
                                   disabled={templateSaving || templateLoading}
-                                  className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg transition-colors"
+                                  className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded-lg transition-colors text-white"
                                   title="Save Template"
                                 >
                                   {templateSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -1232,7 +1232,7 @@ server {
                                   <button
                                     onClick={handleDeleteTemplate}
                                     disabled={templateSaving || templateLoading}
-                                    className="p-2 bg-red-600/80 hover:bg-red-500 disabled:bg-neutral-700 rounded-lg transition-colors"
+                                    className="p-2 bg-red-600/80 hover:bg-red-500 disabled:bg-neutral-700 rounded-lg transition-colors text-white"
                                     title="Delete Template"
                                   >
                                     <Trash2 size={14} />
@@ -1413,7 +1413,7 @@ server {
                       <button
                         onClick={handleSaveRedisConfig}
                         disabled={saving === 'redis-config'}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
                       >
                         {saving === 'redis-config' ? (
                           <Loader2 size={14} className="animate-spin" />
