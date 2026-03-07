@@ -461,7 +461,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
   return (
     <div
       className={clsx(
-        "flex flex-col bg-[#0a0a0a] border border-edge rounded-lg overflow-hidden glass-panel transition-all duration-300",
+        "flex flex-col bg-surface border border-edge rounded-lg overflow-hidden glass-panel transition-all duration-300",
         isExpanded ? "fixed inset-4 z-50" : className,
       )}
     >
@@ -499,7 +499,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
       </div>
 
       {/* Tab Bar */}
-      <div className="flex items-center bg-[#111] border-b border-edge/50 shrink-0">
+      <div className="flex items-center bg-surface-alt border-b border-edge/50 shrink-0">
         <div
           className="flex items-center flex-1 overflow-x-auto scrollbar-none"
           style={{ scrollbarWidth: "none" }}
@@ -510,8 +510,8 @@ export function Terminal({ className, onClose }: TerminalProps) {
               className={clsx(
                 "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium whitespace-nowrap cursor-pointer transition-all border-r border-edge/30 group min-w-0",
                 activeTabId === tab.id
-                  ? "bg-[#0a0a0a] text-emerald-400"
-                  : "text-content-muted hover:text-content-secondary hover:bg-white/5",
+                  ? "bg-surface text-emerald-500"
+                  : "text-content-muted hover:text-content-secondary hover:bg-hover",
               )}
               onClick={() => setActiveTabId(tab.id)}
             >
@@ -526,7 +526,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
                   e.stopPropagation();
                   handleCloseTab(tab.id);
                 }}
-                className="p-0.5 text-content-muted hover:text-red-400 hover:bg-red-500/10 rounded opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0"
+                className="p-0.5 text-content-muted hover:text-red-500 hover:bg-red-500/10 rounded opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0"
                 title="Close tab"
               >
                 <X className="w-3 h-3" />
@@ -538,7 +538,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
           {tabs.length < MAX_TABS && (
             <button
               onClick={() => createTab()}
-              className="p-1.5 text-content-muted hover:text-content hover:bg-white/5 transition-colors shrink-0"
+              className="p-1.5 text-content-muted hover:text-content hover:bg-hover transition-colors shrink-0"
               title="New terminal"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -556,8 +556,8 @@ export function Terminal({ className, onClose }: TerminalProps) {
                 className={clsx(
                   "flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap transition-all",
                   tabs.some((t) => t.siteOrigin === site.domain)
-                    ? "text-emerald-400 bg-emerald-500/10"
-                    : "text-content-muted hover:text-content-secondary hover:bg-white/5",
+                    ? "text-emerald-500 bg-emerald-500/10"
+                    : "text-content-muted hover:text-content-secondary hover:bg-hover",
                 )}
                 title={`Open terminal in ${site.domain}`}
               >
@@ -635,7 +635,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
                       {svc.status === "stopped" ? (
                         <button
                           onClick={() => startServiceByName(svc.name)}
-                          className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded"
+                          className="p-1 text-emerald-500 hover:text-emerald-500 hover:bg-emerald-500/10 rounded"
                           title={`Start ${svc.name}`}
                         >
                           <Play className="w-3 h-3" />
@@ -651,7 +651,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
                           </button>
                           <button
                             onClick={() => stopServiceByName(svc.name)}
-                            className="p-1 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded"
+                            className="p-1 text-red-500 hover:text-red-500 hover:bg-red-500/10 rounded"
                             title={`Stop ${svc.name}`}
                           >
                             <Square className="w-3 h-3" />
@@ -688,7 +688,7 @@ export function Terminal({ className, onClose }: TerminalProps) {
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleCommandRun(item.cmd)}
-                        className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded"
+                        className="p-1 text-emerald-500 hover:text-emerald-500 hover:bg-emerald-500/10 rounded"
                         title="Run instantly"
                       >
                         <svg
