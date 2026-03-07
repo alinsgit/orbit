@@ -1,108 +1,193 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
-  FolderOpen, Plus, Trash2, Globe, ExternalLink, Loader2, Shield,
-  AlertTriangle, RefreshCw, CheckCircle2, XCircle, Settings2,
-  FileCode, Layers, Database, ShoppingCart, Sparkles, CheckCircle, FileDown, FileUp,
-  Play, Square, Code, X, Save, Rocket, Check
-} from 'lucide-react';
+  FolderOpen,
+  Plus,
+  Trash2,
+  Globe,
+  ExternalLink,
+  Loader2,
+  Shield,
+  AlertTriangle,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Settings2,
+  FileCode,
+  Layers,
+  Database,
+  ShoppingCart,
+  Sparkles,
+  CheckCircle,
+  FileDown,
+  FileUp,
+  Play,
+  Square,
+  Code,
+  X,
+  Save,
+  Rocket,
+  Check,
+} from "lucide-react";
 import {
-  getSites, createSite, deleteSite, updateSite, regenerateSiteConfig,
-  generateSslCert, nginxTestConfig, nginxReload, nginxStatus,
-  addHostElevated, SiteWithStatus, Site, WebServer, reloadService,
-  getSslStatus, getWorkspacePath, startTunnel, stopTunnel, getTunnelUrl,
-  installMkcert, installSslCa, exportSites, importSites, SiteExport, SslStatus,
-  scaffoldBasicProject, startSiteApp, stopSiteApp, getSiteAppStatus,
-  readSiteConfig, writeSiteConfig,
-  listBlueprints, createFromBlueprint, Blueprint,
-} from '../lib/api';
-import { useApp } from '../lib/AppContext';
-import { open } from '@tauri-apps/plugin-dialog';
-import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { load } from '@tauri-apps/plugin-store';
+  getSites,
+  createSite,
+  deleteSite,
+  updateSite,
+  regenerateSiteConfig,
+  generateSslCert,
+  nginxTestConfig,
+  nginxReload,
+  nginxStatus,
+  addHostElevated,
+  SiteWithStatus,
+  Site,
+  WebServer,
+  reloadService,
+  getSslStatus,
+  getWorkspacePath,
+  startTunnel,
+  stopTunnel,
+  getTunnelUrl,
+  installMkcert,
+  installSslCa,
+  exportSites,
+  importSites,
+  SiteExport,
+  SslStatus,
+  scaffoldBasicProject,
+  startSiteApp,
+  stopSiteApp,
+  getSiteAppStatus,
+  readSiteConfig,
+  writeSiteConfig,
+  listBlueprints,
+  createFromBlueprint,
+  Blueprint,
+} from "../lib/api";
+import { useApp } from "../lib/AppContext";
+import { open } from "@tauri-apps/plugin-dialog";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
+import { load } from "@tauri-apps/plugin-store";
 
-type SiteTemplate = 'http' | 'laravel' | 'wordpress' | 'litecart' | 'static' | 'nextjs' | 'astro' | 'nuxt' | 'vue' | 'django' | 'sveltekit' | 'remix';
+type SiteTemplate =
+  | "http"
+  | "laravel"
+  | "wordpress"
+  | "litecart"
+  | "static"
+  | "nextjs"
+  | "astro"
+  | "nuxt"
+  | "vue"
+  | "django"
+  | "sveltekit"
+  | "remix";
 
-const WEB_SERVER_INFO: Record<WebServer, { label: string; icon: string; color: string }> = {
-  nginx: { label: 'Nginx', icon: '🌐', color: 'bg-green-500/10 text-green-400' },
-  apache: { label: 'Apache', icon: '🪶', color: 'bg-orange-500/10 text-orange-400' }
+const WEB_SERVER_INFO: Record<
+  WebServer,
+  { label: string; icon: string; color: string }
+> = {
+  nginx: {
+    label: "Nginx",
+    icon: "🌐",
+    color: "bg-green-500/10 text-green-400",
+  },
+  apache: {
+    label: "Apache",
+    icon: "🪶",
+    color: "bg-orange-500/10 text-orange-400",
+  },
 };
 
-const PHP_TEMPLATES: SiteTemplate[] = ['http', 'laravel', 'wordpress', 'litecart'];
+const PHP_TEMPLATES: SiteTemplate[] = [
+  "http",
+  "laravel",
+  "wordpress",
+  "litecart",
+];
 
-const TEMPLATE_INFO: Record<SiteTemplate, { label: string; icon: React.ReactNode; description: string }> = {
+const TEMPLATE_INFO: Record<
+  SiteTemplate,
+  { label: string; icon: React.ReactNode; description: string }
+> = {
   http: {
-    label: 'Standard PHP',
+    label: "Standard PHP",
     icon: <FileCode size={14} />,
-    description: 'Basic PHP application with index.php'
+    description: "Basic PHP application with index.php",
   },
   laravel: {
-    label: 'Laravel',
+    label: "Laravel",
     icon: <Layers size={14} />,
-    description: 'Laravel/Symfony with public directory'
+    description: "Laravel/Symfony with public directory",
   },
   wordpress: {
-    label: 'WordPress',
+    label: "WordPress",
     icon: <Database size={14} />,
-    description: 'WordPress with optimized rules'
+    description: "WordPress with optimized rules",
   },
   litecart: {
-    label: 'LiteCart',
+    label: "LiteCart",
     icon: <ShoppingCart size={14} />,
-    description: 'LiteCart e-commerce platform'
+    description: "LiteCart e-commerce platform",
   },
   static: {
-    label: 'Static',
+    label: "Static",
     icon: <Globe size={14} />,
-    description: 'Static HTML/CSS/JS files only'
+    description: "Static HTML/CSS/JS files only",
   },
   nextjs: {
-    label: 'Next.js',
+    label: "Next.js",
     icon: <Layers size={14} />,
-    description: 'React Framework'
+    description: "React Framework",
   },
   astro: {
-    label: 'Astro',
+    label: "Astro",
     icon: <Globe size={14} />,
-    description: 'Astro Framework'
+    description: "Astro Framework",
   },
   nuxt: {
-    label: 'Nuxt',
+    label: "Nuxt",
     icon: <Layers size={14} />,
-    description: 'Vue Framework'
+    description: "Vue Framework",
   },
   vue: {
-    label: 'Vue',
+    label: "Vue",
     icon: <Layers size={14} />,
-    description: 'Vue.js Application'
+    description: "Vue.js Application",
   },
   django: {
-    label: 'Django',
+    label: "Django",
     icon: <Layers size={14} />,
-    description: 'Python Django application'
+    description: "Python Django application",
   },
   sveltekit: {
-    label: 'SvelteKit',
+    label: "SvelteKit",
     icon: <Layers size={14} />,
-    description: 'SvelteKit application'
+    description: "SvelteKit application",
   },
   remix: {
-    label: 'Remix',
+    label: "Remix",
     icon: <Layers size={14} />,
-    description: 'Remix React framework'
-  }
+    description: "Remix React framework",
+  },
 };
 
 export function SitesManager() {
-  const { getInstalledPhpVersions, services, addToast, openTerminalForSite } = useApp();
+  const { getInstalledPhpVersions, services, addToast, openTerminalForSite } =
+    useApp();
 
   // Check which web servers are installed
-  const nginxInstalled = services.some(s => s.service_type === 'nginx');
-  const apacheInstalled = services.some(s => s.service_type === 'apache');
+  const nginxInstalled = services.some((s) => s.service_type === "nginx");
+  const apacheInstalled = services.some((s) => s.service_type === "apache");
   const availableWebServers: WebServer[] = [
-    ...(nginxInstalled ? ['nginx' as WebServer] : []),
-    ...(apacheInstalled ? ['apache' as WebServer] : [])
+    ...(nginxInstalled ? ["nginx" as WebServer] : []),
+    ...(apacheInstalled ? ["apache" as WebServer] : []),
   ];
-  const defaultWebServer: WebServer = nginxInstalled ? 'nginx' : (apacheInstalled ? 'apache' : 'nginx');
+  const defaultWebServer: WebServer = nginxInstalled
+    ? "nginx"
+    : apacheInstalled
+      ? "apache"
+      : "nginx";
 
   const [sites, setSites] = useState<SiteWithStatus[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -112,7 +197,11 @@ export function SitesManager() {
   // Nginx status
   const [isNginxRunning, setIsNginxRunning] = useState(false);
   const [reloadingNginx, setReloadingNginx] = useState(false);
-  const [nginxMessage, setNginxMessage] = useState<{ type: 'success' | 'error'; text: string; domain?: string } | null>(null);
+  const [nginxMessage, setNginxMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+    domain?: string;
+  } | null>(null);
   const [fixingHosts, setFixingHosts] = useState(false);
 
   // Get PHP versions from global context
@@ -120,13 +209,13 @@ export function SitesManager() {
 
   // New site form
   const [newSite, setNewSite] = useState<Site>({
-    domain: '',
-    path: '',
+    domain: "",
+    path: "",
     port: 80,
-    php_version: '',
+    php_version: "",
     ssl_enabled: false,
-    template: 'http',
-    web_server: defaultWebServer
+    template: "http",
+    web_server: defaultWebServer,
   });
 
   const [processing, setProcessing] = useState<string | null>(null);
@@ -148,23 +237,29 @@ export function SitesManager() {
   const [appProcessing, setAppProcessing] = useState<string | null>(null);
 
   // Tunnel State
-  const [activeTunnel, setActiveTunnel] = useState<{ domain: string; url: string } | null>(null);
+  const [activeTunnel, setActiveTunnel] = useState<{
+    domain: string;
+    url: string;
+  } | null>(null);
   const [tunnelingDomain, setTunnelingDomain] = useState<string | null>(null);
 
   // Per-site config editor
-  const [configEditorDomain, setConfigEditorDomain] = useState<string | null>(null);
-  const [configEditorContent, setConfigEditorContent] = useState('');
+  const [configEditorDomain, setConfigEditorDomain] = useState<string | null>(
+    null,
+  );
+  const [configEditorContent, setConfigEditorContent] = useState("");
   const [configEditorLoading, setConfigEditorLoading] = useState(false);
   const [configEditorSaving, setConfigEditorSaving] = useState(false);
 
-
   // Blueprint wizard
-  const [addMode, setAddMode] = useState<'manual' | 'blueprint'>('manual');
+  const [addMode, setAddMode] = useState<"manual" | "blueprint">("manual");
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
-  const [selectedBlueprint, setSelectedBlueprint] = useState<Blueprint | null>(null);
-  const [blueprintDomain, setBlueprintDomain] = useState('');
-  const [blueprintPath, setBlueprintPath] = useState('');
-  const [blueprintPhpVersion, setBlueprintPhpVersion] = useState('');
+  const [selectedBlueprint, setSelectedBlueprint] = useState<Blueprint | null>(
+    null,
+  );
+  const [blueprintDomain, setBlueprintDomain] = useState("");
+  const [blueprintPath, setBlueprintPath] = useState("");
+  const [blueprintPhpVersion, setBlueprintPhpVersion] = useState("");
   const [blueprintCreating, setBlueprintCreating] = useState(false);
 
   // Check SSL status
@@ -174,7 +269,7 @@ export function SitesManager() {
       setSslStatus(status);
       setSslReady(status.mkcert_installed && status.ca_installed);
     } catch (e) {
-      console.error('Failed to load SSL status:', e);
+      console.error("Failed to load SSL status:", e);
     }
   };
 
@@ -186,10 +281,10 @@ export function SitesManager() {
     setSslLoading(true);
     try {
       const result = await installMkcert();
-      addToast({ type: 'success', message: result });
+      addToast({ type: "success", message: result });
       await loadSslStatus();
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to install mkcert: ${e}` });
+      addToast({ type: "error", message: `Failed to install mkcert: ${e}` });
     } finally {
       setSslLoading(false);
     }
@@ -199,10 +294,10 @@ export function SitesManager() {
     setSslLoading(true);
     try {
       const result = await installSslCa();
-      addToast({ type: 'success', message: result });
+      addToast({ type: "success", message: result });
       await loadSslStatus();
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to install CA: ${e}` });
+      addToast({ type: "error", message: `Failed to install CA: ${e}` });
     } finally {
       setSslLoading(false);
     }
@@ -213,18 +308,23 @@ export function SitesManager() {
     setExporting(true);
     try {
       const exportData = await exportSites();
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `orbit-sites-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `orbit-sites-${new Date().toISOString().split("T")[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      addToast({ type: 'success', message: `Exported ${exportData.sites.length} sites successfully` });
+      addToast({
+        type: "success",
+        message: `Exported ${exportData.sites.length} sites successfully`,
+      });
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to export sites: ${e}` });
+      addToast({ type: "error", message: `Failed to export sites: ${e}` });
     } finally {
       setExporting(false);
     }
@@ -232,9 +332,9 @@ export function SitesManager() {
 
   // Import Sites
   const handleImportSites = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -245,20 +345,30 @@ export function SitesManager() {
         const data: SiteExport = JSON.parse(text);
 
         if (!data.sites || !Array.isArray(data.sites)) {
-          throw new Error('Invalid export file format');
+          throw new Error("Invalid export file format");
         }
 
         const result = await importSites(data, true);
 
         if (result.errors.length > 0) {
-          addToast({ type: 'warning', message: `Imported ${result.imported} sites, skipped ${result.skipped}. Errors: ${result.errors.length}` });
+          addToast({
+            type: "warning",
+            message: `Imported ${result.imported} sites, skipped ${result.skipped}. Errors: ${result.errors.length}`,
+          });
         } else {
-          const skipMsg = result.skipped > 0 ? `, skipped ${result.skipped} existing` : '';
-          addToast({ type: 'success', message: `Successfully imported ${result.imported} sites${skipMsg}` });
+          const skipMsg =
+            result.skipped > 0 ? `, skipped ${result.skipped} existing` : "";
+          addToast({
+            type: "success",
+            message: `Successfully imported ${result.imported} sites${skipMsg}`,
+          });
         }
         await refreshSites();
       } catch (e: any) {
-        addToast({ type: 'error', message: `Failed to import sites: ${e.message || e}` });
+        addToast({
+          type: "error",
+          message: `Failed to import sites: ${e.message || e}`,
+        });
       } finally {
         setImporting(false);
       }
@@ -270,14 +380,11 @@ export function SitesManager() {
   const refreshSites = async () => {
     setRefreshing(true);
     try {
-      const [s, running] = await Promise.all([
-        getSites(),
-        nginxStatus()
-      ]);
+      const [s, running] = await Promise.all([getSites(), nginxStatus()]);
       setSites(s);
       setIsNginxRunning(running);
     } catch (e) {
-      console.error('Failed to refresh sites:', e);
+      console.error("Failed to refresh sites:", e);
     } finally {
       setRefreshing(false);
     }
@@ -285,7 +392,7 @@ export function SitesManager() {
 
   // Refresh app status for sites with dev_command
   const refreshAppStatus = async (siteList: SiteWithStatus[]) => {
-    const withCommand = siteList.filter(s => s.dev_command);
+    const withCommand = siteList.filter((s) => s.dev_command);
     if (withCommand.length === 0) return;
     const statuses: Record<string, string> = {};
     await Promise.all(
@@ -293,9 +400,9 @@ export function SitesManager() {
         try {
           statuses[s.domain] = await getSiteAppStatus(s.domain);
         } catch {
-          statuses[s.domain] = 'stopped';
+          statuses[s.domain] = "stopped";
         }
-      })
+      }),
     );
     setAppStatus(statuses);
   };
@@ -318,10 +425,13 @@ export function SitesManager() {
     setAppProcessing(domain);
     try {
       await startSiteApp(domain);
-      setAppStatus(prev => ({ ...prev, [domain]: 'running' }));
-      addToast({ type: 'success', message: `App started for ${domain}` });
+      setAppStatus((prev) => ({ ...prev, [domain]: "running" }));
+      addToast({ type: "success", message: `App started for ${domain}` });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.toString() || 'Failed to start app' });
+      addToast({
+        type: "error",
+        message: e?.toString() || "Failed to start app",
+      });
     } finally {
       setAppProcessing(null);
     }
@@ -331,10 +441,13 @@ export function SitesManager() {
     setAppProcessing(domain);
     try {
       await stopSiteApp(domain);
-      setAppStatus(prev => ({ ...prev, [domain]: 'stopped' }));
-      addToast({ type: 'success', message: `App stopped for ${domain}` });
+      setAppStatus((prev) => ({ ...prev, [domain]: "stopped" }));
+      addToast({ type: "success", message: `App stopped for ${domain}` });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.toString() || 'Failed to stop app' });
+      addToast({
+        type: "error",
+        message: e?.toString() || "Failed to stop app",
+      });
     } finally {
       setAppProcessing(null);
     }
@@ -349,10 +462,10 @@ export function SitesManager() {
       await nginxTestConfig();
       // Then reload
       await nginxReload();
-      setNginxMessage({ type: 'success', text: 'Nginx reloaded successfully' });
+      setNginxMessage({ type: "success", text: "Nginx reloaded successfully" });
       setIsNginxRunning(true);
     } catch (e: any) {
-      setNginxMessage({ type: 'error', text: e.toString() });
+      setNginxMessage({ type: "error", text: e.toString() });
     } finally {
       setReloadingNginx(false);
       setTimeout(() => setNginxMessage(null), 5000);
@@ -364,10 +477,13 @@ export function SitesManager() {
     setFixingHosts(true);
     try {
       await addHostElevated(domain);
-      setNginxMessage({ type: 'success', text: `Domain ${domain} added to hosts file successfully!` });
+      setNginxMessage({
+        type: "success",
+        text: `Domain ${domain} added to hosts file successfully!`,
+      });
       setTimeout(() => setNginxMessage(null), 5000);
     } catch (e: any) {
-      setNginxMessage({ type: 'error', text: `Failed to add domain: ${e}` });
+      setNginxMessage({ type: "error", text: `Failed to add domain: ${e}` });
     } finally {
       setFixingHosts(false);
     }
@@ -375,12 +491,14 @@ export function SitesManager() {
 
   // Detect template from path
   const detectTemplate = (path: string): SiteTemplate => {
-    if (!path) return 'http';
+    if (!path) return "http";
     const pathLower = path.toLowerCase();
-    if (pathLower.includes('laravel') || pathLower.includes('symfony')) return 'laravel';
-    if (pathLower.includes('wordpress') || pathLower.includes('wp-')) return 'wordpress';
-    if (pathLower.includes('litecart')) return 'litecart';
-    return 'http';
+    if (pathLower.includes("laravel") || pathLower.includes("symfony"))
+      return "laravel";
+    if (pathLower.includes("wordpress") || pathLower.includes("wp-"))
+      return "wordpress";
+    if (pathLower.includes("litecart")) return "litecart";
+    return "http";
   };
 
   // Handle path selection
@@ -388,14 +506,14 @@ export function SitesManager() {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: 'Select Project Directory'
+      title: "Select Project Directory",
     });
-    if (typeof selected === 'string') {
+    if (typeof selected === "string") {
       const detectedTemplate = detectTemplate(selected);
       setNewSite({
         ...newSite,
         path: selected,
-        template: detectedTemplate
+        template: detectedTemplate,
       });
     }
   };
@@ -403,69 +521,84 @@ export function SitesManager() {
   // Handle Scaffold
   const handleScaffold = async () => {
     if (!newSite.domain) {
-      addToast({ type: 'warning', message: 'Enter a domain to use as the project name' });
+      addToast({
+        type: "warning",
+        message: "Enter a domain to use as the project name",
+      });
       return;
     }
 
     try {
       const wp = await getWorkspacePath();
       if (!wp) {
-        addToast({ type: 'error', message: 'No Workspace Directory set. Please set it in Settings.' });
+        addToast({
+          type: "error",
+          message: "No Workspace Directory set. Please set it in Settings.",
+        });
         return;
       }
 
-      const projectName = newSite.domain.split('.')[0];
-      const template = newSite.template || '';
-      const separator = navigator.userAgent.includes('Win') ? '\\' : '/';
+      const projectName = newSite.domain.split(".")[0];
+      const template = newSite.template || "";
+      const separator = navigator.userAgent.includes("Win") ? "\\" : "/";
       const projectPath = `${wp}${separator}${projectName}`;
 
       // Basic templates: create files directly via backend
-      if (template === 'http' || template === 'static' || template === 'litecart') {
+      if (
+        template === "http" ||
+        template === "static" ||
+        template === "litecart"
+      ) {
         try {
           const result = await scaffoldBasicProject(projectPath, template);
-          addToast({ type: 'success', message: result });
+          addToast({ type: "success", message: result });
           setNewSite({ ...newSite, path: projectPath });
         } catch (e: any) {
-          addToast({ type: 'error', message: `Scaffolding failed: ${e}` });
+          addToast({ type: "error", message: `Scaffolding failed: ${e}` });
         }
         return;
       }
 
       // Terminal-based scaffolding for frameworks
-      let scaffoldCmd = '';
-      if (template === 'nextjs') {
+      let scaffoldCmd = "";
+      if (template === "nextjs") {
         scaffoldCmd = `npx --yes create-next-app@latest ${projectName} --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm`;
-      } else if (template === 'nuxt') {
+      } else if (template === "nuxt") {
         scaffoldCmd = `npx --yes nuxi@latest init ${projectName}`;
-      } else if (template === 'vue') {
+      } else if (template === "vue") {
         scaffoldCmd = `npx --yes create-vue@latest ${projectName} --yes`;
-      } else if (template === 'astro') {
+      } else if (template === "astro") {
         scaffoldCmd = `npx --yes create-astro@latest ${projectName} --yes`;
-      } else if (template === 'laravel') {
+      } else if (template === "laravel") {
         scaffoldCmd = `composer create-project laravel/laravel ${projectName}`;
-      } else if (template === 'wordpress') {
+      } else if (template === "wordpress") {
         scaffoldCmd = `php -r "copy('https://wordpress.org/latest.zip', 'wp.zip'); $z = new ZipArchive; if ($z->open('wp.zip') === TRUE) { $z->extractTo('.'); $z->close(); rename('wordpress', '${projectName}'); unlink('wp.zip'); }"`;
       } else {
-        addToast({ type: 'warning', message: 'Unsupported template configuration.'});
+        addToast({
+          type: "warning",
+          message: "Unsupported template configuration.",
+        });
         return;
       }
 
       // Open terminal for site and run scaffold command
-      openTerminalForSite(newSite.domain || 'scaffold', wp, scaffoldCmd);
-      addToast({ type: 'info', message: 'Executing scaffold in the Integrated Terminal...' });
+      openTerminalForSite(newSite.domain || "scaffold", wp, scaffoldCmd);
+      addToast({
+        type: "info",
+        message: "Executing scaffold in the Integrated Terminal...",
+      });
 
       // Auto-fill path — Laravel needs /public as nginx root
       setNewSite({ ...newSite, path: projectPath });
-
     } catch (e: any) {
-      addToast({ type: 'error', message: `Scaffolding failed: ${e}` });
+      addToast({ type: "error", message: `Scaffolding failed: ${e}` });
     }
   };
 
   // Handle add site
   const handleAddSite = async () => {
     if (!newSite.domain || !newSite.path) {
-      addToast({ type: 'warning', message: 'Domain and path are required' });
+      addToast({ type: "warning", message: "Domain and path are required" });
       return;
     }
 
@@ -480,32 +613,36 @@ export function SitesManager() {
 
       // Reload the appropriate web server to apply changes
       try {
-        if (newSite.web_server === 'apache') {
-          await reloadService('apache');
+        if (newSite.web_server === "apache") {
+          await reloadService("apache");
         } else {
           await nginxTestConfig();
           await nginxReload();
         }
       } catch (reloadError) {
-        console.warn('Web server reload failed:', reloadError);
+        console.warn("Web server reload failed:", reloadError);
       }
 
       // Show warning if hosts file couldn't be updated
       if (result.warning) {
-        setNginxMessage({ type: 'error', text: result.warning, domain: result.domain });
+        setNginxMessage({
+          type: "error",
+          text: result.warning,
+          domain: result.domain,
+        });
       }
 
       // Open terminal in the new site's directory
       const sitePath = newSite.path;
 
       setNewSite({
-        domain: '',
-        path: '',
+        domain: "",
+        path: "",
         port: 80,
-        php_version: '',
+        php_version: "",
         ssl_enabled: false,
-        template: 'http',
-        web_server: defaultWebServer
+        template: "http",
+        web_server: defaultWebServer,
       });
       setShowAddForm(false);
       await refreshSites();
@@ -516,7 +653,7 @@ export function SitesManager() {
       }
     } catch (e: any) {
       console.error(e);
-      addToast({ type: 'error', message: 'Failed to create site: ' + e });
+      addToast({ type: "error", message: "Failed to create site: " + e });
     } finally {
       setLoading(false);
     }
@@ -528,15 +665,15 @@ export function SitesManager() {
     try {
       await deleteSite(domain);
       // Reload appropriate web server
-      if (webServer === 'apache') {
-        await reloadService('apache');
+      if (webServer === "apache") {
+        await reloadService("apache");
       } else {
         await nginxReload();
       }
       await refreshSites();
     } catch (e: any) {
       console.error(e);
-      addToast({ type: 'error', message: 'Failed to delete site: ' + e });
+      addToast({ type: "error", message: "Failed to delete site: " + e });
     } finally {
       setProcessing(null);
     }
@@ -552,8 +689,8 @@ export function SitesManager() {
       php_version: site.php_version,
       php_port: site.php_port,
       ssl_enabled: site.ssl_enabled,
-      template: site.template || 'http',
-      web_server: site.web_server || 'nginx'
+      template: site.template || "http",
+      web_server: site.web_server || "nginx",
     });
   };
 
@@ -563,7 +700,7 @@ export function SitesManager() {
     setProcessing(editingSite);
     try {
       // Generate SSL certificate if SSL was just enabled
-      const existingSite = sites.find(s => s.domain === editingSite);
+      const existingSite = sites.find((s) => s.domain === editingSite);
       if (editForm.ssl_enabled && existingSite && !existingSite.ssl_enabled) {
         await generateSslCert(editForm.domain);
       }
@@ -571,8 +708,8 @@ export function SitesManager() {
       await updateSite(editingSite, editForm);
 
       // Reload appropriate web server
-      if (editForm.web_server === 'apache') {
-        await reloadService('apache');
+      if (editForm.web_server === "apache") {
+        await reloadService("apache");
       } else {
         await nginxReload();
       }
@@ -580,10 +717,13 @@ export function SitesManager() {
       await refreshSites();
       setEditingSite(null);
       setEditForm(null);
-      addToast({ type: 'success', message: `Site ${editForm.domain} updated successfully` });
+      addToast({
+        type: "success",
+        message: `Site ${editForm.domain} updated successfully`,
+      });
     } catch (e: any) {
       console.error(e);
-      addToast({ type: 'error', message: 'Failed to update site: ' + e });
+      addToast({ type: "error", message: "Failed to update site: " + e });
     } finally {
       setProcessing(null);
     }
@@ -597,7 +737,7 @@ export function SitesManager() {
       const content = await readSiteConfig(domain);
       setConfigEditorContent(content);
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to read config: ${e}` });
+      addToast({ type: "error", message: `Failed to read config: ${e}` });
       setConfigEditorDomain(null);
     } finally {
       setConfigEditorLoading(false);
@@ -609,11 +749,11 @@ export function SitesManager() {
     setConfigEditorSaving(true);
     try {
       await writeSiteConfig(configEditorDomain, configEditorContent);
-      addToast({ type: 'success', message: 'Config saved and validated!' });
+      addToast({ type: "success", message: "Config saved and validated!" });
       setConfigEditorDomain(null);
       await refreshSites();
     } catch (e: any) {
-      addToast({ type: 'error', message: `${e}` });
+      addToast({ type: "error", message: `${e}` });
     } finally {
       setConfigEditorSaving(false);
     }
@@ -625,12 +765,12 @@ export function SitesManager() {
       const list = await listBlueprints();
       setBlueprints(list);
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to load blueprints: ${e}` });
+      addToast({ type: "error", message: `Failed to load blueprints: ${e}` });
     }
   };
 
   const handleOpenBlueprintMode = async () => {
-    setAddMode('blueprint');
+    setAddMode("blueprint");
     setShowAddForm(true);
     if (blueprints.length === 0) {
       await loadBlueprints();
@@ -647,17 +787,23 @@ export function SitesManager() {
   const handleBlueprintScaffold = async () => {
     if (!selectedBlueprint || !blueprintDomain) return;
     try {
-      const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '' } });
-      const wp = await store.get<string>('workspacePath') || '';
+      const store = await load(".settings.json", {
+        autoSave: false,
+        defaults: { workspacePath: "" },
+      });
+      const wp = (await store.get<string>("workspacePath")) || "";
       if (!wp) {
-        addToast({ type: 'error', message: 'Set a Workspace Path in Settings first.' });
+        addToast({
+          type: "error",
+          message: "Set a Workspace Path in Settings first.",
+        });
         return;
       }
-      const projectName = blueprintDomain.replace(/\..*$/, '');
+      const projectName = blueprintDomain.replace(/\..*$/, "");
       const fullPath = `${wp}/${projectName}`;
       setBlueprintPath(fullPath);
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to get workspace: ${e}` });
+      addToast({ type: "error", message: `Failed to get workspace: ${e}` });
     }
   };
 
@@ -669,52 +815,66 @@ export function SitesManager() {
         selectedBlueprint.name,
         blueprintDomain,
         blueprintPath,
-        blueprintPhpVersion || undefined
+        blueprintPhpVersion || undefined,
       );
 
       if (result.warnings.length > 0) {
-        result.warnings.forEach(w => addToast({ type: 'warning', message: w }));
+        result.warnings.forEach((w) =>
+          addToast({ type: "warning", message: w }),
+        );
       }
 
-      addToast({ type: 'success', message: `Site "${blueprintDomain}" created from ${selectedBlueprint.name} blueprint!` });
+      addToast({
+        type: "success",
+        message: `Site "${blueprintDomain}" created from ${selectedBlueprint.name} blueprint!`,
+      });
 
       // Open terminal with scaffold commands
       if (result.scaffold_commands.length > 0) {
-        const scaffoldCmd = result.scaffold_commands.join(' && ');
+        const scaffoldCmd = result.scaffold_commands.join(" && ");
         openTerminalForSite(blueprintDomain, blueprintPath, scaffoldCmd);
-        addToast({ type: 'info', message: 'Running scaffold commands in terminal...' });
+        addToast({
+          type: "info",
+          message: "Running scaffold commands in terminal...",
+        });
       }
 
       // Reset form
       setSelectedBlueprint(null);
-      setBlueprintDomain('');
-      setBlueprintPath('');
-      setBlueprintPhpVersion('');
+      setBlueprintDomain("");
+      setBlueprintPath("");
+      setBlueprintPhpVersion("");
       setShowAddForm(false);
-      setAddMode('manual');
+      setAddMode("manual");
       await refreshSites();
     } catch (e: any) {
-      addToast({ type: 'error', message: `Blueprint creation failed: ${e}` });
+      addToast({ type: "error", message: `Blueprint creation failed: ${e}` });
     } finally {
       setBlueprintCreating(false);
     }
   };
 
-  const handleRegenerateConfig = async (domain: string, webServer?: WebServer) => {
+  const handleRegenerateConfig = async (
+    domain: string,
+    webServer?: WebServer,
+  ) => {
     setProcessing(domain);
     try {
       await regenerateSiteConfig(domain);
       // Reload appropriate web server
-      if (webServer === 'apache') {
-        await reloadService('apache');
+      if (webServer === "apache") {
+        await reloadService("apache");
       } else {
         await nginxReload();
       }
-      addToast({ type: 'success', message: 'Config regenerated successfully!' });
+      addToast({
+        type: "success",
+        message: "Config regenerated successfully!",
+      });
       await refreshSites();
     } catch (e: any) {
       console.error(e);
-      addToast({ type: 'error', message: `Failed to regenerate config: ${e}` });
+      addToast({ type: "error", message: `Failed to regenerate config: ${e}` });
     } finally {
       setProcessing(null);
     }
@@ -722,8 +882,11 @@ export function SitesManager() {
 
   const getNgrokToken = async (): Promise<string | null> => {
     try {
-      const store = await load('.settings.json', { autoSave: false, defaults: { workspacePath: '', ngrokAuthToken: '' } });
-      return await store.get<string>('ngrokAuthToken') || null;
+      const store = await load(".settings.json", {
+        autoSave: false,
+        defaults: { workspacePath: "", ngrokAuthToken: "" },
+      });
+      return (await store.get<string>("ngrokAuthToken")) || null;
     } catch {
       return null;
     }
@@ -734,12 +897,22 @@ export function SitesManager() {
     try {
       const token = await getNgrokToken();
       if (!token) {
-        addToast({ type: 'error', message: 'Ngrok Auth Token missing. Please save it in Settings first.' });
+        addToast({
+          type: "error",
+          message:
+            "Ngrok Auth Token missing. Please save it in Settings first.",
+        });
         return;
       }
-      
-      const portToTunnel = site.ssl_enabled ? (site.port !== 80 && site.port !== 443 ? site.port : 443) : (site.port !== 80 && site.port !== 443 ? site.port : 80);
-      
+
+      const portToTunnel = site.ssl_enabled
+        ? site.port !== 80 && site.port !== 443
+          ? site.port
+          : 443
+        : site.port !== 80 && site.port !== 443
+          ? site.port
+          : 80;
+
       const res = await startTunnel(site.domain, portToTunnel, token);
       if (res.success) {
         // Poll for public URL
@@ -748,34 +921,37 @@ export function SitesManager() {
           try {
             url = await getTunnelUrl();
             if (url) break;
-          } catch(_e) {
+          } catch (_e) {
             // Ngrok node might still be waking up, wait 1 sec
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise((r) => setTimeout(r, 1000));
           }
         }
-        
+
         if (url) {
           setActiveTunnel({ domain: site.domain, url });
-          addToast({ type: 'success', message: 'Tunnel is live!' });
+          addToast({ type: "success", message: "Tunnel is live!" });
         } else {
-          addToast({ type: 'error', message: 'Tunnel started but could not resolve public URL.' });
+          addToast({
+            type: "error",
+            message: "Tunnel started but could not resolve public URL.",
+          });
         }
       }
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to start tunnel: ${e}` });
+      addToast({ type: "error", message: `Failed to start tunnel: ${e}` });
     } finally {
       setTunnelingDomain(null);
     }
   };
 
   const handleStopTunnel = async () => {
-    setTunnelingDomain('stopping');
+    setTunnelingDomain("stopping");
     try {
       await stopTunnel();
       setActiveTunnel(null);
-      addToast({ type: 'success', message: 'Tunnel stopped.' });
+      addToast({ type: "success", message: "Tunnel stopped." });
     } catch (e: any) {
-      addToast({ type: 'error', message: `Failed to stop tunnel: ${e}` });
+      addToast({ type: "error", message: `Failed to stop tunnel: ${e}` });
     } finally {
       setTunnelingDomain(null);
     }
@@ -787,7 +963,9 @@ export function SitesManager() {
       <header className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold">Sites</h2>
-          <p className="text-content-secondary">Manage your local development sites</p>
+          <p className="text-content-secondary">
+            Manage your local development sites
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {/* SSL Tools */}
@@ -797,42 +975,72 @@ export function SitesManager() {
               className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer flex items-center gap-2 border border-edge"
               title="SSL & Root CA Settings"
             >
-              <Shield size={16} className={sslReady ? "text-emerald-500" : "text-amber-500"} />
+              <Shield
+                size={16}
+                className={sslReady ? "text-emerald-500" : "text-amber-500"}
+              />
             </button>
 
             {showSslDropdown && (
               <div className="absolute top-full right-0 mt-2 w-72 bg-surface-raised border border-edge rounded-lg shadow-xl shadow-black/20 z-50 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-medium text-sm">Local SSL Root CA</h4>
-                  <button onClick={() => setShowSslDropdown(false)} className="text-content-muted hover:text-content">
+                  <button
+                    onClick={() => setShowSslDropdown(false)}
+                    className="text-content-muted hover:text-content"
+                  >
                     <XCircle size={16} />
                   </button>
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${sslStatus?.mkcert_installed ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <div
+                      className={`w-2 h-2 rounded-full ${sslStatus?.mkcert_installed ? "bg-emerald-500" : "bg-red-500"}`}
+                    />
                     <div className="flex-1 text-xs">
                       <p className="font-medium">mkcert Core</p>
-                      <p className="text-content-muted">{sslStatus?.mkcert_installed ? 'Installed' : 'Missing'}</p>
+                      <p className="text-content-muted">
+                        {sslStatus?.mkcert_installed ? "Installed" : "Missing"}
+                      </p>
                     </div>
                     {!sslStatus?.mkcert_installed && (
-                      <button onClick={handleInstallMkcert} disabled={sslLoading} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs rounded transition-colors disabled:opacity-50 text-white">
-                        {sslLoading ? <Loader2 size={12} className="animate-spin" /> : 'Install'}
+                      <button
+                        onClick={handleInstallMkcert}
+                        disabled={sslLoading}
+                        className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs rounded transition-colors disabled:opacity-50 text-white"
+                      >
+                        {sslLoading ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          "Install"
+                        )}
                       </button>
                     )}
                   </div>
 
                   {sslStatus?.mkcert_installed && (
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${sslStatus?.ca_installed ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <div
+                        className={`w-2 h-2 rounded-full ${sslStatus?.ca_installed ? "bg-emerald-500" : "bg-amber-500"}`}
+                      />
                       <div className="flex-1 text-xs">
                         <p className="font-medium">Browser CA Trust</p>
-                        <p className="text-content-muted">{sslStatus?.ca_installed ? 'Trusted' : 'Untrusted'}</p>
+                        <p className="text-content-muted">
+                          {sslStatus?.ca_installed ? "Trusted" : "Untrusted"}
+                        </p>
                       </div>
                       {!sslStatus?.ca_installed && (
-                        <button onClick={handleInstallCa} disabled={sslLoading} className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-xs rounded transition-colors disabled:opacity-50 text-white">
-                          {sslLoading ? <Loader2 size={12} className="animate-spin" /> : 'Install'}
+                        <button
+                          onClick={handleInstallCa}
+                          disabled={sslLoading}
+                          className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-xs rounded transition-colors disabled:opacity-50 text-white"
+                        >
+                          {sslLoading ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            "Install"
+                          )}
                         </button>
                       )}
                     </div>
@@ -856,7 +1064,11 @@ export function SitesManager() {
               className="p-2 hover:bg-hover rounded-l-lg transition-colors cursor-pointer disabled:opacity-50 border-r border-edge"
               title="Import Sites Config"
             >
-              {importing ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+              {importing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <FileUp size={16} />
+              )}
             </button>
             <button
               onClick={handleExportSites}
@@ -864,23 +1076,32 @@ export function SitesManager() {
               className="p-2 hover:bg-hover rounded-r-lg transition-colors cursor-pointer disabled:opacity-50"
               title="Export Sites Config"
             >
-              {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+              {exporting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <FileDown size={16} />
+              )}
             </button>
           </div>
 
-
-
           {/* Nginx Status & Reload */}
           <div className="flex items-center gap-2 px-3 py-2 bg-surface-raised rounded-lg border border-edge">
-            <div className={`w-2 h-2 rounded-full ${isNginxRunning ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-content-secondary hidden lg:inline">Nginx</span>
+            <div
+              className={`w-2 h-2 rounded-full ${isNginxRunning ? "bg-emerald-500" : "bg-red-500"}`}
+            />
+            <span className="text-sm text-content-secondary hidden lg:inline">
+              Nginx
+            </span>
             <button
               onClick={handleNginxReload}
               disabled={reloadingNginx}
               className="p-1 hover:bg-hover rounded transition-colors cursor-pointer disabled:opacity-50"
               title="Reload Nginx"
             >
-              <RefreshCw size={14} className={reloadingNginx ? 'animate-spin' : ''} />
+              <RefreshCw
+                size={14}
+                className={reloadingNginx ? "animate-spin" : ""}
+              />
             </button>
           </div>
 
@@ -891,7 +1112,7 @@ export function SitesManager() {
             className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50 border border-edge"
             title="Refresh Sites"
           >
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           </button>
 
           {/* Add Site */}
@@ -907,21 +1128,32 @@ export function SitesManager() {
 
       {/* Nginx Message */}
       {nginxMessage && (
-        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${nginxMessage.type === 'success'
-          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-          : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
-          }`}>
+        <div
+          className={`mb-4 p-3 rounded-lg flex items-center justify-between ${
+            nginxMessage.type === "success"
+              ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+              : "bg-amber-500/10 border border-amber-500/30 text-amber-400"
+          }`}
+        >
           <div className="flex items-center gap-2">
-            {nginxMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+            {nginxMessage.type === "success" ? (
+              <CheckCircle2 size={16} />
+            ) : (
+              <AlertTriangle size={16} />
+            )}
             <span className="text-sm">{nginxMessage.text}</span>
           </div>
-          {nginxMessage.domain && nginxMessage.type === 'error' && (
+          {nginxMessage.domain && nginxMessage.type === "error" && (
             <button
               onClick={() => handleFixHosts(nginxMessage.domain!)}
               disabled={fixingHosts}
               className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
             >
-              {fixingHosts ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
+              {fixingHosts ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Shield size={12} />
+              )}
               Fix with Admin
             </button>
           )}
@@ -934,21 +1166,23 @@ export function SitesManager() {
           {/* Tab Switcher */}
           <div className="flex items-center gap-1 mb-4 bg-surface-inset rounded-lg p-1">
             <button
-              onClick={() => setAddMode('manual')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${addMode === 'manual'
-                ? 'bg-surface-raised text-content shadow-sm'
-                : 'text-content-muted hover:text-content-secondary'
-                }`}
+              onClick={() => setAddMode("manual")}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                addMode === "manual"
+                  ? "bg-surface-raised text-content shadow-sm"
+                  : "text-content-muted hover:text-content-secondary"
+              }`}
             >
               <Settings2 size={14} />
               Manual
             </button>
             <button
               onClick={handleOpenBlueprintMode}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${addMode === 'blueprint'
-                ? 'bg-surface-raised text-content shadow-sm'
-                : 'text-content-muted hover:text-content-secondary'
-                }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                addMode === "blueprint"
+                  ? "bg-surface-raised text-content shadow-sm"
+                  : "text-content-muted hover:text-content-secondary"
+              }`}
             >
               <Rocket size={14} />
               From Blueprint
@@ -956,50 +1190,73 @@ export function SitesManager() {
           </div>
 
           {/* Blueprint Mode */}
-          {addMode === 'blueprint' && (
+          {addMode === "blueprint" && (
             <div className="space-y-4">
               {!selectedBlueprint ? (
                 <>
-                  <p className="text-sm text-content-secondary">Choose a blueprint to create a fully configured project with one click.</p>
+                  <p className="text-sm text-content-secondary">
+                    Choose a blueprint to create a fully configured project with
+                    one click.
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
-                    {blueprints.map(bp => {
-                      const hasServices = bp.services.every(s => {
-                        if (s === 'php') return phpVersions.length > 0;
-                        return services.some(svc => svc.service_type === s);
+                    {blueprints.map((bp) => {
+                      const hasServices = bp.services.every((s) => {
+                        if (s === "php") return phpVersions.length > 0;
+                        return services.some((svc) => svc.service_type === s);
                       });
                       return (
                         <button
                           key={bp.name}
                           onClick={() => {
                             setSelectedBlueprint(bp);
-                            setBlueprintPhpVersion(phpVersions[0] || '');
+                            setBlueprintPhpVersion(phpVersions[0] || "");
                           }}
-                          className={`text-left p-4 rounded-lg border transition-all cursor-pointer ${hasServices
-                            ? 'border-edge hover:border-emerald-500/50 hover:bg-surface'
-                            : 'border-edge opacity-60'
-                            }`}
+                          className={`text-left p-4 rounded-lg border transition-all cursor-pointer ${
+                            hasServices
+                              ? "border-edge hover:border-emerald-500/50 hover:bg-surface"
+                              : "border-edge opacity-60"
+                          }`}
                         >
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-sm">{bp.name}</span>
+                            <span className="font-medium text-sm">
+                              {bp.name}
+                            </span>
                             {!hasServices && (
-                              <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">missing services</span>
+                              <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                                missing services
+                              </span>
                             )}
                           </div>
-                          <p className="text-xs text-content-muted mb-2">{bp.description}</p>
+                          <p className="text-xs text-content-muted mb-2">
+                            {bp.description}
+                          </p>
                           <div className="flex flex-wrap gap-1">
-                            {bp.services.map(s => (
-                              <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                s === 'php' ? 'bg-purple-500/10 text-purple-400' :
-                                s === 'nodejs' ? 'bg-green-500/10 text-green-400' :
-                                s === 'python' ? 'bg-blue-500/10 text-blue-400' :
-                                s === 'nginx' ? 'bg-emerald-500/10 text-emerald-400' :
-                                s === 'mariadb' ? 'bg-orange-500/10 text-orange-400' :
-                                s === 'redis' ? 'bg-red-500/10 text-red-400' :
-                                'bg-surface-inset text-content-muted'
-                              }`}>{s}</span>
+                            {bp.services.map((s) => (
+                              <span
+                                key={s}
+                                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                  s === "php"
+                                    ? "bg-purple-500/10 text-purple-400"
+                                    : s === "nodejs"
+                                      ? "bg-green-500/10 text-green-400"
+                                      : s === "python"
+                                        ? "bg-blue-500/10 text-blue-400"
+                                        : s === "nginx"
+                                          ? "bg-emerald-500/10 text-emerald-400"
+                                          : s === "mariadb"
+                                            ? "bg-orange-500/10 text-orange-400"
+                                            : s === "redis"
+                                              ? "bg-red-500/10 text-red-400"
+                                              : "bg-surface-inset text-content-muted"
+                                }`}
+                              >
+                                {s}
+                              </span>
                             ))}
                             {bp.dev_command && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">dev server</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">
+                                dev server
+                              </span>
                             )}
                           </div>
                         </button>
@@ -1022,14 +1279,18 @@ export function SitesManager() {
                         <Rocket size={16} className="text-emerald-500" />
                         {selectedBlueprint.name}
                       </h4>
-                      <p className="text-xs text-content-muted">{selectedBlueprint.description}</p>
+                      <p className="text-xs text-content-muted">
+                        {selectedBlueprint.description}
+                      </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     {/* Domain */}
                     <div>
-                      <label className="block text-sm text-content-secondary mb-1">Domain</label>
+                      <label className="block text-sm text-content-secondary mb-1">
+                        Domain
+                      </label>
                       <input
                         type="text"
                         value={blueprintDomain}
@@ -1040,19 +1301,27 @@ export function SitesManager() {
                     </div>
 
                     {/* PHP Version (only for PHP blueprints) */}
-                    {selectedBlueprint.services.includes('php') ? (
+                    {selectedBlueprint.services.includes("php") ? (
                       <div>
-                        <label className="block text-sm text-content-secondary mb-1">PHP Version</label>
+                        <label className="block text-sm text-content-secondary mb-1">
+                          PHP Version
+                        </label>
                         {phpVersions.length === 0 ? (
-                          <p className="text-sm text-amber-500 py-2">No PHP installed</p>
+                          <p className="text-sm text-amber-500 py-2">
+                            No PHP installed
+                          </p>
                         ) : (
                           <select
                             value={blueprintPhpVersion}
-                            onChange={(e) => setBlueprintPhpVersion(e.target.value)}
+                            onChange={(e) =>
+                              setBlueprintPhpVersion(e.target.value)
+                            }
                             className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
                           >
-                            {phpVersions.map(v => (
-                              <option key={v} value={v}>PHP {v}</option>
+                            {phpVersions.map((v) => (
+                              <option key={v} value={v}>
+                                PHP {v}
+                              </option>
                             ))}
                           </select>
                         )}
@@ -1064,7 +1333,9 @@ export function SitesManager() {
 
                   {/* Path */}
                   <div>
-                    <label className="block text-sm text-content-secondary mb-1">Project Path</label>
+                    <label className="block text-sm text-content-secondary mb-1">
+                      Project Path
+                    </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -1094,17 +1365,54 @@ export function SitesManager() {
 
                   {/* What will happen */}
                   <div className="bg-surface rounded-lg border border-edge p-3 space-y-2">
-                    <p className="text-xs font-medium text-content-secondary">This blueprint will:</p>
+                    <p className="text-xs font-medium text-content-secondary">
+                      This blueprint will:
+                    </p>
                     <ul className="text-xs text-content-muted space-y-1">
-                      <li className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Create site with <strong>{selectedBlueprint.template}</strong> template</li>
+                      <li className="flex items-center gap-2">
+                        <Check
+                          size={12}
+                          className="text-emerald-500 shrink-0"
+                        />{" "}
+                        Create site with{" "}
+                        <strong>{selectedBlueprint.template}</strong> template
+                      </li>
                       {selectedBlueprint.scaffold.map((cmd, i) => (
-                        <li key={i} className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Run: <code className="bg-surface-inset px-1 rounded text-[11px]">{cmd}</code></li>
+                        <li key={i} className="flex items-center gap-2">
+                          <Check
+                            size={12}
+                            className="text-emerald-500 shrink-0"
+                          />{" "}
+                          Run:{" "}
+                          <code className="bg-surface-inset px-1 rounded text-[11px]">
+                            {cmd}
+                          </code>
+                        </li>
                       ))}
                       {selectedBlueprint.env_template && (
-                        <li className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Generate <code className="bg-surface-inset px-1 rounded text-[11px]">.env</code> file</li>
+                        <li className="flex items-center gap-2">
+                          <Check
+                            size={12}
+                            className="text-emerald-500 shrink-0"
+                          />{" "}
+                          Generate{" "}
+                          <code className="bg-surface-inset px-1 rounded text-[11px]">
+                            .env
+                          </code>{" "}
+                          file
+                        </li>
                       )}
                       {selectedBlueprint.dev_command && (
-                        <li className="flex items-center gap-2"><Check size={12} className="text-emerald-500 shrink-0" /> Configure dev server: <code className="bg-surface-inset px-1 rounded text-[11px]">{selectedBlueprint.dev_command}</code></li>
+                        <li className="flex items-center gap-2">
+                          <Check
+                            size={12}
+                            className="text-emerald-500 shrink-0"
+                          />{" "}
+                          Configure dev server:{" "}
+                          <code className="bg-surface-inset px-1 rounded text-[11px]">
+                            {selectedBlueprint.dev_command}
+                          </code>
+                        </li>
                       )}
                     </ul>
                   </div>
@@ -1112,14 +1420,20 @@ export function SitesManager() {
                   {/* Actions */}
                   <div className="flex justify-end gap-2 pt-1">
                     <button
-                      onClick={() => { setSelectedBlueprint(null); setBlueprintDomain(''); setBlueprintPath(''); }}
+                      onClick={() => {
+                        setSelectedBlueprint(null);
+                        setBlueprintDomain("");
+                        setBlueprintPath("");
+                      }}
                       className="px-4 py-2 bg-surface-inset hover:bg-hover rounded-lg text-sm font-medium transition-colors cursor-pointer"
                     >
                       Back
                     </button>
                     <button
                       onClick={handleCreateFromBlueprint}
-                      disabled={blueprintCreating || !blueprintDomain || !blueprintPath}
+                      disabled={
+                        blueprintCreating || !blueprintDomain || !blueprintPath
+                      }
                       className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer text-white"
                     >
                       {blueprintCreating ? (
@@ -1142,7 +1456,10 @@ export function SitesManager() {
               {!selectedBlueprint && (
                 <div className="flex justify-end">
                   <button
-                    onClick={() => { setShowAddForm(false); setAddMode('manual'); }}
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setAddMode("manual");
+                    }}
                     className="px-4 py-2 bg-surface-inset hover:bg-hover rounded-lg text-sm font-medium transition-colors cursor-pointer"
                   >
                     Cancel
@@ -1153,189 +1470,249 @@ export function SitesManager() {
           )}
 
           {/* Manual Mode */}
-          {addMode === 'manual' && (
-          <div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* Domain */}
+          {addMode === "manual" && (
             <div>
-              <label className="block text-sm text-content-secondary mb-1">Domain</label>
-              <input
-                type="text"
-                value={newSite.domain}
-                onChange={(e) => setNewSite({ ...newSite, domain: e.target.value })}
-                placeholder="mysite.test"
-                className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            {/* Port */}
-            <div>
-              <label className="block text-sm text-content-secondary mb-1">Port</label>
-              <input
-                type="number"
-                value={newSite.port}
-                onChange={(e) => setNewSite({ ...newSite, port: parseInt(e.target.value) || 80 })}
-                className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          {/* Path */}
-          <div className="mb-4">
-            <label className="block text-sm text-content-secondary mb-1">Project Path</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newSite.path}
-                onChange={(e) => setNewSite({ ...newSite, path: e.target.value })}
-                placeholder="C:/projects/mysite"
-                className="flex-1 px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                onClick={selectFolder}
-                className="px-3 py-2 bg-surface-inset hover:bg-hover rounded-lg transition-colors cursor-pointer"
-                title="Select Existing Folder"
-              >
-                <FolderOpen size={16} />
-              </button>
-              <button
-                onClick={handleScaffold}
-                disabled={!newSite.domain}
-                className="px-3 py-2 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                title="Scaffold new project in Workspace"
-              >
-                <Sparkles size={16} />
-                Generate Default
-              </button>
-            </div>
-          </div>
-
-          {/* Template & PHP Version */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* Template */}
-            <div>
-              <label className="block text-sm text-content-secondary mb-1">Template</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map((template) => (
-                  <button
-                    key={template}
-                    onClick={() => setNewSite({
-                      ...newSite,
-                      template,
-                      ...(!PHP_TEMPLATES.includes(template) ? { php_version: undefined } : {})
-                    })}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${newSite.template === template
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-surface-raised hover:bg-hover text-content-secondary'
-                      }`}
-                  >
-                    {TEMPLATE_INFO[template].icon}
-                    {TEMPLATE_INFO[template].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* PHP Version */}
-            <div>
-              <label className="block text-sm text-content-secondary mb-1">PHP Version</label>
-              {!PHP_TEMPLATES.includes(newSite.template as SiteTemplate) ? (
-                <p className="text-sm text-content-muted py-2">Not needed for this template</p>
-              ) : phpVersions.length === 0 ? (
-                <p className="text-sm text-amber-500 py-2">No PHP installed. Install from Services tab.</p>
-              ) : (
-                <select
-                  value={newSite.php_version || ''}
-                  onChange={(e) => setNewSite({ ...newSite, php_version: e.target.value || undefined })}
-                  className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">Select PHP version</option>
-                  {phpVersions.map((v) => (
-                    <option key={v} value={v}>PHP {v}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-
-          {/* Web Server & SSL */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* Web Server Selector */}
-            <div>
-              <label className="block text-sm text-content-secondary mb-1">Web Server</label>
-              {availableWebServers.length === 0 ? (
-                <p className="text-sm text-amber-500 py-2">No web server installed. Install Nginx or Apache from Services tab.</p>
-              ) : (
-                <div className="flex gap-2">
-                  {availableWebServers.map((ws) => (
-                    <button
-                      key={ws}
-                      onClick={() => setNewSite({ ...newSite, web_server: ws })}
-                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${newSite.web_server === ws
-                        ? ws === 'nginx' ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
-                        : 'bg-surface-raised hover:bg-hover text-content-secondary'
-                        }`}
-                    >
-                      <span>{WEB_SERVER_INFO[ws].icon}</span>
-                      {WEB_SERVER_INFO[ws].label}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Domain */}
+                <div>
+                  <label className="block text-sm text-content-secondary mb-1">
+                    Domain
+                  </label>
+                  <input
+                    type="text"
+                    value={newSite.domain}
+                    onChange={(e) =>
+                      setNewSite({ ...newSite, domain: e.target.value })
+                    }
+                    placeholder="mysite.test"
+                    className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
-              )}
-            </div>
 
-            {/* SSL */}
-            <div className="flex flex-col gap-1 pb-1">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="ssl_enabled"
-                  checked={newSite.ssl_enabled}
-                  disabled={!sslReady}
-                  onChange={(e) => setNewSite({ ...newSite, ssl_enabled: e.target.checked })}
-                  className="w-4 h-4 rounded border-edge bg-surface text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
-                />
-                <label htmlFor="ssl_enabled" className={`text-sm flex items-center gap-2 ${sslReady ? 'text-content-secondary' : 'text-content-muted'}`}>
-                  <Shield size={14} className={sslReady ? 'text-emerald-500' : 'text-content-muted'} />
-                  Enable SSL (HTTPS)
-                </label>
+                {/* Port */}
+                <div>
+                  <label className="block text-sm text-content-secondary mb-1">
+                    Port
+                  </label>
+                  <input
+                    type="number"
+                    value={newSite.port}
+                    onChange={(e) =>
+                      setNewSite({
+                        ...newSite,
+                        port: parseInt(e.target.value) || 80,
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
-              {!sslReady && (
-                <p className="text-xs text-amber-400 flex items-center gap-1">
-                  <AlertTriangle size={12} />
-                  Install mkcert and Root CA in Settings first
-                </p>
-              )}
-            </div>
-          </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 bg-surface-inset hover:bg-hover rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAddSite}
-              disabled={loading || !newSite.domain || !newSite.path}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer text-white"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Plus size={16} />
-                  Create Site
-                </>
-              )}
-            </button>
-          </div>
-          </div>
+              {/* Path */}
+              <div className="mb-4">
+                <label className="block text-sm text-content-secondary mb-1">
+                  Project Path
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSite.path}
+                    onChange={(e) =>
+                      setNewSite({ ...newSite, path: e.target.value })
+                    }
+                    placeholder="C:/projects/mysite"
+                    className="flex-1 px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    onClick={selectFolder}
+                    className="px-3 py-2 bg-surface-inset hover:bg-hover rounded-lg transition-colors cursor-pointer"
+                    title="Select Existing Folder"
+                  >
+                    <FolderOpen size={16} />
+                  </button>
+                  <button
+                    onClick={handleScaffold}
+                    disabled={!newSite.domain}
+                    className="px-3 py-2 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Scaffold new project in Workspace"
+                  >
+                    <Sparkles size={16} />
+                    Generate Default
+                  </button>
+                </div>
+              </div>
+
+              {/* Template & PHP Version */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Template */}
+                <div>
+                  <label className="block text-sm text-content-secondary mb-1">
+                    Template
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map(
+                      (template) => (
+                        <button
+                          key={template}
+                          onClick={() =>
+                            setNewSite({
+                              ...newSite,
+                              template,
+                              ...(!PHP_TEMPLATES.includes(template)
+                                ? { php_version: undefined }
+                                : {}),
+                            })
+                          }
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                            newSite.template === template
+                              ? "bg-emerald-600 text-white"
+                              : "bg-surface-raised hover:bg-hover text-content-secondary"
+                          }`}
+                        >
+                          {TEMPLATE_INFO[template].icon}
+                          {TEMPLATE_INFO[template].label}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+
+                {/* PHP Version */}
+                <div>
+                  <label className="block text-sm text-content-secondary mb-1">
+                    PHP Version
+                  </label>
+                  {!PHP_TEMPLATES.includes(newSite.template as SiteTemplate) ? (
+                    <p className="text-sm text-content-muted py-2">
+                      Not needed for this template
+                    </p>
+                  ) : phpVersions.length === 0 ? (
+                    <p className="text-sm text-amber-500 py-2">
+                      No PHP installed. Install from Services tab.
+                    </p>
+                  ) : (
+                    <select
+                      value={newSite.php_version || ""}
+                      onChange={(e) =>
+                        setNewSite({
+                          ...newSite,
+                          php_version: e.target.value || undefined,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="">Select PHP version</option>
+                      {phpVersions.map((v) => (
+                        <option key={v} value={v}>
+                          PHP {v}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              {/* Web Server & SSL */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Web Server Selector */}
+                <div>
+                  <label className="block text-sm text-content-secondary mb-1">
+                    Web Server
+                  </label>
+                  {availableWebServers.length === 0 ? (
+                    <p className="text-sm text-amber-500 py-2">
+                      No web server installed. Install Nginx or Apache from
+                      Services tab.
+                    </p>
+                  ) : (
+                    <div className="flex gap-2">
+                      {availableWebServers.map((ws) => (
+                        <button
+                          key={ws}
+                          onClick={() =>
+                            setNewSite({ ...newSite, web_server: ws })
+                          }
+                          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                            newSite.web_server === ws
+                              ? ws === "nginx"
+                                ? "bg-green-600 text-white"
+                                : "bg-orange-600 text-white"
+                              : "bg-surface-raised hover:bg-hover text-content-secondary"
+                          }`}
+                        >
+                          <span>{WEB_SERVER_INFO[ws].icon}</span>
+                          {WEB_SERVER_INFO[ws].label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* SSL */}
+                <div className="flex flex-col gap-1 pb-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="ssl_enabled"
+                      checked={newSite.ssl_enabled}
+                      disabled={!sslReady}
+                      onChange={(e) =>
+                        setNewSite({
+                          ...newSite,
+                          ssl_enabled: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 rounded border-edge bg-surface text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50"
+                    />
+                    <label
+                      htmlFor="ssl_enabled"
+                      className={`text-sm flex items-center gap-2 ${sslReady ? "text-content-secondary" : "text-content-muted"}`}
+                    >
+                      <Shield
+                        size={14}
+                        className={
+                          sslReady ? "text-emerald-500" : "text-content-muted"
+                        }
+                      />
+                      Enable SSL (HTTPS)
+                    </label>
+                  </div>
+                  {!sslReady && (
+                    <p className="text-xs text-amber-400 flex items-center gap-1">
+                      <AlertTriangle size={12} />
+                      Install mkcert and Root CA in Settings first
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="px-4 py-2 bg-surface-inset hover:bg-hover rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddSite}
+                  disabled={loading || !newSite.domain || !newSite.path}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-raised disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors cursor-pointer text-white"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} />
+                      Create Site
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1358,21 +1735,26 @@ export function SitesManager() {
             {sites.map((site) => (
               <div
                 key={site.domain}
-                className={`bg-surface-raised border rounded-xl p-4 transition-all duration-300 group ${site.config_valid
-                  ? 'border-edge-subtle hover:border-edge'
-                  : 'border-red-500/30 hover:border-red-500/50'
-                  }`}
+                className={`bg-surface-raised border rounded-xl p-4 transition-all duration-300 group ${
+                  site.config_valid
+                    ? "border-edge-subtle hover:border-edge"
+                    : "border-red-500/30 hover:border-red-500/50"
+                }`}
               >
                 {/* Edit Mode */}
                 {editingSite === site.domain && editForm ? (
                   <div className="space-y-3">
                     {/* Path */}
                     <div>
-                      <label className="block text-xs text-content-muted mb-1">Project Path</label>
+                      <label className="block text-xs text-content-muted mb-1">
+                        Project Path
+                      </label>
                       <input
                         type="text"
                         value={editForm.path}
-                        onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, path: e.target.value })
+                        }
                         className="w-full px-3 py-2 bg-surface border border-edge rounded-lg text-sm"
                         placeholder="Path"
                       />
@@ -1380,21 +1762,28 @@ export function SitesManager() {
 
                     {/* Template */}
                     <div>
-                      <label className="block text-xs text-content-muted mb-1">Template</label>
+                      <label className="block text-xs text-content-muted mb-1">
+                        Template
+                      </label>
                       <div className="grid grid-cols-2 gap-1">
-                        {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map((template) => (
-                          <button
-                            key={template}
-                            onClick={() => setEditForm({ ...editForm, template })}
-                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors ${editForm.template === template
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-surface-inset text-content-secondary hover:bg-hover'
+                        {(Object.keys(TEMPLATE_INFO) as SiteTemplate[]).map(
+                          (template) => (
+                            <button
+                              key={template}
+                              onClick={() =>
+                                setEditForm({ ...editForm, template })
+                              }
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                                editForm.template === template
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-surface-inset text-content-secondary hover:bg-hover"
                               }`}
-                          >
-                            {TEMPLATE_INFO[template].icon}
-                            {TEMPLATE_INFO[template].label}
-                          </button>
-                        ))}
+                            >
+                              {TEMPLATE_INFO[template].icon}
+                              {TEMPLATE_INFO[template].label}
+                            </button>
+                          ),
+                        )}
                       </div>
                     </div>
 
@@ -1402,20 +1791,35 @@ export function SitesManager() {
                     <div className="grid grid-cols-2 gap-2">
                       {/* PHP Version */}
                       <div>
-                        <label className="block text-xs text-content-muted mb-1">PHP Version</label>
-                        {!PHP_TEMPLATES.includes(editForm.template as SiteTemplate) ? (
-                          <p className="text-xs text-content-muted py-2">Not needed</p>
+                        <label className="block text-xs text-content-muted mb-1">
+                          PHP Version
+                        </label>
+                        {!PHP_TEMPLATES.includes(
+                          editForm.template as SiteTemplate,
+                        ) ? (
+                          <p className="text-xs text-content-muted py-2">
+                            Not needed
+                          </p>
                         ) : phpVersions.length === 0 ? (
-                          <p className="text-xs text-amber-500 py-1">No PHP installed</p>
+                          <p className="text-xs text-amber-500 py-1">
+                            No PHP installed
+                          </p>
                         ) : (
                           <select
-                            value={editForm.php_version || ''}
-                            onChange={(e) => setEditForm({ ...editForm, php_version: e.target.value || undefined })}
+                            value={editForm.php_version || ""}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                php_version: e.target.value || undefined,
+                              })
+                            }
                             className="w-full px-2 py-1.5 bg-surface border border-edge rounded-lg text-sm"
                           >
                             <option value="">Select PHP</option>
                             {phpVersions.map((v) => (
-                              <option key={v} value={v}>PHP {v}</option>
+                              <option key={v} value={v}>
+                                PHP {v}
+                              </option>
                             ))}
                           </select>
                         )}
@@ -1423,11 +1827,18 @@ export function SitesManager() {
 
                       {/* Port */}
                       <div>
-                        <label className="block text-xs text-content-muted mb-1">Port</label>
+                        <label className="block text-xs text-content-muted mb-1">
+                          Port
+                        </label>
                         <input
                           type="number"
                           value={editForm.port}
-                          onChange={(e) => setEditForm({ ...editForm, port: parseInt(e.target.value) || 80 })}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              port: parseInt(e.target.value) || 80,
+                            })
+                          }
                           className="w-full px-2 py-1.5 bg-surface border border-edge rounded-lg text-sm"
                         />
                       </div>
@@ -1437,16 +1848,23 @@ export function SitesManager() {
                     <div className="grid grid-cols-2 gap-2">
                       {/* Web Server */}
                       <div>
-                        <label className="block text-xs text-content-muted mb-1">Web Server</label>
+                        <label className="block text-xs text-content-muted mb-1">
+                          Web Server
+                        </label>
                         <div className="flex gap-1">
                           {availableWebServers.map((ws) => (
                             <button
                               key={ws}
-                              onClick={() => setEditForm({ ...editForm, web_server: ws })}
-                              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${editForm.web_server === ws
-                                ? ws === 'nginx' ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
-                                : 'bg-surface-inset text-content-secondary hover:bg-hover'
-                                }`}
+                              onClick={() =>
+                                setEditForm({ ...editForm, web_server: ws })
+                              }
+                              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${
+                                editForm.web_server === ws
+                                  ? ws === "nginx"
+                                    ? "bg-green-600 text-white"
+                                    : "bg-orange-600 text-white"
+                                  : "bg-surface-inset text-content-secondary hover:bg-hover"
+                              }`}
                             >
                               {WEB_SERVER_INFO[ws].icon}
                               {WEB_SERVER_INFO[ws].label}
@@ -1457,16 +1875,32 @@ export function SitesManager() {
 
                       {/* SSL Toggle */}
                       <div className="flex flex-col gap-1 pb-1">
-                        <label className={`flex items-center gap-2 ${sslReady || editForm.ssl_enabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                        <label
+                          className={`flex items-center gap-2 ${sslReady || editForm.ssl_enabled ? "cursor-pointer" : "cursor-not-allowed"}`}
+                        >
                           <input
                             type="checkbox"
                             checked={editForm.ssl_enabled}
                             disabled={!sslReady && !editForm.ssl_enabled}
-                            onChange={(e) => setEditForm({ ...editForm, ssl_enabled: e.target.checked })}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                ssl_enabled: e.target.checked,
+                              })
+                            }
                             className="w-4 h-4 rounded border-edge bg-surface text-emerald-500 disabled:opacity-50"
                           />
-                          <span className={`text-xs flex items-center gap-1 ${sslReady || editForm.ssl_enabled ? 'text-content-secondary' : 'text-content-muted'}`}>
-                            <Shield size={12} className={editForm.ssl_enabled ? 'text-emerald-500' : 'text-amber-500'} />
+                          <span
+                            className={`text-xs flex items-center gap-1 ${sslReady || editForm.ssl_enabled ? "text-content-secondary" : "text-content-muted"}`}
+                          >
+                            <Shield
+                              size={12}
+                              className={
+                                editForm.ssl_enabled
+                                  ? "text-emerald-500"
+                                  : "text-amber-500"
+                              }
+                            />
                             SSL (HTTPS)
                           </span>
                         </label>
@@ -1482,7 +1916,10 @@ export function SitesManager() {
                     {/* Actions */}
                     <div className="flex gap-2 pt-1">
                       <button
-                        onClick={() => { setEditingSite(null); setEditForm(null); }}
+                        onClick={() => {
+                          setEditingSite(null);
+                          setEditForm(null);
+                        }}
                         className="flex-1 px-3 py-1.5 bg-surface-inset hover:bg-hover rounded-lg text-sm transition-colors cursor-pointer"
                       >
                         Cancel
@@ -1492,7 +1929,11 @@ export function SitesManager() {
                         disabled={processing === site.domain}
                         className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm disabled:opacity-50 transition-colors cursor-pointer text-white"
                       >
-                        {processing === site.domain ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Save'}
+                        {processing === site.domain ? (
+                          <Loader2 size={14} className="animate-spin mx-auto" />
+                        ) : (
+                          "Save"
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1501,16 +1942,24 @@ export function SitesManager() {
                     {/* Header */}
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${site.config_valid ? 'bg-emerald-500/10' : 'bg-red-500/10'
-                          }`}>
-                          {site.config_valid
-                            ? <Globe size={16} className="text-emerald-500" />
-                            : <XCircle size={16} className="text-red-500" />
-                          }
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            site.config_valid
+                              ? "bg-emerald-500/10"
+                              : "bg-red-500/10"
+                          }`}
+                        >
+                          {site.config_valid ? (
+                            <Globe size={16} className="text-emerald-500" />
+                          ) : (
+                            <XCircle size={16} className="text-red-500" />
+                          )}
                         </div>
                         <div>
                           <h3 className="font-semibold text-sm flex items-center gap-1">
-                            {site.ssl_enabled && <Shield size={12} className="text-amber-500" />}
+                            {site.ssl_enabled && (
+                              <Shield size={12} className="text-amber-500" />
+                            )}
                             {site.domain}
                           </h3>
                           <span className="text-xs text-content-muted font-mono">
@@ -1535,15 +1984,24 @@ export function SitesManager() {
                           <Code size={14} />
                         </button>
                         <button
-                          onClick={() => handleRegenerateConfig(site.domain, site.web_server)}
+                          onClick={() =>
+                            handleRegenerateConfig(site.domain, site.web_server)
+                          }
                           disabled={processing === site.domain}
                           className="p-1.5 rounded-lg hover:bg-hover text-content-muted transition-colors cursor-pointer disabled:opacity-50"
                           title="Regenerate Config"
                         >
-                          <RefreshCw size={14} className={processing === site.domain ? 'animate-spin' : ''} />
+                          <RefreshCw
+                            size={14}
+                            className={
+                              processing === site.domain ? "animate-spin" : ""
+                            }
+                          />
                         </button>
                         <button
-                          onClick={() => handleDeleteSite(site.domain, site.web_server)}
+                          onClick={() =>
+                            handleDeleteSite(site.domain, site.web_server)
+                          }
                           disabled={processing === site.domain}
                           className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-500 text-content-muted transition-colors cursor-pointer disabled:opacity-50"
                           title="Delete"
@@ -1557,7 +2015,9 @@ export function SitesManager() {
                     <div className="mb-2 flex flex-wrap gap-1">
                       {/* Web Server Badge */}
                       {site.web_server && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${WEB_SERVER_INFO[site.web_server]?.color || 'bg-surface-inset text-content-secondary'}`}>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${WEB_SERVER_INFO[site.web_server]?.color || "bg-surface-inset text-content-secondary"}`}
+                        >
                           {WEB_SERVER_INFO[site.web_server]?.icon}
                           {WEB_SERVER_INFO[site.web_server]?.label}
                         </span>
@@ -1572,7 +2032,10 @@ export function SitesManager() {
                     </div>
 
                     {/* Path */}
-                    <div className="text-xs text-content-secondary mb-3 truncate" title={site.path}>
+                    <div
+                      className="text-xs text-content-secondary mb-3 truncate"
+                      title={site.path}
+                    >
                       {site.path}
                     </div>
 
@@ -1587,7 +2050,11 @@ export function SitesManager() {
                     {/* Open Link */}
                     <div className="flex items-center gap-4 mt-1">
                       <button
-                        onClick={() => shellOpen(`${site.ssl_enabled ? 'https' : 'http'}://${site.domain}${site.port !== 80 && site.port !== 443 ? ':' + site.port : ''}`)}
+                        onClick={() =>
+                          shellOpen(
+                            `${site.ssl_enabled ? "https" : "http"}://${site.domain}`,
+                          )
+                        }
                         className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400 transition-colors cursor-pointer"
                       >
                         <ExternalLink size={12} />
@@ -1597,14 +2064,18 @@ export function SitesManager() {
                       {site.dev_command && (
                         <>
                           <div className="h-3 w-px bg-edge" />
-                          {appStatus[site.domain] === 'running' ? (
+                          {appStatus[site.domain] === "running" ? (
                             <button
                               onClick={() => handleStopApp(site.domain)}
                               disabled={appProcessing === site.domain}
                               className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-50"
                               title={`Stop: ${site.dev_command}`}
                             >
-                              {appProcessing === site.domain ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} />}
+                              {appProcessing === site.domain ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Square size={12} />
+                              )}
                               Stop App
                             </button>
                           ) : (
@@ -1614,7 +2085,11 @@ export function SitesManager() {
                               className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-50"
                               title={`Start: ${site.dev_command}`}
                             >
-                              {appProcessing === site.domain ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                              {appProcessing === site.domain ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Play size={12} />
+                              )}
                               Start App
                             </button>
                           )}
@@ -1635,20 +2110,30 @@ export function SitesManager() {
                           </button>
                           <button
                             onClick={handleStopTunnel}
-                            disabled={tunnelingDomain === 'stopping'}
+                            disabled={tunnelingDomain === "stopping"}
                             className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
                           >
-                            {tunnelingDomain === 'stopping' ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                            {tunnelingDomain === "stopping" ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <XCircle size={12} />
+                            )}
                             Stop
                           </button>
                         </>
                       ) : (
                         <button
                           onClick={() => handleStartTunnel(site)}
-                          disabled={tunnelingDomain !== null || activeTunnel !== null}
+                          disabled={
+                            tunnelingDomain !== null || activeTunnel !== null
+                          }
                           className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-50"
                         >
-                          {tunnelingDomain === site.domain ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
+                          {tunnelingDomain === site.domain ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Globe size={12} />
+                          )}
                           Share URL
                         </button>
                       )}
@@ -1670,7 +2155,8 @@ export function SitesManager() {
               <div className="flex items-center gap-2">
                 <Code size={16} className="text-emerald-500" />
                 <h3 className="text-sm font-medium text-content">
-                  Nginx Config — <span className="text-emerald-400">{configEditorDomain}</span>
+                  Nginx Config —{" "}
+                  <span className="text-emerald-400">{configEditorDomain}</span>
                 </h3>
               </div>
               <div className="flex items-center gap-2">
@@ -1679,7 +2165,11 @@ export function SitesManager() {
                   disabled={configEditorSaving || configEditorLoading}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {configEditorSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {configEditorSaving ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Save size={14} />
+                  )}
                   Save
                 </button>
                 <button
@@ -1694,7 +2184,10 @@ export function SitesManager() {
             <div className="flex-1 overflow-hidden p-1">
               {configEditorLoading ? (
                 <div className="flex items-center justify-center h-64">
-                  <Loader2 size={24} className="animate-spin text-content-muted" />
+                  <Loader2
+                    size={24}
+                    className="animate-spin text-content-muted"
+                  />
                 </div>
               ) : (
                 <textarea
@@ -1707,7 +2200,9 @@ export function SitesManager() {
             </div>
             {/* Footer hint */}
             <div className="px-5 py-2 border-t border-edge text-xs text-content-muted">
-              Changes are validated with <code className="bg-surface px-1 rounded">nginx -t</code> before saving. Invalid config will be rolled back automatically.
+              Changes are validated with{" "}
+              <code className="bg-surface px-1 rounded">nginx -t</code> before
+              saving. Invalid config will be rolled back automatically.
             </div>
           </div>
         </div>
