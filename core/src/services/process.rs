@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
-use sysinfo::{System, ProcessesToUpdate};
+use sysinfo::ProcessesToUpdate;
 
 // Service types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
