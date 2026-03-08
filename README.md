@@ -41,7 +41,7 @@ Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js
 
 ## MCP Integration
 
-Orbit exposes 51 tools via the Model Context Protocol for Claude Code, Cursor, Windsurf and any MCP-compatible client.
+Orbit exposes 65 tools via the Model Context Protocol for Claude Code, Cursor, Antigravity, Windsurf and any MCP-compatible client.
 
 After installing MCP from the Orbit app, add the following to your AI tool's config:
 
