@@ -12,9 +12,7 @@ import {
   RefreshCw,
   Package
 } from 'lucide-react'
-import { open } from '@tauri-apps/plugin-shell'
 import { useApp } from '../lib/AppContext'
-import { InfoTooltip } from './InfoTooltip'
 
 export function ComposerManager() {
   const { addToast } = useApp()
@@ -81,82 +79,52 @@ export function ComposerManager() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <RefreshCw className="w-8 h-8 animate-spin text-emerald-500" />
+      <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 flex items-center justify-center h-[140px]">
+        <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
       </div>
     )
   }
 
   return (
-    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-3 bg-orange-500/10 rounded-xl">
-          <Package className="w-6 h-6 text-orange-500" />
+    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="p-2 bg-orange-500/10 rounded-lg">
+          <Package className="w-4 h-4 text-orange-500" />
         </div>
-        <div>
-          <h2 className="text-lg font-semibold">Composer</h2>
-          <p className="text-content-secondary text-sm">PHP dependency manager</p>
-        </div>
-        <InfoTooltip
-          content={
-            <div className="space-y-2 text-content-secondary">
-              <p>PHP dependency manager for libraries and packages.</p>
-              <div className="space-y-1 font-mono text-xs text-content-muted">
-                <p>composer install</p>
-                <p>composer update</p>
-                <p>composer require vendor/pkg</p>
-              </div>
-              <button
-                onClick={() => open('https://getcomposer.org/doc/')}
-                className="text-emerald-500 hover:text-emerald-400 text-xs transition-colors"
-              >
-                getcomposer.org/doc
-              </button>
-            </div>
-          }
-        />
-        <div className="ml-auto">
-          {status?.installed ? (
-            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs font-medium">
-              Installed
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs font-medium">
-              Not Installed
-            </span>
-          )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Composer</span>
+            {status?.installed ? (
+              <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded text-[10px] font-medium">
+                {status.version || 'Installed'}
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 bg-zinc-500/15 text-zinc-400 rounded text-[10px] font-medium">
+                Not Installed
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-content-muted leading-tight">PHP dependency manager</p>
         </div>
       </div>
 
+      {/* Info */}
       {status?.installed && (
-        <div className="mb-4 p-3 bg-surface-inset rounded-lg text-sm">
-          <div className="flex justify-between mb-1">
-            <span className="text-content-muted">Version:</span>
-            <span className="font-mono">{status.version || 'Unknown'}</span>
-          </div>
-          <div className="flex justify-between mb-1">
-            <span className="text-content-muted">PHP:</span>
-            <span className="font-mono">{status.php_version || 'Unknown'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-content-muted">Path:</span>
-            <span className="font-mono text-xs truncate max-w-[200px]">{status.path}</span>
-          </div>
+        <div className="text-[11px] text-content-muted mb-3 space-y-0.5">
+          {status.php_version && <div>PHP: <span className="text-content-secondary font-mono">{status.php_version}</span></div>}
         </div>
       )}
 
-      <div className="flex gap-2">
+      {/* Actions */}
+      <div className="flex gap-1.5 mt-auto">
         {!status?.installed ? (
           <button
             onClick={handleInstall}
             disabled={actionLoading !== null}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 text-white"
           >
-            {actionLoading === 'install' ? (
-              <RefreshCw size={16} className="animate-spin" />
-            ) : (
-              <Download size={16} />
-            )}
+            {actionLoading === 'install' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
             Install
           </button>
         ) : (
@@ -164,26 +132,18 @@ export function ComposerManager() {
             <button
               onClick={handleUpdate}
               disabled={actionLoading !== null}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
             >
-              {actionLoading === 'update' ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : (
-                <RefreshCw size={16} />
-              )}
+              {actionLoading === 'update' ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
               Update
             </button>
             <button
               onClick={handleUninstall}
               disabled={actionLoading !== null}
-              className="p-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors disabled:opacity-50"
+              className="p-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors disabled:opacity-50"
               title="Uninstall"
             >
-              {actionLoading === 'uninstall' ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : (
-                <Trash2 size={16} />
-              )}
+              {actionLoading === 'uninstall' ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
             </button>
           </>
         )}

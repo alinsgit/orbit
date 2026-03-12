@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { open } from '@tauri-apps/plugin-shell'
 import { useApp } from '../lib/AppContext'
-import { InfoTooltip } from './InfoTooltip'
 
 export function MailManager() {
   const { addToast } = useApp()
@@ -60,7 +59,7 @@ export function MailManager() {
   const handleUninstall = async () => {
     try {
       setActionLoading('uninstall')
-      await stopMailpit().catch(() => { })
+      await stopMailpit().catch(() => {})
       await uninstallMailpit()
       addToast({ type: 'success', message: 'Mailpit uninstalled' })
       await loadStatus()
@@ -103,81 +102,57 @@ export function MailManager() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <RefreshCw className="w-8 h-8 animate-spin text-emerald-500" />
+      <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 flex items-center justify-center h-[140px]">
+        <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
       </div>
     )
   }
 
   return (
-    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-3 bg-pink-500/10 rounded-xl">
-          <Mail className="w-6 h-6 text-pink-500" />
+    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="p-2 bg-pink-500/10 rounded-lg">
+          <Mail className="w-4 h-4 text-pink-500" />
         </div>
-        <div>
-          <h2 className="text-lg font-semibold">Mailpit</h2>
-          <p className="text-content-secondary text-sm">Email testing tool</p>
-        </div>
-        <InfoTooltip
-          content={
-            <div className="space-y-2 text-content-secondary">
-              <p>Local SMTP server for email testing. Catches all outgoing mail.</p>
-              <div className="font-mono text-xs text-content-muted space-y-0.5">
-                <p className="font-sans text-content-secondary text-xs mb-1">Laravel .env:</p>
-                <p>MAIL_MAILER=smtp</p>
-                <p>MAIL_HOST=127.0.0.1</p>
-                <p>MAIL_PORT=1025</p>
-                <p>MAIL_ENCRYPTION=null</p>
-              </div>
-            </div>
-          }
-        />
-        <div className="ml-auto">
-          {status?.installed ? (
-            <span className={`px-2 py-1 rounded text-xs font-medium ${status.running
-              ? 'bg-emerald-500/20 text-emerald-400'
-              : 'bg-yellow-500/20 text-yellow-400'
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Mailpit</span>
+            {status?.installed ? (
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                status.running
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : 'bg-yellow-500/15 text-yellow-400'
               }`}>
-              {status.running ? 'Running' : 'Stopped'}
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs font-medium">
-              Not Installed
-            </span>
-          )}
+                {status.running ? 'Running' : 'Stopped'}
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 bg-zinc-500/15 text-zinc-400 rounded text-[10px] font-medium">
+                Not Installed
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-content-muted leading-tight">Email testing tool</p>
         </div>
       </div>
 
+      {/* Info */}
       {status?.installed && (
-        <div className="mb-4 p-3 bg-surface-inset rounded-lg text-sm">
-          <div className="flex justify-between mb-1">
-            <span className="text-content-muted">SMTP Port:</span>
-            <span className="font-mono">{status.smtp_port}</span>
-          </div>
-          <div className="flex justify-between mb-1">
-            <span className="text-content-muted">Web UI Port:</span>
-            <span className="font-mono">{status.web_port}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-content-muted">Path:</span>
-            <span className="font-mono text-xs truncate max-w-[200px]">{status.path}</span>
-          </div>
+        <div className="text-[11px] text-content-muted mb-3 flex gap-3">
+          <span>SMTP: <span className="text-content-secondary font-mono">{status.smtp_port}</span></span>
+          <span>UI: <span className="text-content-secondary font-mono">{status.web_port}</span></span>
         </div>
       )}
 
-      <div className="flex gap-2">
+      {/* Actions */}
+      <div className="flex gap-1.5 mt-auto">
         {!status?.installed ? (
           <button
             onClick={handleInstall}
             disabled={actionLoading !== null}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 text-white"
           >
-            {actionLoading === 'install' ? (
-              <RefreshCw size={16} className="animate-spin" />
-            ) : (
-              <Download size={16} />
-            )}
+            {actionLoading === 'install' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
             Install
           </button>
         ) : (
@@ -186,21 +161,17 @@ export function MailManager() {
               <>
                 <button
                   onClick={openWebUI}
-                  className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 rounded-lg text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-600/15 hover:bg-pink-600/25 text-pink-400 rounded-lg text-xs font-medium transition-colors"
                 >
-                  <ExternalLink size={16} />
-                  Open Web UI
+                  <ExternalLink size={13} />
+                  Web UI
                 </button>
                 <button
                   onClick={handleStop}
                   disabled={actionLoading !== null}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 text-red-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                 >
-                  {actionLoading === 'stop' ? (
-                    <RefreshCw size={16} className="animate-spin" />
-                  ) : (
-                    <Square size={16} />
-                  )}
+                  {actionLoading === 'stop' ? <RefreshCw size={13} className="animate-spin" /> : <Square size={13} />}
                   Stop
                 </button>
               </>
@@ -208,27 +179,19 @@ export function MailManager() {
               <button
                 onClick={handleStart}
                 disabled={actionLoading !== null}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 text-white"
               >
-                {actionLoading === 'start' ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : (
-                  <Play size={16} />
-                )}
+                {actionLoading === 'start' ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
                 Start
               </button>
             )}
             <button
               onClick={handleUninstall}
               disabled={actionLoading !== null}
-              className="p-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors disabled:opacity-50"
+              className="p-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors disabled:opacity-50"
               title="Uninstall"
             >
-              {actionLoading === 'uninstall' ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : (
-                <Trash2 size={16} />
-              )}
+              {actionLoading === 'uninstall' ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
             </button>
           </>
         )}

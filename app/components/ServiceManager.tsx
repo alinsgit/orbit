@@ -8,7 +8,7 @@ import { ServiceOverview } from './ServiceOverview';
 import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
 import { MeilisearchManager } from './MeilisearchManager';
-import { CliManager } from './CliManager';
+import { CliManager, CliCommandReference } from './CliManager';
 
 import { getServiceIcon } from '../lib/serviceIcons';
 import { ask } from '@tauri-apps/plugin-dialog';
@@ -592,11 +592,14 @@ export function ServiceManager() {
         )}
 
         {subTab === 'tools' && (
-          <div className="space-y-6">
-            <ComposerManager />
-            <MailManager />
-            <MeilisearchManager />
-            <CliManager />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <ComposerManager />
+              <MailManager />
+              <MeilisearchManager />
+              <CliManager />
+            </div>
+            <CliCommandReference />
           </div>
         )}
       </div>
