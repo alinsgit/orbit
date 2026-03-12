@@ -1,5 +1,5 @@
 use crate::services::ai_tools::{AiToolStatus, ClaudeCodeManager, GeminiCliManager};
-use tauri::{command, AppHandle};
+use tauri::{command, AppHandle, Manager};
 
 /// Get Claude Code status
 #[command]
@@ -53,4 +53,11 @@ pub fn uninstall_gemini_cli(app: AppHandle) -> Result<String, String> {
 pub fn update_gemini_cli(app: AppHandle) -> Result<String, String> {
     GeminiCliManager::update(&app)?;
     Ok("Gemini CLI updated successfully".to_string())
+}
+
+/// Generate and write AI context files for a site project
+#[command]
+pub fn generate_ai_context_cmd(app: AppHandle, domain: String) -> Result<String, String> {
+    let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    crate::services::ai_tools::write_context_file(&app, &domain, &data_dir)
 }

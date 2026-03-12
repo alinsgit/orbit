@@ -290,6 +290,8 @@ pub fn run() {
         commands::ai_tools::install_gemini_cli,
         commands::ai_tools::uninstall_gemini_cli,
         commands::ai_tools::update_gemini_cli,
+        // AI Context Generation
+        commands::ai_tools::generate_ai_context_cmd,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {
