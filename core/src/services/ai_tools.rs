@@ -13,47 +13,30 @@ pub struct AiToolStatus {
   pub installed: bool,
   pub path: Option<String>,
   pub version: Option<String>,
-  /// "orbit" if installed in Orbit's nodejs folder, "system" if found in system PATH
+  /// "native" / "orbit" / "system" — where the tool was found
   pub source: Option<String>,
+  /// Latest available version from registry (for update check)
+  pub latest_version: Option<String>,
 }
 
 pub struct ClaudeCodeManager;
 
 impl ClaudeCodeManager {
-  /// Get npm executable path (Orbit's own Node.js)
-  pub fn get_npm_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let base = app
-      .path()
-      .app_local_data_dir()
-      .map_err(|e| e.to_string())?
-      .join("bin")
-      .join("nodejs");
+  /// Native install path: ~/.local/bin/claude(.exe)
+  fn get_native_exe_path() -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
 
     #[cfg(target_os = "windows")]
-    return Ok(base.join("npm.cmd"));
+    let exe = home.join(".local").join("bin").join("claude.exe");
 
     #[cfg(not(target_os = "windows"))]
-    return Ok(base.join("bin").join("npm"));
+    let exe = home.join(".local").join("bin").join("claude");
+
+    Some(exe)
   }
 
-  /// Get claude executable path in Orbit's nodejs folder
-  pub fn get_orbit_exe_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let base = app
-      .path()
-      .app_local_data_dir()
-      .map_err(|e| e.to_string())?
-      .join("bin")
-      .join("nodejs");
-
-    #[cfg(target_os = "windows")]
-    return Ok(base.join("claude.cmd"));
-
-    #[cfg(not(target_os = "windows"))]
-    return Ok(base.join("bin").join("claude"));
-  }
-
-  /// Find claude in system PATH (outside Orbit)
-  fn find_system_exe() -> Option<PathBuf> {
+  /// Find claude in system PATH
+  fn find_in_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     let cmd = "where";
     #[cfg(not(target_os = "windows"))]
@@ -91,101 +74,91 @@ impl ClaudeCodeManager {
     None
   }
 
-  /// Get full Claude Code status — checks Orbit first, then system PATH
-  pub fn get_status(app: &AppHandle) -> Result<AiToolStatus, String> {
-    // 1. Check Orbit's own installation
-    let orbit_exe = Self::get_orbit_exe_path(app)?;
-    if orbit_exe.exists() {
-      let version = Self::get_version_from(&orbit_exe);
-      return Ok(AiToolStatus {
-        installed: true,
-        path: Some(orbit_exe.to_string_lossy().to_string()),
-        version,
-        source: Some("orbit".to_string()),
-      });
+  /// Get Claude Code status — checks native path, then system PATH
+  pub fn get_status(_app: &AppHandle) -> Result<AiToolStatus, String> {
+    // 1. Check native install path (~/.local/bin/claude)
+    if let Some(native_exe) = Self::get_native_exe_path() {
+      if native_exe.exists() {
+        let version = Self::get_version_from(&native_exe);
+        return Ok(AiToolStatus {
+          installed: true,
+          path: Some(native_exe.to_string_lossy().to_string()),
+          version,
+          source: Some("native".to_string()),
+          latest_version: None,
+        });
+      }
     }
 
     // 2. Check system PATH
-    if let Some(system_exe) = Self::find_system_exe() {
+    if let Some(system_exe) = Self::find_in_path() {
       let version = Self::get_version_from(&system_exe);
       return Ok(AiToolStatus {
         installed: true,
         path: Some(system_exe.to_string_lossy().to_string()),
         version,
         source: Some("system".to_string()),
+        latest_version: None,
       });
     }
 
-    // 3. Not found anywhere
+    // 3. Not found
     Ok(AiToolStatus::default())
   }
 
-  /// Install Claude Code via npm
+  /// Install Claude Code via native installer
   pub fn install(app: &AppHandle) -> Result<(), String> {
-    let npm = Self::get_npm_path(app)?;
+    #[cfg(target_os = "windows")]
+    {
+      let output = hidden_command("powershell")
+        .args([
+          "-NoProfile",
+          "-ExecutionPolicy", "Bypass",
+          "-Command",
+          "irm https://claude.ai/install.ps1 | iex",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run installer: {e}"))?;
 
-    if !npm.exists() {
-      return Err("Node.js is not installed. Please install Node.js first.".to_string());
+      if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("Install failed: {stdout}\n{stderr}"));
+      }
     }
 
-    let output = hidden_command(&npm)
-      .args(["install", "-g", "@anthropic-ai/claude-code"])
-      .output()
-      .map_err(|e| format!("Failed to run npm install: {e}"))?;
+    #[cfg(not(target_os = "windows"))]
+    {
+      let output = hidden_command("bash")
+        .args(["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
+        .output()
+        .map_err(|e| format!("Failed to run installer: {e}"))?;
 
-    if output.status.success() {
-      // Best effort: auto-configure orbit-mcp in Claude Code's MCP config
-      setup_mcp_for_claude(app).ok();
-      Ok(())
-    } else {
-      let stderr = String::from_utf8_lossy(&output.stderr);
-      let stdout = String::from_utf8_lossy(&output.stdout);
-      Err(format!("{stdout}\n{stderr}"))
+      if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("Install failed: {stdout}\n{stderr}"));
+      }
     }
+
+    // Auto-configure orbit-mcp
+    setup_mcp_for_claude(app).ok();
+    Ok(())
   }
 
-  /// Uninstall Claude Code via npm
-  pub fn uninstall(app: &AppHandle) -> Result<(), String> {
-    let npm = Self::get_npm_path(app)?;
-
-    if !npm.exists() {
-      return Err("Node.js is not installed.".to_string());
+  /// Uninstall Claude Code — remove native binary
+  pub fn uninstall(_app: &AppHandle) -> Result<(), String> {
+    if let Some(exe) = Self::get_native_exe_path() {
+      if exe.exists() {
+        std::fs::remove_file(&exe)
+          .map_err(|e| format!("Failed to remove {}: {e}", exe.display()))?;
+      }
     }
-
-    let output = hidden_command(&npm)
-      .args(["uninstall", "-g", "@anthropic-ai/claude-code"])
-      .output()
-      .map_err(|e| format!("Failed to run npm uninstall: {e}"))?;
-
-    if output.status.success() {
-      Ok(())
-    } else {
-      let stderr = String::from_utf8_lossy(&output.stderr);
-      let stdout = String::from_utf8_lossy(&output.stdout);
-      Err(format!("{stdout}\n{stderr}"))
+    // Also try to find and remove via PATH
+    if let Some(path_exe) = Self::find_in_path() {
+      std::fs::remove_file(&path_exe).ok();
     }
-  }
-
-  /// Update Claude Code via npm
-  pub fn update(app: &AppHandle) -> Result<(), String> {
-    let npm = Self::get_npm_path(app)?;
-
-    if !npm.exists() {
-      return Err("Node.js is not installed.".to_string());
-    }
-
-    let output = hidden_command(&npm)
-      .args(["update", "-g", "@anthropic-ai/claude-code"])
-      .output()
-      .map_err(|e| format!("Failed to run npm update: {e}"))?;
-
-    if output.status.success() {
-      Ok(())
-    } else {
-      let stderr = String::from_utf8_lossy(&output.stderr);
-      let stdout = String::from_utf8_lossy(&output.stdout);
-      Err(format!("{stdout}\n{stderr}"))
-    }
+    Ok(())
   }
 }
 
@@ -614,6 +587,7 @@ impl GeminiCliManager {
         path: Some(orbit_exe.to_string_lossy().to_string()),
         version,
         source: Some("orbit".to_string()),
+        latest_version: None,
       });
     }
 
@@ -625,11 +599,35 @@ impl GeminiCliManager {
         path: Some(system_exe.to_string_lossy().to_string()),
         version,
         source: Some("system".to_string()),
+        latest_version: None,
       });
     }
 
     // 3. Not found anywhere
     Ok(AiToolStatus::default())
+  }
+
+  /// Check latest available version from npm registry
+  pub fn check_latest_version(app: &AppHandle) -> Result<Option<String>, String> {
+    let npm = Self::get_npm_path(app)?;
+    if !npm.exists() {
+      return Ok(None);
+    }
+
+    let output = hidden_command(&npm)
+      .args(["view", "@google/gemini-cli", "version"])
+      .output()
+      .ok();
+
+    if let Some(output) = output {
+      if output.status.success() {
+        let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !version.is_empty() {
+          return Ok(Some(version));
+        }
+      }
+    }
+    Ok(None)
   }
 
   /// Install Gemini CLI via npm

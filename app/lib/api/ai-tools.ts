@@ -4,8 +4,10 @@ export interface AiToolStatus {
   installed: boolean;
   path: string | null;
   version: string | null;
-  /** "orbit" if installed in Orbit's nodejs folder, "system" if found in system PATH */
-  source: 'orbit' | 'system' | null;
+  /** "native" / "orbit" / "system" — where the tool was found */
+  source: 'native' | 'orbit' | 'system' | null;
+  /** Latest available version from registry (for update check) */
+  latest_version: string | null;
 }
 
 // Claude Code
@@ -32,15 +34,6 @@ export const uninstallClaudeCode = async (): Promise<string> => {
     return await invoke('uninstall_claude_code');
   } catch (error) {
     console.error('Failed to uninstall Claude Code:', error);
-    throw error;
-  }
-};
-
-export const updateClaudeCode = async (): Promise<string> => {
-  try {
-    return await invoke('update_claude_code');
-  } catch (error) {
-    console.error('Failed to update Claude Code:', error);
     throw error;
   }
 };
@@ -78,6 +71,15 @@ export const updateGeminiCli = async (): Promise<string> => {
     return await invoke('update_gemini_cli');
   } catch (error) {
     console.error('Failed to update Gemini CLI:', error);
+    throw error;
+  }
+};
+
+export const checkGeminiUpdate = async (): Promise<string | null> => {
+  try {
+    return await invoke('check_gemini_update');
+  } catch (error) {
+    console.error('Failed to check Gemini CLI update:', error);
     throw error;
   }
 };

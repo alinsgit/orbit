@@ -285,11 +285,11 @@ pub fn run() {
         commands::ai_tools::get_claude_code_status,
         commands::ai_tools::install_claude_code,
         commands::ai_tools::uninstall_claude_code,
-        commands::ai_tools::update_claude_code,
         commands::ai_tools::get_gemini_cli_status,
         commands::ai_tools::install_gemini_cli,
         commands::ai_tools::uninstall_gemini_cli,
         commands::ai_tools::update_gemini_cli,
+        commands::ai_tools::check_gemini_update,
         // AI Context Generation
         commands::ai_tools::generate_ai_context_cmd,
         // MCP Auto-Configuration

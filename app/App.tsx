@@ -8,6 +8,7 @@ import { LogViewer } from './components/LogViewer'
 import DatabaseViewer from './components/DatabaseViewer'
 import { Terminal } from './components/Terminal'
 import { AiToolView } from './components/AiToolView'
+import { AiPanel } from './components/AiPanel'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const appWindow = getCurrentWindow()
@@ -28,7 +29,7 @@ function App() {
     geminiCliInstalled,
   } = useApp()
 
-  const isAiViewActive = activeTab === 'claude-code' || activeTab === 'gemini-cli'
+  const isAiTerminalActive = activeTab === 'claude-code' || activeTab === 'gemini-cli'
 
   // Drag resize state
   const [terminalHeight, setTerminalHeight] = useState(() => {
@@ -154,11 +155,17 @@ function App() {
             icon={<ScrollText size={24} />}
             title="Logs"
           />
+          <NavButton
+            active={activeTab === 'ai' || activeTab === 'claude-code' || activeTab === 'gemini-cli'}
+            onClick={() => setActiveTab('ai')}
+            icon={<Bot size={24} />}
+            title="AI Tools"
+          />
           {claudeCodeInstalled && (
             <NavButton
               active={activeTab === 'claude-code'}
               onClick={() => setActiveTab('claude-code')}
-              icon={<Bot size={24} />}
+              icon={<span className="text-[11px] font-bold leading-none">CC</span>}
               title="Claude Code"
             />
           )}
@@ -166,7 +173,7 @@ function App() {
             <NavButton
               active={activeTab === 'gemini-cli'}
               onClick={() => setActiveTab('gemini-cli')}
-              icon={<Sparkles size={24} />}
+              icon={<Sparkles size={20} />}
               title="Gemini CLI"
             />
           )}
@@ -192,13 +199,14 @@ function App() {
             {activeTab === 'sites' && <SitesManager />}
             {activeTab === 'logs' && <LogViewer />}
             {activeTab === 'database' && <DatabaseViewer />}
+            {activeTab === 'ai' && <AiPanel />}
             {activeTab === 'settings' && <SettingsManager />}
             {activeTab === 'claude-code' && <AiToolView tool="claude-code" />}
             {activeTab === 'gemini-cli' && <AiToolView tool="gemini-cli" />}
           </div>
 
           {/* Docked Terminal with Drag Handle (hidden when AI view is active) */}
-          {isTerminalOpen && !isAiViewActive && (
+          {isTerminalOpen && !isAiTerminalActive && (
             <>
               <div
                 className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors"

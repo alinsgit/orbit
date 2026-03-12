@@ -8,6 +8,7 @@ import {
   InstalledService,
   getClaudeCodeStatus,
   getGeminiCliStatus,
+  AiToolStatus,
 } from './api';
 import { settingsStore, Settings } from './store';
 
@@ -61,7 +62,9 @@ interface AppContextType {
   openTerminalForSite: (domain: string, path: string, command?: string) => void;
   clearPendingTerminalSite: () => void;
 
-  // AI Tools
+  // AI Tools — cached status
+  claudeCodeStatus: AiToolStatus | null;
+  geminiCliStatus: AiToolStatus | null;
   claudeCodeInstalled: boolean;
   geminiCliInstalled: boolean;
   refreshAiToolStatus: () => Promise<void>;
@@ -81,8 +84,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTab] = useState('services');
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [pendingTerminalSite, setPendingTerminalSite] = useState<{ domain: string; path: string; command?: string } | null>(null);
-  const [claudeCodeInstalled, setClaudeCodeInstalled] = useState(false);
-  const [geminiCliInstalled, setGeminiCliInstalled] = useState(false);
+  const [claudeCodeStatus, setClaudeCodeStatus] = useState<AiToolStatus | null>(null);
+  const [geminiCliStatus, setGeminiCliStatus] = useState<AiToolStatus | null>(null);
 
   // Generate unique ID for toasts
   const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -234,10 +237,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPendingTerminalSite(null);
   }, []);
 
-  // AI tool status
+  // AI tool status — cached, only refreshed on mount or explicit action
   const refreshAiToolStatus = useCallback(async () => {
-    getClaudeCodeStatus().then(s => setClaudeCodeInstalled(s.installed)).catch(() => {});
-    getGeminiCliStatus().then(s => setGeminiCliInstalled(s.installed)).catch(() => {});
+    getClaudeCodeStatus().then(s => setClaudeCodeStatus(s)).catch(() => {});
+    getGeminiCliStatus().then(s => setGeminiCliStatus(s)).catch(() => {});
   }, []);
 
   // Initial load
@@ -311,8 +314,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pendingTerminalSite,
       openTerminalForSite,
       clearPendingTerminalSite,
-      claudeCodeInstalled,
-      geminiCliInstalled,
+      claudeCodeStatus,
+      geminiCliStatus,
+      claudeCodeInstalled: claudeCodeStatus?.installed ?? false,
+      geminiCliInstalled: geminiCliStatus?.installed ?? false,
       refreshAiToolStatus,
     }}>
       {children}
