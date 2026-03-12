@@ -31,6 +31,8 @@ pub mod cli;
 pub mod meilisearch;
 pub mod blueprints;
 pub mod ai_tools;
+pub mod deploy_store;
+pub mod deploy;
 
 use std::process::Command;
 
