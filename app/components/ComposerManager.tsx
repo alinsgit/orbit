@@ -86,9 +86,8 @@ export function ComposerManager() {
   }
 
   return (
-    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2.5 mb-3">
+    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4">
+      <div className="flex items-center gap-2.5">
         <div className="p-2 bg-orange-500/10 rounded-lg">
           <Package className="w-4 h-4 text-orange-500" />
         </div>
@@ -105,48 +104,26 @@ export function ComposerManager() {
               </span>
             )}
           </div>
-          <p className="text-[11px] text-content-muted leading-tight">PHP dependency manager</p>
+          <p className="text-[11px] text-content-muted leading-tight">
+            PHP dependency manager{status?.installed && status.php_version ? ` · PHP ${status.php_version}` : ''}
+          </p>
         </div>
-      </div>
-
-      {/* Info */}
-      {status?.installed && (
-        <div className="text-[11px] text-content-muted mb-3 space-y-0.5">
-          {status.php_version && <div>PHP: <span className="text-content-secondary font-mono">{status.php_version}</span></div>}
+        <div className="flex items-center gap-1 shrink-0">
+          {!status?.installed ? (
+            <button onClick={handleInstall} disabled={actionLoading !== null} className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50" title="Install">
+              {actionLoading === 'install' ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+            </button>
+          ) : (
+            <>
+              <button onClick={handleUpdate} disabled={actionLoading !== null} className="p-1.5 text-blue-400 hover:bg-blue-500/15 rounded-lg transition-colors disabled:opacity-50" title="Update">
+                {actionLoading === 'update' ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              </button>
+              <button onClick={handleUninstall} disabled={actionLoading !== null} className="p-1.5 text-red-400 hover:bg-red-500/15 rounded-lg transition-colors disabled:opacity-50" title="Uninstall">
+                {actionLoading === 'uninstall' ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              </button>
+            </>
+          )}
         </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-1.5 mt-auto">
-        {!status?.installed ? (
-          <button
-            onClick={handleInstall}
-            disabled={actionLoading !== null}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 text-white"
-          >
-            {actionLoading === 'install' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
-            Install
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={handleUpdate}
-              disabled={actionLoading !== null}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-            >
-              {actionLoading === 'update' ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              Update
-            </button>
-            <button
-              onClick={handleUninstall}
-              disabled={actionLoading !== null}
-              className="p-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors disabled:opacity-50"
-              title="Uninstall"
-            >
-              {actionLoading === 'uninstall' ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-            </button>
-          </>
-        )}
       </div>
     </div>
   )

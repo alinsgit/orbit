@@ -109,9 +109,8 @@ export function MailManager() {
   }
 
   return (
-    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2.5 mb-3">
+    <div className="bg-surface-raised border border-edge-subtle rounded-xl p-4">
+      <div className="flex items-center gap-2.5">
         <div className="p-2 bg-pink-500/10 rounded-lg">
           <Mail className="w-4 h-4 text-pink-500" />
         </div>
@@ -120,9 +119,7 @@ export function MailManager() {
             <span className="text-sm font-semibold">Mailpit</span>
             {status?.installed ? (
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                status.running
-                  ? 'bg-emerald-500/15 text-emerald-400'
-                  : 'bg-yellow-500/15 text-yellow-400'
+                status.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-yellow-500/15 text-yellow-400'
               }`}>
                 {status.running ? 'Running' : 'Stopped'}
               </span>
@@ -132,69 +129,37 @@ export function MailManager() {
               </span>
             )}
           </div>
-          <p className="text-[11px] text-content-muted leading-tight">Email testing tool</p>
+          <p className="text-[11px] text-content-muted leading-tight">
+            Email testing{status?.installed ? ` · SMTP :${status.smtp_port} · UI :${status.web_port}` : ''}
+          </p>
         </div>
-      </div>
-
-      {/* Info */}
-      {status?.installed && (
-        <div className="text-[11px] text-content-muted mb-3 flex gap-3">
-          <span>SMTP: <span className="text-content-secondary font-mono">{status.smtp_port}</span></span>
-          <span>UI: <span className="text-content-secondary font-mono">{status.web_port}</span></span>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-1.5 mt-auto">
-        {!status?.installed ? (
-          <button
-            onClick={handleInstall}
-            disabled={actionLoading !== null}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 text-white"
-          >
-            {actionLoading === 'install' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
-            Install
-          </button>
-        ) : (
-          <>
-            {status.running ? (
-              <>
-                <button
-                  onClick={openWebUI}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-600/15 hover:bg-pink-600/25 text-pink-400 rounded-lg text-xs font-medium transition-colors"
-                >
-                  <ExternalLink size={13} />
-                  Web UI
-                </button>
-                <button
-                  onClick={handleStop}
-                  disabled={actionLoading !== null}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 text-red-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === 'stop' ? <RefreshCw size={13} className="animate-spin" /> : <Square size={13} />}
-                  Stop
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleStart}
-                disabled={actionLoading !== null}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 text-white"
-              >
-                {actionLoading === 'start' ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
-                Start
-              </button>
-            )}
-            <button
-              onClick={handleUninstall}
-              disabled={actionLoading !== null}
-              className="p-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg transition-colors disabled:opacity-50"
-              title="Uninstall"
-            >
-              {actionLoading === 'uninstall' ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+        <div className="flex items-center gap-1 shrink-0">
+          {!status?.installed ? (
+            <button onClick={handleInstall} disabled={actionLoading !== null} className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50" title="Install">
+              {actionLoading === 'install' ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
             </button>
-          </>
-        )}
+          ) : (
+            <>
+              {status.running ? (
+                <>
+                  <button onClick={openWebUI} className="p-1.5 text-pink-400 hover:bg-pink-500/15 rounded-lg transition-colors" title="Open Web UI">
+                    <ExternalLink size={14} />
+                  </button>
+                  <button onClick={handleStop} disabled={actionLoading !== null} className="p-1.5 text-amber-400 hover:bg-amber-500/15 rounded-lg transition-colors disabled:opacity-50" title="Stop">
+                    {actionLoading === 'stop' ? <RefreshCw size={14} className="animate-spin" /> : <Square size={14} />}
+                  </button>
+                </>
+              ) : (
+                <button onClick={handleStart} disabled={actionLoading !== null} className="p-1.5 text-emerald-400 hover:bg-emerald-500/15 rounded-lg transition-colors disabled:opacity-50" title="Start">
+                  {actionLoading === 'start' ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+                </button>
+              )}
+              <button onClick={handleUninstall} disabled={actionLoading !== null} className="p-1.5 text-red-400 hover:bg-red-500/15 rounded-lg transition-colors disabled:opacity-50" title="Uninstall">
+                {actionLoading === 'uninstall' ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
