@@ -4,6 +4,8 @@ export interface AiToolStatus {
   installed: boolean;
   path: string | null;
   version: string | null;
+  /** "orbit" if installed in Orbit's nodejs folder, "system" if found in system PATH */
+  source: 'orbit' | 'system' | null;
 }
 
 // Claude Code

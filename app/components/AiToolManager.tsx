@@ -74,9 +74,15 @@ function AiToolCard({
         <InfoTooltip content={tooltip} />
         <div className="ml-auto">
           {status?.installed ? (
-            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs font-medium">
-              Installed
-            </span>
+            status.source === 'system' ? (
+              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs font-medium">
+                System
+              </span>
+            ) : (
+              <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs font-medium">
+                Installed
+              </span>
+            )
           ) : (
             <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs font-medium">
               Not Installed
@@ -97,6 +103,12 @@ function AiToolCard({
           <div className="flex justify-between mb-1">
             <span className="text-content-muted">Version:</span>
             <span className="font-mono">{status.version || 'Unknown'}</span>
+          </div>
+          <div className="flex justify-between mb-1">
+            <span className="text-content-muted">Source:</span>
+            <span className={`font-mono text-xs ${status.source === 'system' ? 'text-blue-400' : 'text-emerald-400'}`}>
+              {status.source === 'system' ? 'System PATH' : 'Orbit'}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-content-muted">Path:</span>
@@ -119,6 +131,30 @@ function AiToolCard({
             )}
             Install
           </button>
+        ) : status?.source === 'system' ? (
+          <>
+            <button
+              onClick={onLaunch}
+              disabled={actionLoading !== null}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
+            >
+              <ExternalLink size={16} />
+              Launch
+            </button>
+            <button
+              onClick={onInstall}
+              disabled={actionLoading !== null || !nodeInstalled}
+              className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-hover border border-edge rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-content-secondary"
+              title="Install into Orbit for managed updates"
+            >
+              {actionLoading === 'install' ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : (
+                <Download size={16} />
+              )}
+              Install in Orbit
+            </button>
+          </>
         ) : (
           <>
             <button

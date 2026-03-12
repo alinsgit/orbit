@@ -13,12 +13,14 @@ pub struct AiToolStatus {
   pub installed: bool,
   pub path: Option<String>,
   pub version: Option<String>,
+  /// "orbit" if installed in Orbit's nodejs folder, "system" if found in system PATH
+  pub source: Option<String>,
 }
 
 pub struct ClaudeCodeManager;
 
 impl ClaudeCodeManager {
-  /// Get npm executable path
+  /// Get npm executable path (Orbit's own Node.js)
   pub fn get_npm_path(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
       .path()
@@ -34,8 +36,8 @@ impl ClaudeCodeManager {
     return Ok(base.join("bin").join("npm"));
   }
 
-  /// Get claude executable path
-  pub fn get_exe_path(app: &AppHandle) -> Result<PathBuf, String> {
+  /// Get claude executable path in Orbit's nodejs folder
+  pub fn get_orbit_exe_path(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
       .path()
       .app_local_data_dir()
@@ -50,55 +52,72 @@ impl ClaudeCodeManager {
     return Ok(base.join("bin").join("claude"));
   }
 
-  /// Check if Claude Code is installed
-  pub fn is_installed(app: &AppHandle) -> Result<bool, String> {
-    Ok(Self::get_exe_path(app)?.exists())
-  }
+  /// Find claude in system PATH (outside Orbit)
+  fn find_system_exe() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    let cmd = "where";
+    #[cfg(not(target_os = "windows"))]
+    let cmd = "which";
 
-  /// Get Claude Code version
-  pub fn get_version(app: &AppHandle) -> Result<Option<String>, String> {
-    if !Self::is_installed(app)? {
-      return Ok(None);
-    }
-
-    let exe = Self::get_exe_path(app)?;
-    let output = hidden_command(&exe)
-      .args(["--version"])
+    let output = hidden_command(cmd)
+      .args(["claude"])
       .output()
-      .ok();
+      .ok()?;
 
-    if let Some(output) = output {
-      if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let version = stdout.trim().to_string();
-        if !version.is_empty() {
-          return Ok(Some(version));
-        }
+    if output.status.success() {
+      let stdout = String::from_utf8_lossy(&output.stdout);
+      let first_line = stdout.lines().next()?.trim().to_string();
+      if !first_line.is_empty() {
+        return Some(PathBuf::from(first_line));
       }
     }
-
-    Ok(None)
+    None
   }
 
-  /// Get full Claude Code status
-  pub fn get_status(app: &AppHandle) -> Result<AiToolStatus, String> {
-    let installed = Self::is_installed(app)?;
-    let path = if installed {
-      Some(Self::get_exe_path(app)?.to_string_lossy().to_string())
-    } else {
-      None
-    };
-    let version = if installed {
-      Self::get_version(app)?
-    } else {
-      None
-    };
+  /// Get version from a specific exe path
+  fn get_version_from(exe: &Path) -> Option<String> {
+    let output = hidden_command(exe)
+      .args(["--version"])
+      .output()
+      .ok()?;
 
-    Ok(AiToolStatus {
-      installed,
-      path,
-      version,
-    })
+    if output.status.success() {
+      let stdout = String::from_utf8_lossy(&output.stdout);
+      let version = stdout.trim().to_string();
+      if !version.is_empty() {
+        return Some(version);
+      }
+    }
+    None
+  }
+
+  /// Get full Claude Code status — checks Orbit first, then system PATH
+  pub fn get_status(app: &AppHandle) -> Result<AiToolStatus, String> {
+    // 1. Check Orbit's own installation
+    let orbit_exe = Self::get_orbit_exe_path(app)?;
+    if orbit_exe.exists() {
+      let version = Self::get_version_from(&orbit_exe);
+      return Ok(AiToolStatus {
+        installed: true,
+        path: Some(orbit_exe.to_string_lossy().to_string()),
+        version,
+        source: Some("orbit".to_string()),
+      });
+    }
+
+    // 2. Check system PATH
+    if let Some(system_exe) = Self::find_system_exe() {
+      let version = Self::get_version_from(&system_exe);
+      return Ok(AiToolStatus {
+        installed: true,
+        path: Some(system_exe.to_string_lossy().to_string()),
+        version,
+        source: Some("system".to_string()),
+      });
+    }
+
+    // 3. Not found anywhere
+    Ok(AiToolStatus::default())
   }
 
   /// Install Claude Code via npm
@@ -513,7 +532,7 @@ pub fn setup_mcp_for_claude(app: &AppHandle) -> Result<(), String> {
 pub struct GeminiCliManager;
 
 impl GeminiCliManager {
-  /// Get npm executable path
+  /// Get npm executable path (Orbit's own Node.js)
   pub fn get_npm_path(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
       .path()
@@ -529,8 +548,8 @@ impl GeminiCliManager {
     return Ok(base.join("bin").join("npm"));
   }
 
-  /// Get gemini executable path
-  pub fn get_exe_path(app: &AppHandle) -> Result<PathBuf, String> {
+  /// Get gemini executable path in Orbit's nodejs folder
+  pub fn get_orbit_exe_path(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
       .path()
       .app_local_data_dir()
@@ -545,55 +564,72 @@ impl GeminiCliManager {
     return Ok(base.join("bin").join("gemini"));
   }
 
-  /// Check if Gemini CLI is installed
-  pub fn is_installed(app: &AppHandle) -> Result<bool, String> {
-    Ok(Self::get_exe_path(app)?.exists())
-  }
+  /// Find gemini in system PATH (outside Orbit)
+  fn find_system_exe() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    let cmd = "where";
+    #[cfg(not(target_os = "windows"))]
+    let cmd = "which";
 
-  /// Get Gemini CLI version
-  pub fn get_version(app: &AppHandle) -> Result<Option<String>, String> {
-    if !Self::is_installed(app)? {
-      return Ok(None);
-    }
-
-    let exe = Self::get_exe_path(app)?;
-    let output = hidden_command(&exe)
-      .args(["--version"])
+    let output = hidden_command(cmd)
+      .args(["gemini"])
       .output()
-      .ok();
+      .ok()?;
 
-    if let Some(output) = output {
-      if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let version = stdout.trim().to_string();
-        if !version.is_empty() {
-          return Ok(Some(version));
-        }
+    if output.status.success() {
+      let stdout = String::from_utf8_lossy(&output.stdout);
+      let first_line = stdout.lines().next()?.trim().to_string();
+      if !first_line.is_empty() {
+        return Some(PathBuf::from(first_line));
       }
     }
-
-    Ok(None)
+    None
   }
 
-  /// Get full Gemini CLI status
-  pub fn get_status(app: &AppHandle) -> Result<AiToolStatus, String> {
-    let installed = Self::is_installed(app)?;
-    let path = if installed {
-      Some(Self::get_exe_path(app)?.to_string_lossy().to_string())
-    } else {
-      None
-    };
-    let version = if installed {
-      Self::get_version(app)?
-    } else {
-      None
-    };
+  /// Get version from a specific exe path
+  fn get_version_from(exe: &Path) -> Option<String> {
+    let output = hidden_command(exe)
+      .args(["--version"])
+      .output()
+      .ok()?;
 
-    Ok(AiToolStatus {
-      installed,
-      path,
-      version,
-    })
+    if output.status.success() {
+      let stdout = String::from_utf8_lossy(&output.stdout);
+      let version = stdout.trim().to_string();
+      if !version.is_empty() {
+        return Some(version);
+      }
+    }
+    None
+  }
+
+  /// Get full Gemini CLI status — checks Orbit first, then system PATH
+  pub fn get_status(app: &AppHandle) -> Result<AiToolStatus, String> {
+    // 1. Check Orbit's own installation
+    let orbit_exe = Self::get_orbit_exe_path(app)?;
+    if orbit_exe.exists() {
+      let version = Self::get_version_from(&orbit_exe);
+      return Ok(AiToolStatus {
+        installed: true,
+        path: Some(orbit_exe.to_string_lossy().to_string()),
+        version,
+        source: Some("orbit".to_string()),
+      });
+    }
+
+    // 2. Check system PATH
+    if let Some(system_exe) = Self::find_system_exe() {
+      let version = Self::get_version_from(&system_exe);
+      return Ok(AiToolStatus {
+        installed: true,
+        path: Some(system_exe.to_string_lossy().to_string()),
+        version,
+        source: Some("system".to_string()),
+      });
+    }
+
+    // 3. Not found anywhere
+    Ok(AiToolStatus::default())
   }
 
   /// Install Gemini CLI via npm
