@@ -27,6 +27,7 @@ import {
   Save,
   Rocket,
   Check,
+  ChevronDown,
 } from "lucide-react";
 import {
   getSites,
@@ -65,6 +66,7 @@ import {
   Blueprint,
 } from "../lib/api";
 import { useApp } from "../lib/AppContext";
+import { DeployPanel } from "./DeployPanel";
 import { open } from "@tauri-apps/plugin-dialog";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { load } from "@tauri-apps/plugin-store";
@@ -221,6 +223,7 @@ export function SitesManager() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [editingSite, setEditingSite] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Site | null>(null);
+  const [deployExpandedSite, setDeployExpandedSite] = useState<string | null>(null);
 
   // SSL status for mkcert/CA check
   const [sslReady, setSslReady] = useState(false);
@@ -2136,6 +2139,36 @@ export function SitesManager() {
                           )}
                           Share URL
                         </button>
+                      )}
+                    </div>
+
+                    {/* Deploy Section */}
+                    <div className="mt-3 border-t border-edge/30 pt-2">
+                      <button
+                        onClick={() =>
+                          setDeployExpandedSite(
+                            deployExpandedSite === site.domain
+                              ? null
+                              : site.domain,
+                          )
+                        }
+                        className="flex items-center gap-1.5 text-xs text-content-muted hover:text-content-secondary transition-colors cursor-pointer w-full"
+                      >
+                        <Rocket size={12} />
+                        <span>Deploy</span>
+                        {deployExpandedSite === site.domain ? (
+                          <X size={10} className="ml-auto" />
+                        ) : (
+                          <ChevronDown size={10} className="ml-auto" />
+                        )}
+                      </button>
+                      {deployExpandedSite === site.domain && (
+                        <div className="mt-2">
+                          <DeployPanel
+                            domain={site.domain}
+                            sitePath={site.path}
+                          />
+                        </div>
                       )}
                     </div>
                   </>
