@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useTheme } from "../lib/ThemeContext";
+import { XTERM_THEME_DARK, XTERM_THEME_LIGHT, XTERM_OPTIONS } from "../lib/xterm-config";
 
 interface TerminalProps {
   className?: string;
@@ -44,51 +45,7 @@ interface TermTab {
 
 const MAX_TABS = 5;
 
-const XTERM_THEME_DARK = {
-  background: "#0a0a0a",
-  foreground: "#f5f5f5",
-  cursor: "#10b981",
-  selectionBackground: "rgba(16, 185, 129, 0.3)",
-  black: "#000000",
-  red: "#ef4444",
-  green: "#10b981",
-  yellow: "#f59e0b",
-  blue: "#3b82f6",
-  magenta: "#d946ef",
-  cyan: "#06b6d4",
-  white: "#ffffff",
-  brightBlack: "#404040",
-  brightRed: "#f87171",
-  brightGreen: "#34d399",
-  brightYellow: "#fbbf24",
-  brightBlue: "#60a5fa",
-  brightMagenta: "#e879f9",
-  brightCyan: "#22d3ee",
-  brightWhite: "#ffffff",
-};
-
-const XTERM_THEME_LIGHT = {
-  background: "#ffffff",
-  foreground: "#171717",
-  cursor: "#10b981",
-  selectionBackground: "rgba(16, 185, 129, 0.3)",
-  black: "#171717",
-  red: "#dc2626",
-  green: "#059669",
-  yellow: "#d97706",
-  blue: "#2563eb",
-  magenta: "#c026d3",
-  cyan: "#0891b2",
-  white: "#ffffff",
-  brightBlack: "#525252",
-  brightRed: "#ef4444",
-  brightGreen: "#10b981",
-  brightYellow: "#f59e0b",
-  brightBlue: "#3b82f6",
-  brightMagenta: "#d946ef",
-  brightCyan: "#06b6d4",
-  brightWhite: "#a3a3a3",
-};
+// Theme and font config imported from shared xterm-config.ts
 
 // Manageable service types
 const MANAGEABLE_TYPES = ["nginx", "php", "mariadb", "apache"];
@@ -237,15 +194,11 @@ export function Terminal({ className, onClose }: TerminalProps) {
       if (!container || xtermsRef.current.has(tabId)) return;
 
       const term = new XTerm({
-        fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
-        fontSize: 14,
+        ...XTERM_OPTIONS,
         theme:
           currentThemeRef.current === "light"
             ? XTERM_THEME_LIGHT
             : XTERM_THEME_DARK,
-        cursorBlink: true,
-        cursorStyle: "block",
-        allowProposedApi: true,
       });
 
       const fitAddon = new FitAddon();

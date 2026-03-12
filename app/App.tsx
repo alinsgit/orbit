@@ -212,7 +212,7 @@ function App() {
                 className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors"
                 onMouseDown={handleDragStart}
               />
-              <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0a0a0a] relative z-40 flex flex-col">
+              <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0d1117] relative z-40 flex flex-col">
                 <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
               </div>
             </>

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "xterm/css/xterm.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
 
 /* Class-based dark mode override for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));
