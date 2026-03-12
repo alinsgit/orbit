@@ -292,6 +292,8 @@ pub fn run() {
         commands::ai_tools::update_gemini_cli,
         // AI Context Generation
         commands::ai_tools::generate_ai_context_cmd,
+        // MCP Auto-Configuration
+        commands::ai_tools::setup_mcp_config,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

@@ -125,6 +125,8 @@ impl ClaudeCodeManager {
       .map_err(|e| format!("Failed to run npm install: {e}"))?;
 
     if output.status.success() {
+      // Best effort: auto-configure orbit-mcp in Claude Code's MCP config
+      setup_mcp_for_claude(app).ok();
       Ok(())
     } else {
       let stderr = String::from_utf8_lossy(&output.stderr);
@@ -459,6 +461,63 @@ pub fn write_context_file(
     claude_dir.join("orbit-context.md").display(),
     gemini_dir.join("orbit-context.md").display()
   ))
+}
+
+/// Ensure orbit-mcp is registered in Claude Code's MCP config (~/.claude.json)
+pub fn setup_mcp_for_claude(app: &AppHandle) -> Result<(), String> {
+  let mcp_exe = app
+    .path()
+    .app_local_data_dir()
+    .map_err(|e| e.to_string())?
+    .join("bin")
+    .join("mcp")
+    .join("orbit-mcp.exe");
+
+  if !mcp_exe.exists() {
+    return Err(
+      "orbit-mcp is not installed. Install it from the MCP tab first.".to_string(),
+    );
+  }
+
+  let mcp_path = mcp_exe.to_string_lossy().to_string().replace('\\', "/");
+
+  // Read or create ~/.claude.json
+  let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+  let claude_config = home.join(".claude.json");
+
+  let mut config: serde_json::Value = if claude_config.exists() {
+    let data = std::fs::read_to_string(&claude_config).map_err(|e| e.to_string())?;
+    serde_json::from_str(&data).unwrap_or(serde_json::json!({}))
+  } else {
+    serde_json::json!({})
+  };
+
+  // Add orbit MCP server entry if not already present
+  let mcp_servers = config
+    .as_object_mut()
+    .ok_or("Invalid config format")?
+    .entry("mcpServers")
+    .or_insert(serde_json::json!({}));
+
+  if let Some(servers) = mcp_servers.as_object_mut() {
+    if !servers.contains_key("orbit") {
+      servers.insert(
+        "orbit".to_string(),
+        serde_json::json!({
+          "command": mcp_path,
+          "args": []
+        }),
+      );
+    }
+  }
+
+  std::fs::write(
+    &claude_config,
+    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?,
+  )
+  .map_err(|e| e.to_string())?;
+
+  Ok(())
 }
 
 pub struct GeminiCliManager;

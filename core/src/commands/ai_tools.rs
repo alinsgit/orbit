@@ -61,3 +61,10 @@ pub fn generate_ai_context_cmd(app: AppHandle, domain: String) -> Result<String,
     let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     crate::services::ai_tools::write_context_file(&app, &domain, &data_dir)
 }
+
+/// Register orbit-mcp in Claude Code's MCP configuration (~/.claude.json)
+#[command]
+pub fn setup_mcp_config(app: AppHandle) -> Result<String, String> {
+    crate::services::ai_tools::setup_mcp_for_claude(&app)?;
+    Ok("MCP config updated for Claude Code".to_string())
+}
