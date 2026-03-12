@@ -6,7 +6,6 @@ import {
   uninstallGeminiCli,
   updateGeminiCli,
   checkGeminiUpdate,
-  setupMcpConfig,
   AiToolStatus,
 } from '../lib/api'
 import {
@@ -18,10 +17,10 @@ import {
   Sparkles,
   AlertTriangle,
   ArrowUpCircle,
-  Plug,
   Check,
 } from 'lucide-react'
 import { useApp } from '../lib/AppContext'
+import { McpManager } from './McpManager'
 
 export function AiPanel() {
   const {
@@ -37,7 +36,6 @@ export function AiPanel() {
   const [geminiAction, setGeminiAction] = useState<string | null>(null)
   const [geminiLatest, setGeminiLatest] = useState<string | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
-  const [mcpConfiguring, setMcpConfiguring] = useState(false)
 
   const nodeInstalled = services.some(s => s.service_type === 'nodejs')
 
@@ -124,18 +122,6 @@ export function AiPanel() {
       addToast({ type: 'error', message: `Failed to update Gemini CLI: ${err}` })
     } finally {
       setGeminiAction(null)
-    }
-  }
-
-  const handleMcpConfig = async () => {
-    try {
-      setMcpConfiguring(true)
-      await setupMcpConfig()
-      addToast({ type: 'success', message: 'MCP config updated for Claude Code' })
-    } catch (err) {
-      addToast({ type: 'error', message: `Failed to configure MCP: ${err}` })
-    } finally {
-      setMcpConfiguring(false)
     }
   }
 
@@ -293,36 +279,8 @@ export function AiPanel() {
         </ToolCard>
       </div>
 
-      {/* MCP Configuration */}
-      {claudeCodeStatus?.installed && (
-        <div className="bg-surface-raised border border-edge-subtle rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-500/10 rounded-lg">
-                <Plug className="w-5 h-5 text-purple-500" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold">MCP Integration</h3>
-                <p className="text-xs text-content-muted">
-                  Connect Orbit MCP server to Claude Code for AI-powered dev management
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleMcpConfig}
-              disabled={mcpConfiguring}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 text-white"
-            >
-              {mcpConfiguring ? (
-                <RefreshCw size={14} className="animate-spin" />
-              ) : (
-                <Plug size={14} />
-              )}
-              Configure MCP
-            </button>
-          </div>
-        </div>
-      )}
+      {/* MCP Server Manager */}
+      <McpManager />
     </div>
   )
 }

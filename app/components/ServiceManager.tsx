@@ -8,7 +8,6 @@ import { ServiceOverview } from './ServiceOverview';
 import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
 import { MeilisearchManager } from './MeilisearchManager';
-import { McpManager } from './McpManager';
 import { CliManager } from './CliManager';
 
 import { getServiceIcon } from '../lib/serviceIcons';
@@ -597,7 +596,6 @@ export function ServiceManager() {
             <ComposerManager />
             <MailManager />
             <MeilisearchManager />
-            <McpManager />
             <CliManager />
           </div>
         )}
