@@ -10,6 +10,7 @@ import { MailManager } from './MailManager';
 import { MeilisearchManager } from './MeilisearchManager';
 import { McpManager } from './McpManager';
 import { CliManager } from './CliManager';
+import { AiToolManager } from './AiToolManager';
 import { getServiceIcon } from '../lib/serviceIcons';
 import { ask } from '@tauri-apps/plugin-dialog';
 
@@ -593,6 +594,7 @@ export function ServiceManager() {
 
         {subTab === 'tools' && (
           <div className="space-y-6">
+            <AiToolManager />
             <ComposerManager />
             <MailManager />
             <MeilisearchManager />
