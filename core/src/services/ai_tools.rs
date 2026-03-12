@@ -1,28 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 use super::hidden_command;
 use crate::services::site_store::SiteStore;
 
 /// AI tool status information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AiToolStatus {
   pub installed: bool,
   pub path: Option<String>,
   pub version: Option<String>,
-}
-
-impl Default for AiToolStatus {
-  fn default() -> Self {
-    Self {
-      installed: false,
-      path: None,
-      version: None,
-    }
-  }
 }
 
 pub struct ClaudeCodeManager;
@@ -200,7 +190,7 @@ fn php_port_from_version(php_version: &str) -> u16 {
 pub fn generate_ai_context(
   app: &AppHandle,
   domain: &str,
-  data_dir: &PathBuf,
+  data_dir: &Path,
 ) -> Result<String, String> {
   let store = SiteStore::load(app)?;
   let site = store
@@ -431,7 +421,7 @@ pub fn generate_ai_context(
 pub fn write_context_file(
   app: &AppHandle,
   domain: &str,
-  data_dir: &PathBuf,
+  data_dir: &Path,
 ) -> Result<String, String> {
   let content = generate_ai_context(app, domain, data_dir)?;
 
