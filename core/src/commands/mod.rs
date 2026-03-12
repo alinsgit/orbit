@@ -27,3 +27,4 @@ pub mod cli;
 pub mod meilisearch;
 pub mod mongodb;
 pub mod blueprints;
+pub mod ai_tools;

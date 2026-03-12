@@ -281,6 +281,15 @@ pub fn run() {
         // Blueprints
         commands::blueprints::list_blueprints,
         commands::blueprints::create_from_blueprint,
+        // AI Tools (Claude Code, Gemini CLI)
+        commands::ai_tools::get_claude_code_status,
+        commands::ai_tools::install_claude_code,
+        commands::ai_tools::uninstall_claude_code,
+        commands::ai_tools::update_claude_code,
+        commands::ai_tools::get_gemini_cli_status,
+        commands::ai_tools::install_gemini_cli,
+        commands::ai_tools::uninstall_gemini_cli,
+        commands::ai_tools::update_gemini_cli,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {
