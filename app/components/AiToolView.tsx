@@ -350,43 +350,43 @@ export function AiToolView({ tool }: AiToolViewProps) {
               </button>
             </div>
           ))}
-
-          {/* New session button */}
-          {sessions.length < MAX_AI_SESSIONS && (
-            <div className="relative">
-              <button
-                onClick={() => setShowSiteSelector(!showSiteSelector)}
-                className="p-1.5 text-content-muted hover:text-content hover:bg-hover rounded-md transition-colors"
-                title="New session"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-
-              {/* Site selector dropdown */}
-              {showSiteSelector && (
-                <div className="absolute top-full left-0 mt-1 w-56 bg-surface-raised border border-edge rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
-                  {sites.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-content-muted">No sites found</div>
-                  ) : (
-                    sites.map(site => (
-                      <button
-                        key={site.domain}
-                        onClick={() => createSession(site)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-hover hover:text-content transition-colors"
-                      >
-                        <FolderOpen className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-                        <span className="truncate">{site.domain}</span>
-                        {sessions.some(s => s.domain === site.domain) && (
-                          <span className="ml-auto text-[10px] text-emerald-500">open</span>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
+
+        {/* New session button — outside overflow container so dropdown isn't clipped */}
+        {sessions.length < MAX_AI_SESSIONS && (
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowSiteSelector(!showSiteSelector)}
+              className="p-1.5 text-content-muted hover:text-content hover:bg-hover rounded-md transition-colors"
+              title="New session"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
+            {/* Site selector dropdown */}
+            {showSiteSelector && (
+              <div className="absolute top-full right-0 mt-1 w-56 bg-surface-raised border border-edge rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
+                {sites.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-content-muted">No sites found</div>
+                ) : (
+                  sites.map(site => (
+                    <button
+                      key={site.domain}
+                      onClick={() => createSession(site)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-content-secondary hover:bg-hover hover:text-content transition-colors"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                      <span className="truncate">{site.domain}</span>
+                      {sessions.some(s => s.domain === site.domain) && (
+                        <span className="ml-auto text-[10px] text-emerald-500">open</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
