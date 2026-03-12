@@ -30,6 +30,7 @@ pub mod mcp;
 pub mod cli;
 pub mod meilisearch;
 pub mod blueprints;
+pub mod ai_tools;
 
 use std::process::Command;
 
