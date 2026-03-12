@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Server, Settings, Minus, Square, X, ScrollText, Database, Globe, TerminalSquare, Loader2 } from 'lucide-react'
+import { Server, Settings, Minus, Square, X, ScrollText, Database, Globe, TerminalSquare, Loader2, Bot, Sparkles } from 'lucide-react'
 import { useApp } from './lib/AppContext'
 import { ServiceManager } from './components/ServiceManager'
 import { SitesManager } from './components/SitesManager'
@@ -7,6 +7,7 @@ import { SettingsManager } from './components/SettingsManager'
 import { LogViewer } from './components/LogViewer'
 import DatabaseViewer from './components/DatabaseViewer'
 import { Terminal } from './components/Terminal'
+import { AiToolView } from './components/AiToolView'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const appWindow = getCurrentWindow()
@@ -22,8 +23,12 @@ function App() {
     setActiveTab,
     isTerminalOpen,
     setIsTerminalOpen,
-    isLoading
+    isLoading,
+    claudeCodeInstalled,
+    geminiCliInstalled,
   } = useApp()
+
+  const isAiViewActive = activeTab === 'claude-code' || activeTab === 'gemini-cli'
 
   // Drag resize state
   const [terminalHeight, setTerminalHeight] = useState(() => {
@@ -149,6 +154,22 @@ function App() {
             icon={<ScrollText size={24} />}
             title="Logs"
           />
+          {claudeCodeInstalled && (
+            <NavButton
+              active={activeTab === 'claude-code'}
+              onClick={() => setActiveTab('claude-code')}
+              icon={<Bot size={24} />}
+              title="Claude Code"
+            />
+          )}
+          {geminiCliInstalled && (
+            <NavButton
+              active={activeTab === 'gemini-cli'}
+              onClick={() => setActiveTab('gemini-cli')}
+              icon={<Sparkles size={24} />}
+              title="Gemini CLI"
+            />
+          )}
           <div className="flex-1" />
           <NavButton
             active={isTerminalOpen}
@@ -172,10 +193,12 @@ function App() {
             {activeTab === 'logs' && <LogViewer />}
             {activeTab === 'database' && <DatabaseViewer />}
             {activeTab === 'settings' && <SettingsManager />}
+            {activeTab === 'claude-code' && <AiToolView tool="claude-code" />}
+            {activeTab === 'gemini-cli' && <AiToolView tool="gemini-cli" />}
           </div>
 
-          {/* Docked Terminal with Drag Handle */}
-          {isTerminalOpen && (
+          {/* Docked Terminal with Drag Handle (hidden when AI view is active) */}
+          {isTerminalOpen && !isAiViewActive && (
             <>
               <div
                 className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors"

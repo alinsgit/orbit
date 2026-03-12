@@ -5,7 +5,9 @@ import {
   startService,
   stopService,
   autoStartServices,
-  InstalledService
+  InstalledService,
+  getClaudeCodeStatus,
+  getGeminiCliStatus,
 } from './api';
 import { settingsStore, Settings } from './store';
 
@@ -58,6 +60,11 @@ interface AppContextType {
   pendingTerminalSite: { domain: string; path: string; command?: string } | null;
   openTerminalForSite: (domain: string, path: string, command?: string) => void;
   clearPendingTerminalSite: () => void;
+
+  // AI Tools
+  claudeCodeInstalled: boolean;
+  geminiCliInstalled: boolean;
+  refreshAiToolStatus: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -74,6 +81,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTab] = useState('services');
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [pendingTerminalSite, setPendingTerminalSite] = useState<{ domain: string; path: string; command?: string } | null>(null);
+  const [claudeCodeInstalled, setClaudeCodeInstalled] = useState(false);
+  const [geminiCliInstalled, setGeminiCliInstalled] = useState(false);
 
   // Generate unique ID for toasts
   const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -225,10 +234,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPendingTerminalSite(null);
   }, []);
 
+  // AI tool status
+  const refreshAiToolStatus = useCallback(async () => {
+    getClaudeCodeStatus().then(s => setClaudeCodeInstalled(s.installed)).catch(() => {});
+    getGeminiCliStatus().then(s => setGeminiCliInstalled(s.installed)).catch(() => {});
+  }, []);
+
   // Initial load
   useEffect(() => {
     refreshSettings();
-  }, [refreshSettings]);
+    refreshAiToolStatus();
+  }, [refreshSettings, refreshAiToolStatus]);
 
   // Load services after settings (first load — show loader)
   const initialLoadDone = useRef(false);
@@ -295,6 +311,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pendingTerminalSite,
       openTerminalForSite,
       clearPendingTerminalSite,
+      claudeCodeInstalled,
+      geminiCliInstalled,
+      refreshAiToolStatus,
     }}>
       {children}
 
