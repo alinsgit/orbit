@@ -331,7 +331,11 @@ export function Terminal({ className, onClose }: TerminalProps) {
   useEffect(() => {
     if (!wrapperRef.current) return;
 
-    const observer = new ResizeObserver(() => {
+    const observer = new ResizeObserver((entries) => {
+      // Skip fit when hidden (zero dimensions)
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+
       const entry = xtermsRef.current.get(activeTabId);
       if (!entry?.ready) return;
       try {

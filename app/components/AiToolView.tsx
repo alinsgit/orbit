@@ -230,7 +230,11 @@ export function AiToolView({ tool }: AiToolViewProps) {
   // ResizeObserver
   useEffect(() => {
     if (!wrapperRef.current) return
-    const observer = new ResizeObserver(() => {
+    const observer = new ResizeObserver((entries) => {
+      // Skip fit when hidden (zero dimensions)
+      const rect = entries[0]?.contentRect
+      if (!rect || rect.width === 0 || rect.height === 0) return
+
       if (!activeSessionId) return
       const entry = xtermsRef.current.get(activeSessionId)
       if (!entry?.ready) return

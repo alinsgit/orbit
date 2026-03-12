@@ -31,6 +31,21 @@ function App() {
 
   const isAiTerminalActive = activeTab === 'claude-code' || activeTab === 'gemini-cli'
 
+  // Lazy mount: mount tab on first visit, keep mounted forever (preserves state)
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set([activeTab]))
+  useEffect(() => {
+    setMountedTabs(prev => {
+      if (prev.has(activeTab)) return prev
+      return new Set([...prev, activeTab])
+    })
+  }, [activeTab])
+
+  // Terminal: mount on first open, keep mounted forever (preserves PTY sessions)
+  const [terminalMounted, setTerminalMounted] = useState(false)
+  useEffect(() => {
+    if (isTerminalOpen) setTerminalMounted(true)
+  }, [isTerminalOpen])
+
   // Drag resize state
   const [terminalHeight, setTerminalHeight] = useState(() => {
     const saved = localStorage.getItem(TERMINAL_HEIGHT_KEY)
@@ -194,20 +209,52 @@ function App() {
 
         {/* Main Content */}
         <main ref={mainRef} className="flex-1 min-h-0 relative flex flex-col bg-surface-alt overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-auto">
-            {activeTab === 'services' && <ServiceManager />}
-            {activeTab === 'sites' && <SitesManager />}
-            {activeTab === 'logs' && <LogViewer />}
-            {activeTab === 'database' && <DatabaseViewer />}
-            {activeTab === 'ai' && <AiPanel />}
-            {activeTab === 'settings' && <SettingsManager />}
-            {activeTab === 'claude-code' && <AiToolView tool="claude-code" />}
-            {activeTab === 'gemini-cli' && <AiToolView tool="gemini-cli" />}
+          <div className="flex-1 min-h-0">
+            {mountedTabs.has('services') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'services' ? undefined : 'none' }}>
+                <ServiceManager />
+              </div>
+            )}
+            {mountedTabs.has('sites') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'sites' ? undefined : 'none' }}>
+                <SitesManager />
+              </div>
+            )}
+            {mountedTabs.has('logs') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'logs' ? undefined : 'none' }}>
+                <LogViewer />
+              </div>
+            )}
+            {mountedTabs.has('database') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'database' ? undefined : 'none' }}>
+                <DatabaseViewer />
+              </div>
+            )}
+            {mountedTabs.has('ai') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'ai' ? undefined : 'none' }}>
+                <AiPanel />
+              </div>
+            )}
+            {mountedTabs.has('settings') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'settings' ? undefined : 'none' }}>
+                <SettingsManager />
+              </div>
+            )}
+            {mountedTabs.has('claude-code') && (
+              <div className="h-full" style={{ display: activeTab === 'claude-code' ? undefined : 'none' }}>
+                <AiToolView tool="claude-code" />
+              </div>
+            )}
+            {mountedTabs.has('gemini-cli') && (
+              <div className="h-full" style={{ display: activeTab === 'gemini-cli' ? undefined : 'none' }}>
+                <AiToolView tool="gemini-cli" />
+              </div>
+            )}
           </div>
 
-          {/* Docked Terminal with Drag Handle (hidden when AI view is active) */}
-          {isTerminalOpen && !isAiTerminalActive && (
-            <>
+          {/* Docked Terminal — mounted on first open, hidden via CSS to preserve PTY sessions */}
+          {terminalMounted && (
+            <div style={{ display: isTerminalOpen && !isAiTerminalActive ? undefined : 'none' }}>
               <div
                 className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors"
                 onMouseDown={handleDragStart}
@@ -215,7 +262,7 @@ function App() {
               <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0d1117] relative z-40 flex flex-col">
                 <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
               </div>
-            </>
+            </div>
           )}
         </main>
       </div>
