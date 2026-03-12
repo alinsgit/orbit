@@ -55,6 +55,8 @@ clap = { version = "4", features = ["derive"], optional = true }
 colored = { version = "2", optional = true }
 sysinfo = "0.38.4"
 portable-pty = "0.8.1"
+keyring = { version = "3", features = ["sync-secret-service", "windows-native"] }
+dirs = "6"
 
 [features]
 cli = ["clap", "colored"]
