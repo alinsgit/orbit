@@ -166,19 +166,22 @@ pub fn extract_tar_gz(tar_path: &Path, extract_path: &Path, strip_root: bool) ->
     let mut archive = Archive::new(gz);
 
     // First pass: detect root folder prefix to strip
-    let root_prefix: Option<String> = if strip_root {
+    let root_prefix: Option<PathBuf> = if strip_root {
         let file2 = std::fs::File::open(tar_path)
             .map_err(|e| format!("Failed to re-open tar.gz: {e}"))?;
         let gz2 = GzDecoder::new(file2);
         let mut archive2 = Archive::new(gz2);
-        let mut prefix: Option<String> = None;
+        let mut prefix: Option<PathBuf> = None;
         for entry in archive2.entries().map_err(|e| format!("Failed to read entries: {e}"))? {
             let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
             let path = entry.path().map_err(|e| format!("Failed to get path: {e}"))?;
-            let path_str = path.to_string_lossy().to_string();
-            if let Some(slash) = path_str.find('/') {
-                prefix = Some(format!("{}/", &path_str[..slash]));
-                break;
+            let mut comps = path.components();
+            let first_comp = comps.next();
+            if entry.header().entry_type().is_dir() || comps.next().is_some() {
+                if let Some(std::path::Component::Normal(comp)) = first_comp {
+                    prefix = Some(PathBuf::from(comp));
+                    break;
+                }
             }
         }
         prefix
@@ -191,20 +194,18 @@ pub fn extract_tar_gz(tar_path: &Path, extract_path: &Path, strip_root: bool) ->
     for entry in archive.entries().map_err(|e| format!("Failed to read tar entries: {e}"))? {
         let mut entry = entry.map_err(|e| format!("Failed to read tar entry: {e}"))?;
         let entry_path = entry.path().map_err(|e| format!("Failed to get entry path: {e}"))?;
-        let path_str = entry_path.to_string_lossy().to_string();
 
         // Strip root prefix if detected
         let relative = if let Some(ref prefix) = root_prefix {
-            if path_str.starts_with(prefix) {
-                path_str[prefix.len()..].to_string()
-            } else {
-                path_str.clone()
+            match entry_path.strip_prefix(prefix) {
+                Ok(stripped) => stripped.to_path_buf(),
+                Err(_) => entry_path.into_owned()
             }
         } else {
-            path_str.clone()
+            entry_path.into_owned()
         };
 
-        if relative.is_empty() {
+        if relative.as_os_str().is_empty() {
             continue;
         }
 
@@ -219,7 +220,7 @@ pub fn extract_tar_gz(tar_path: &Path, extract_path: &Path, strip_root: bool) ->
                     .map_err(|e| format!("Failed to create parent dir: {e}"))?;
             }
             entry.unpack(&out_path)
-                .map_err(|e| format!("Failed to unpack {relative}: {e}"))?;
+                .map_err(|e| format!("Failed to unpack {}: {e}", relative.display()))?;
 
             // Preserve Unix executable permissions
             #[cfg(unix)]
@@ -261,12 +262,17 @@ pub fn extract_zip_with_strip(zip_path: &Path, extract_path: &Path, strip_root: 
     let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {e}"))?;
 
     // Detect common root folder if strip_root is enabled
-    let root_folder = if strip_root && !archive.is_empty() {
+    let root_folder: Option<PathBuf> = if strip_root && !archive.is_empty() {
         if let Ok(first) = archive.by_index(0) {
-            let name = first.name();
-            if name.ends_with('/') {
-                Some(name.to_string())
-            } else { name.find('/').map(|idx| format!("{}/", &name[..idx])) }
+            if let Some(path) = first.enclosed_name() {
+                let mut comps = path.components();
+                let first_comp = comps.next();
+                if first.is_dir() || comps.next().is_some() {
+                    if let Some(std::path::Component::Normal(comp)) = first_comp {
+                        Some(PathBuf::from(comp))
+                    } else { None }
+                } else { None }
+            } else { None }
         } else {
             None
         }
@@ -287,11 +293,9 @@ pub fn extract_zip_with_strip(zip_path: &Path, extract_path: &Path, strip_root: 
 
         // Strip root folder if detected
         let relative_path = if let Some(ref root) = root_folder {
-            let path_str = file_path.to_string_lossy();
-            if path_str.starts_with(root) {
-                PathBuf::from(&path_str[root.len()..])
-            } else {
-                file_path
+            match file_path.strip_prefix(root) {
+                Ok(stripped) => stripped.to_path_buf(),
+                Err(_) => file_path
             }
         } else {
             file_path
