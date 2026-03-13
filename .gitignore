@@ -62,6 +62,10 @@ CLAUDE.md
 .superpowers/
 docs/superpowers/
 
+# Old project structure (now app/ and core/)
+src/
+src-tauri/
+
 # Test artifacts
 ziptest/
 core/cargo_errors.txt
