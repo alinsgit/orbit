@@ -319,16 +319,11 @@ impl Default for OldConnection {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[allow(clippy::upper_case_acronyms)]
 enum OldProtocol {
+    #[default]
     SSH,
     SFTP,
     FTP,
-}
-
-impl Default for OldProtocol {
-    fn default() -> Self {
-        Self::SSH
-    }
 }
