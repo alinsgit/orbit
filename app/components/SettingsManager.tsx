@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Settings, Loader2, Sun, Moon, Monitor, Palette, Trash2, Eraser, Info, ExternalLink, Github, Heart, ArrowUpCircle, Sparkles, RotateCcw, FolderOpen, RefreshCw, CheckCircle, Terminal, Network, Zap } from 'lucide-react';
-import { clearAllCaches } from '../lib/api';
+import { Settings, Loader2, Sun, Moon, Monitor, Palette, Trash2, Eraser, Info, ExternalLink, Github, Heart, ArrowUpCircle, Sparkles, RotateCcw, FolderOpen, RefreshCw, CheckCircle, Terminal, Network, Zap, Server, Plus, X, Check, FileKey, Lock, Wifi } from 'lucide-react';
+import { clearAllCaches, deployListConnections, deployAddConnection, deployRemoveConnection, deployTestConnection } from '../lib/api';
+import type { ServerConnection } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { PathEditorModal } from './PathEditorModal';
 import { HostsEditorModal } from './HostsEditorModal';
@@ -50,10 +51,21 @@ export function SettingsManager() {
   const [ngrokToken, setNgrokToken] = useState<string>('');
   const [ngrokTokenSaving, setNgrokTokenSaving] = useState(false);
 
+  // Server Connections State
+  const [connections, setConnections] = useState<ServerConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [showAddConn, setShowAddConn] = useState(false);
+  const [connAction, setConnAction] = useState<string | null>(null);
+  const [connForm, setConnForm] = useState({
+    name: '', host: '', port: 22, username: '', protocol: 'SSH' as 'SSH' | 'FTP',
+    authType: 'password' as 'password' | 'keyfile', keyfilePath: '', password: ''
+  });
+
   useEffect(() => {
     loadVersionInfo();
     handleCheckForUpdates();
     loadWorkspaceSettings();
+    loadConnections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -105,6 +117,67 @@ export function SettingsManager() {
       addToast({ type: 'error', message: `Could not save token: ${e}` });
     } finally {
       setNgrokTokenSaving(false);
+    }
+  };
+
+  // ── Server Connection Handlers ──
+
+  const loadConnections = async () => {
+    try {
+      setConnectionsLoading(true);
+      const list = await deployListConnections();
+      setConnections(list);
+    } catch { /* noop */ } finally {
+      setConnectionsLoading(false);
+    }
+  };
+
+  const handleAddConnection = async () => {
+    if (!connForm.name || !connForm.host || !connForm.username) return;
+    try {
+      setConnAction('add');
+      const conn: ServerConnection = {
+        name: connForm.name.trim(),
+        host: connForm.host.trim(),
+        port: connForm.port,
+        username: connForm.username.trim(),
+        auth: connForm.authType === 'keyfile' ? { KeyFile: connForm.keyfilePath } : 'Password',
+        protocol: connForm.protocol,
+      };
+      await deployAddConnection(conn, connForm.authType === 'password' ? connForm.password : undefined);
+      addToast({ type: 'success', message: `Connection "${conn.name}" added` });
+      setConnForm({ name: '', host: '', port: 22, username: '', protocol: 'SSH', authType: 'password', keyfilePath: '', password: '' });
+      setShowAddConn(false);
+      await loadConnections();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to add connection: ${e}` });
+    } finally {
+      setConnAction(null);
+    }
+  };
+
+  const handleRemoveConnection = async (name: string) => {
+    try {
+      setConnAction(`remove-${name}`);
+      await deployRemoveConnection(name);
+      addToast({ type: 'success', message: `Connection "${name}" removed` });
+      await loadConnections();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Failed to remove: ${e}` });
+    } finally {
+      setConnAction(null);
+    }
+  };
+
+  const handleTestConnection = async (name: string) => {
+    try {
+      setConnAction(`test-${name}`);
+      const result = await deployTestConnection(name);
+      addToast({ type: 'success', message: result });
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Connection test failed: ${e}` });
+    } finally {
+      setConnAction(null);
     }
   };
 
@@ -382,6 +455,144 @@ export function SettingsManager() {
               <div className="font-medium">OS PATH Editor</div>
               <div className="text-xs text-content-muted">Directly augment or manipulate your executable search environment values.</div>
             </button>
+          </div>
+        </section>
+
+        {/* Server Connections */}
+        <section className="bg-surface-raised border border-edge-subtle rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-edge-subtle flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                <Server size={20} className="text-emerald-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Server Connections</h3>
+                <p className="text-sm text-content-secondary">Global SSH/FTP connections for deploy</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAddConn(!showAddConn)}
+              className="p-1.5 text-emerald-400 hover:bg-emerald-500/15 rounded-lg transition-colors"
+              title={showAddConn ? 'Cancel' : 'Add Connection'}
+            >
+              {showAddConn ? <X size={16} /> : <Plus size={16} />}
+            </button>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* Add Connection Form */}
+            {showAddConn && (
+              <div className="p-3 bg-surface-inset rounded-lg border border-edge-subtle space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text" placeholder="Connection name"
+                    value={connForm.name} onChange={e => setConnForm(f => ({ ...f, name: e.target.value }))}
+                    className="px-3 py-1.5 border border-edge bg-surface rounded-lg text-sm"
+                  />
+                  <div className="flex gap-1">
+                    <input
+                      type="text" placeholder="Host"
+                      value={connForm.host} onChange={e => setConnForm(f => ({ ...f, host: e.target.value }))}
+                      className="flex-1 px-3 py-1.5 border border-edge bg-surface rounded-lg text-sm min-w-0"
+                    />
+                    <input
+                      type="number" placeholder="Port"
+                      value={connForm.port} onChange={e => setConnForm(f => ({ ...f, port: parseInt(e.target.value) || 22 }))}
+                      className="w-16 px-2 py-1.5 border border-edge bg-surface rounded-lg text-sm text-center"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text" placeholder="Username"
+                    value={connForm.username} onChange={e => setConnForm(f => ({ ...f, username: e.target.value }))}
+                    className="px-3 py-1.5 border border-edge bg-surface rounded-lg text-sm"
+                  />
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setConnForm(f => ({ ...f, protocol: f.protocol === 'SSH' ? 'FTP' : 'SSH', port: f.protocol === 'SSH' ? 21 : 22 }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${connForm.protocol === 'SSH' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'}`}
+                    >
+                      {connForm.protocol}
+                    </button>
+                    <button
+                      onClick={() => setConnForm(f => ({ ...f, authType: f.authType === 'password' ? 'keyfile' : 'password' }))}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${connForm.authType === 'password' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}
+                    >
+                      {connForm.authType === 'password' ? <><Lock size={11} /> Password</> : <><FileKey size={11} /> Key File</>}
+                    </button>
+                  </div>
+                </div>
+                {connForm.authType === 'password' ? (
+                  <input
+                    type="password" placeholder="Password"
+                    value={connForm.password} onChange={e => setConnForm(f => ({ ...f, password: e.target.value }))}
+                    className="w-full px-3 py-1.5 border border-edge bg-surface rounded-lg text-sm"
+                  />
+                ) : (
+                  <input
+                    type="text" placeholder="Key file path (e.g. C:\Users\...\.ssh\id_rsa)"
+                    value={connForm.keyfilePath} onChange={e => setConnForm(f => ({ ...f, keyfilePath: e.target.value }))}
+                    className="w-full px-3 py-1.5 border border-edge bg-surface rounded-lg text-sm"
+                  />
+                )}
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setShowAddConn(false)} className="px-3 py-1.5 text-xs text-content-muted hover:text-content-secondary transition-colors">Cancel</button>
+                  <button
+                    onClick={handleAddConnection}
+                    disabled={!connForm.name || !connForm.host || !connForm.username || connAction === 'add'}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-xs font-medium text-white transition-colors"
+                  >
+                    {connAction === 'add' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Connection List */}
+            {connectionsLoading ? (
+              <div className="flex justify-center py-4">
+                <RefreshCw size={16} className="animate-spin text-content-muted" />
+              </div>
+            ) : connections.length === 0 ? (
+              <p className="text-xs text-content-muted text-center py-3">No connections configured. Click + to add one.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {connections.map(conn => (
+                  <div key={conn.name} className="flex items-center gap-2.5 px-3 py-2 bg-surface-inset rounded-lg border border-edge-subtle">
+                    <Server size={14} className="text-content-muted shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium truncate">{conn.name}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${conn.protocol === 'SSH' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                          {conn.protocol}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-content-muted truncate">{conn.username}@{conn.host}:{conn.port}</p>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        onClick={() => handleTestConnection(conn.name)}
+                        disabled={connAction !== null}
+                        className="p-1.5 text-emerald-400 hover:bg-emerald-500/15 rounded-lg transition-colors disabled:opacity-50"
+                        title="Test connection"
+                      >
+                        {connAction === `test-${conn.name}` ? <RefreshCw size={13} className="animate-spin" /> : <Wifi size={13} />}
+                      </button>
+                      <button
+                        onClick={() => handleRemoveConnection(conn.name)}
+                        disabled={connAction !== null}
+                        className="p-1.5 text-red-400 hover:bg-red-500/15 rounded-lg transition-colors disabled:opacity-50"
+                        title="Remove connection"
+                      >
+                        {connAction === `remove-${conn.name}` ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

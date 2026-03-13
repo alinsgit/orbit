@@ -264,68 +264,60 @@ pub fn generate_ai_context(
 
   // --- Deploy Targets section ---
   md.push_str("## Deploy Targets\n\n");
-  let deploy_path = data_dir
-    .join("config")
-    .join("deploy-connections.json");
+  let targets_path = data_dir.join("config").join("deploy-targets.json");
+  let connections_path = data_dir.join("config").join("deploy-connections.json");
 
-  if deploy_path.exists() {
-    match std::fs::read_to_string(&deploy_path) {
-      Ok(content) => {
-        match serde_json::from_str::<serde_json::Value>(&content) {
-          Ok(json) => {
-            // deploy-connections.json is expected to be an array or object keyed by domain
-            let targets = if let Some(arr) = json.as_array() {
-              // Array of connection objects — filter by domain
-              arr
-                .iter()
-                .filter(|conn| {
-                  conn.get("domain")
-                    .and_then(|d| d.as_str())
-                    .map(|d| d == domain)
-                    .unwrap_or(false)
-                })
-                .cloned()
-                .collect::<Vec<_>>()
-            } else if let Some(obj) = json.as_object() {
-              // Object keyed by domain
-              obj.get(domain)
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default()
-            } else {
-              vec![]
-            };
+  let mut has_targets = false;
 
-            if targets.is_empty() {
-              md.push_str("No deploy targets configured for this project.\n");
-            } else {
-              for target in &targets {
-                let name = target
-                  .get("name")
-                  .and_then(|v| v.as_str())
-                  .unwrap_or("unnamed");
-                let protocol = target
-                  .get("protocol")
-                  .and_then(|v| v.as_str())
-                  .unwrap_or("unknown");
-                let host = target
-                  .get("host")
-                  .and_then(|v| v.as_str())
-                  .unwrap_or("");
-                md.push_str(&format!("- **{name}** ({protocol}) → {host}\n"));
-              }
+  if targets_path.exists() {
+    if let Ok(targets_content) = std::fs::read_to_string(&targets_path) {
+      if let Ok(targets_json) = serde_json::from_str::<serde_json::Value>(&targets_content) {
+        if let Some(obj) = targets_json.as_object() {
+          if let Some(site_targets) = obj.get(domain).and_then(|v| v.as_array()) {
+            // Load connections for enriching target info
+            let connections: Vec<serde_json::Value> = connections_path
+              .exists()
+              .then(|| {
+                std::fs::read_to_string(&connections_path)
+                  .ok()
+                  .and_then(|c| serde_json::from_str::<Vec<serde_json::Value>>(&c).ok())
+              })
+              .flatten()
+              .unwrap_or_default();
+
+            for target in site_targets {
+              let conn_name = target
+                .get("connection")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+              let remote_path = target
+                .get("remote_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+              // Find matching connection for protocol/host info
+              let conn = connections.iter().find(|c| {
+                c.get("name").and_then(|n| n.as_str()) == Some(conn_name)
+              });
+              let protocol = conn
+                .and_then(|c| c.get("protocol").and_then(|v| v.as_str()))
+                .unwrap_or("SSH");
+              let host = conn
+                .and_then(|c| c.get("host").and_then(|v| v.as_str()))
+                .unwrap_or("");
+
+              md.push_str(&format!(
+                "- **{conn_name}** ({protocol}) → {host}:{remote_path}\n"
+              ));
+              has_targets = true;
             }
-          }
-          Err(_) => {
-            md.push_str("No deploy targets configured for this project.\n");
           }
         }
       }
-      Err(_) => {
-        md.push_str("No deploy targets configured for this project.\n");
-      }
     }
-  } else {
+  }
+
+  if !has_targets {
     md.push_str("No deploy targets configured for this project.\n");
   }
   md.push('\n');
@@ -344,6 +336,7 @@ pub fn generate_ai_context(
   md.push_str("- **Logs**: list log files, read logs, clear logs, analyze logs\n");
   md.push_str("- **Composer**: install dependencies, require/run packages\n");
   md.push_str("- **Mailpit**: list/read/delete emails\n");
+  md.push_str("- **Deploy**: list connections, list/assign/unassign targets, test connection, SSH execute, sync files\n");
   md.push_str("- **Config**: read/write Orbit config files, hosts file management\n");
   md.push('\n');
 

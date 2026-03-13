@@ -1902,43 +1902,39 @@ fn handle_tools_list(id: &Value) -> Value {
         // Deploy tools
         {
             "name": "deploy_list_connections",
-            "description": "List deploy connections for a site. Returns connection names, protocols (SSH/SFTP/FTP), hosts, and remote paths.",
+            "description": "List all global server connections (SSH/FTP). These are shared across sites.",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "domain": { "type": "string", "description": "Site domain (e.g., myapp.test)" }
-                },
-                "required": ["domain"]
+                "properties": {},
+                "required": []
             }
         },
         {
             "name": "deploy_test_connection",
-            "description": "Test a deploy connection by attempting to authenticate. Returns success message or error details.",
+            "description": "Test a server connection by attempting to authenticate. Returns success message or error details.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "domain": { "type": "string", "description": "Site domain" },
                     "connection_name": { "type": "string", "description": "Connection name" }
                 },
-                "required": ["domain", "connection_name"]
+                "required": ["connection_name"]
             }
         },
         {
             "name": "deploy_ssh_execute",
-            "description": "Execute a remote command via SSH on a deploy connection. Returns command output.",
+            "description": "Execute a remote command via SSH on a server connection. Returns command output.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "domain": { "type": "string", "description": "Site domain" },
                     "connection_name": { "type": "string", "description": "Connection name" },
                     "command": { "type": "string", "description": "Shell command to execute on remote server" }
                 },
-                "required": ["domain", "connection_name", "command"]
+                "required": ["connection_name", "command"]
             }
         },
         {
             "name": "deploy_sync",
-            "description": "Deploy site files to remote server via SFTP/FTP. Uses blake3 hashing for diff-based sync — only changed files are uploaded. Emits deploy-progress events.",
+            "description": "Deploy site files to remote server via SFTP/FTP. Uses blake3 hashing for diff-based sync — only changed files are uploaded.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1956,6 +1952,42 @@ fn handle_tools_list(id: &Value) -> Value {
                 "properties": {
                     "domain": { "type": "string", "description": "Site domain" },
                     "connection_name": { "type": "string", "description": "Connection name" }
+                },
+                "required": ["domain", "connection_name"]
+            }
+        },
+        {
+            "name": "deploy_list_targets",
+            "description": "List deploy targets for a site. Each target references a global connection + remote path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain (e.g., myapp.test)" }
+                },
+                "required": ["domain"]
+            }
+        },
+        {
+            "name": "deploy_assign_target",
+            "description": "Assign a deploy target to a site. Links a global connection with a remote path for deployment.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain" },
+                    "connection_name": { "type": "string", "description": "Connection name" },
+                    "remote_path": { "type": "string", "description": "Remote path on server (e.g., /var/www/html)" }
+                },
+                "required": ["domain", "connection_name", "remote_path"]
+            }
+        },
+        {
+            "name": "deploy_unassign_target",
+            "description": "Remove a deploy target from a site.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": { "type": "string", "description": "Site domain" },
+                    "connection_name": { "type": "string", "description": "Connection name to unassign" }
                 },
                 "required": ["domain", "connection_name"]
             }
@@ -2243,22 +2275,36 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
             let cmd = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
             tool_mongo_execute(db, cmd)
         }
-        // Deploy
+        // Deploy — Global Connections
         "deploy_list_connections" => {
-            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
-            tool_deploy_list_connections(domain)
+            tool_deploy_list_connections()
         }
         "deploy_test_connection" => {
-            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
             let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
-            tool_deploy_test_connection(domain, conn_name)
+            tool_deploy_test_connection(conn_name)
         }
         "deploy_ssh_execute" => {
-            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
             let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
             let cmd = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
-            tool_deploy_ssh_execute(domain, conn_name, cmd)
+            tool_deploy_ssh_execute(conn_name, cmd)
         }
+        // Deploy — Site Targets
+        "deploy_list_targets" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            tool_deploy_list_targets(domain)
+        }
+        "deploy_assign_target" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
+            let remote_path = args.get("remote_path").and_then(|v| v.as_str()).unwrap_or("/");
+            tool_deploy_assign_target(domain, conn_name, remote_path)
+        }
+        "deploy_unassign_target" => {
+            let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+            let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
+            tool_deploy_unassign_target(domain, conn_name)
+        }
+        // Deploy — Operations
         "deploy_sync" => {
             let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
             let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
@@ -5210,106 +5256,42 @@ fn tool_stop_site_app(domain: &str) -> Result<String, String> {
 
 // ─── Deploy Tools ────────────────────────────────────────────────
 
-fn tool_deploy_list_connections(domain: &str) -> Result<String, String> {
+// Helper: read global connections (Vec<Value>) from deploy-connections.json
+fn mcp_read_connections() -> Result<Vec<Value>, String> {
     let config_path = get_config_dir().join("deploy-connections.json");
     if !config_path.exists() {
-        return Ok(json!({ "connections": [] }).to_string());
+        return Ok(Vec::new());
     }
     let data = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
-    let all: std::collections::HashMap<String, Vec<Value>> =
-        serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    let connections = all.get(domain).cloned().unwrap_or_default();
-    Ok(serde_json::to_string_pretty(&json!({
-        "domain": domain,
-        "connections": connections
-    })).unwrap())
+    serde_json::from_str(&data).map_err(|e| e.to_string())
 }
 
-fn tool_deploy_test_connection(domain: &str, conn_name: &str) -> Result<String, String> {
-    let config_path = get_config_dir().join("deploy-connections.json");
-    if !config_path.exists() {
-        return Err("No deploy connections configured".to_string());
+// Helper: find a connection by name
+fn mcp_find_connection(conn_name: &str) -> Result<Value, String> {
+    let connections = mcp_read_connections()?;
+    connections.into_iter()
+        .find(|c| c.get("name").and_then(|v| v.as_str()) == Some(conn_name))
+        .ok_or_else(|| format!("Connection '{}' not found", conn_name))
+}
+
+// Helper: read targets for a domain from deploy-targets.json
+fn mcp_read_targets(domain: &str) -> Result<Vec<Value>, String> {
+    let targets_path = get_config_dir().join("deploy-targets.json");
+    if !targets_path.exists() {
+        return Ok(Vec::new());
     }
-    let data = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    let data = fs::read_to_string(&targets_path).map_err(|e| e.to_string())?;
     let all: std::collections::HashMap<String, Vec<Value>> =
         serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    let connections = all.get(domain).ok_or("No connections for this site")?;
-    let conn = connections.iter().find(|c| c.get("name").and_then(|v| v.as_str()) == Some(conn_name))
-        .ok_or_else(|| format!("Connection '{}' not found", conn_name))?;
+    Ok(all.get(domain).cloned().unwrap_or_default())
+}
 
-    let protocol = conn.get("protocol").and_then(|v| v.as_str()).unwrap_or("SSH");
+// Helper: create SSH session from connection JSON
+fn mcp_create_ssh_session(conn: &Value) -> Result<ssh2::Session, String> {
     let host = conn.get("host").and_then(|v| v.as_str()).unwrap_or("");
     let port = conn.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
     let username = conn.get("username").and_then(|v| v.as_str()).unwrap_or("");
-    let auth = conn.get("auth");
-
-    match protocol {
-        "SSH" | "SFTP" => {
-            let addr = format!("{}:{}", host, port);
-            let tcp = std::net::TcpStream::connect(&addr)
-                .map_err(|e| format!("Connection failed: {e}"))?;
-            let mut session = ssh2::Session::new()
-                .map_err(|e| format!("SSH session error: {e}"))?;
-            session.set_tcp_stream(tcp);
-            session.handshake()
-                .map_err(|e| format!("SSH handshake failed: {e}"))?;
-
-            // Determine auth method
-            if let Some(Value::Object(kf)) = auth {
-                if let Some(path) = kf.get("KeyFile").and_then(|v| v.as_str()) {
-                    session.userauth_pubkey_file(username, None, std::path::Path::new(path), None)
-                        .map_err(|e| format!("Key auth failed: {e}"))?;
-                }
-            } else {
-                // Password auth — get from keyring
-                let key = format!("orbit:deploy:{}:{}", domain, conn_name);
-                let entry = keyring::Entry::new("orbit-deploy", &key)
-                    .map_err(|e| format!("Keyring error: {e}"))?;
-                let password = entry.get_password()
-                    .map_err(|e| format!("Failed to get password: {e}"))?;
-                session.userauth_password(username, &password)
-                    .map_err(|e| format!("Auth failed: {e}"))?;
-            }
-
-            if session.authenticated() {
-                Ok(format!("SSH connection successful to {}", host))
-            } else {
-                Err("Authentication failed".to_string())
-            }
-        }
-        "FTP" => {
-            let addr = format!("{}:{}", host, port);
-            let mut ftp = suppaftp::FtpStream::connect(&addr)
-                .map_err(|e| format!("FTP connection failed: {e}"))?;
-            let key = format!("orbit:deploy:{}:{}", domain, conn_name);
-            let entry = keyring::Entry::new("orbit-deploy", &key)
-                .map_err(|e| format!("Keyring error: {e}"))?;
-            let password = entry.get_password()
-                .map_err(|e| format!("Failed to get password: {e}"))?;
-            ftp.login(username, &password)
-                .map_err(|e| format!("FTP login failed: {e}"))?;
-            ftp.quit().ok();
-            Ok(format!("FTP connection successful to {}", host))
-        }
-        _ => Err(format!("Unknown protocol: {}", protocol)),
-    }
-}
-
-fn tool_deploy_ssh_execute(domain: &str, conn_name: &str, command: &str) -> Result<String, String> {
-    let config_path = get_config_dir().join("deploy-connections.json");
-    if !config_path.exists() {
-        return Err("No deploy connections configured".to_string());
-    }
-    let data = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
-    let all: std::collections::HashMap<String, Vec<Value>> =
-        serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    let connections = all.get(domain).ok_or("No connections for this site")?;
-    let conn = connections.iter().find(|c| c.get("name").and_then(|v| v.as_str()) == Some(conn_name))
-        .ok_or_else(|| format!("Connection '{}' not found", conn_name))?;
-
-    let host = conn.get("host").and_then(|v| v.as_str()).unwrap_or("");
-    let port = conn.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
-    let username = conn.get("username").and_then(|v| v.as_str()).unwrap_or("");
+    let conn_name = conn.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let auth = conn.get("auth");
 
     let addr = format!("{}:{}", host, port);
@@ -5327,7 +5309,7 @@ fn tool_deploy_ssh_execute(domain: &str, conn_name: &str, command: &str) -> Resu
                 .map_err(|e| format!("Key auth failed: {e}"))?;
         }
     } else {
-        let key = format!("orbit:deploy:{}:{}", domain, conn_name);
+        let key = format!("orbit:deploy:{}", conn_name);
         let entry = keyring::Entry::new("orbit-deploy", &key)
             .map_err(|e| format!("Keyring error: {e}"))?;
         let password = entry.get_password()
@@ -5335,6 +5317,54 @@ fn tool_deploy_ssh_execute(domain: &str, conn_name: &str, command: &str) -> Resu
         session.userauth_password(username, &password)
             .map_err(|e| format!("Auth failed: {e}"))?;
     }
+
+    Ok(session)
+}
+
+fn tool_deploy_list_connections() -> Result<String, String> {
+    let connections = mcp_read_connections()?;
+    Ok(serde_json::to_string_pretty(&json!({
+        "connections": connections
+    })).unwrap())
+}
+
+fn tool_deploy_test_connection(conn_name: &str) -> Result<String, String> {
+    let conn = mcp_find_connection(conn_name)?;
+    let host = conn.get("host").and_then(|v| v.as_str()).unwrap_or("");
+    let protocol = conn.get("protocol").and_then(|v| v.as_str()).unwrap_or("SSH");
+
+    match protocol {
+        "SSH" => {
+            let session = mcp_create_ssh_session(&conn)?;
+            if session.authenticated() {
+                Ok(format!("SSH connection successful to {}", host))
+            } else {
+                Err("Authentication failed".to_string())
+            }
+        }
+        "FTP" => {
+            let port = conn.get("port").and_then(|v| v.as_u64()).unwrap_or(21) as u16;
+            let username = conn.get("username").and_then(|v| v.as_str()).unwrap_or("");
+            let addr = format!("{}:{}", host, port);
+            let mut ftp = suppaftp::FtpStream::connect(&addr)
+                .map_err(|e| format!("FTP connection failed: {e}"))?;
+            let key = format!("orbit:deploy:{}", conn_name);
+            let entry = keyring::Entry::new("orbit-deploy", &key)
+                .map_err(|e| format!("Keyring error: {e}"))?;
+            let password = entry.get_password()
+                .map_err(|e| format!("Failed to get password: {e}"))?;
+            ftp.login(username, &password)
+                .map_err(|e| format!("FTP login failed: {e}"))?;
+            ftp.quit().ok();
+            Ok(format!("FTP connection successful to {}", host))
+        }
+        _ => Err(format!("Unknown protocol: {}", protocol)),
+    }
+}
+
+fn tool_deploy_ssh_execute(conn_name: &str, command: &str) -> Result<String, String> {
+    let conn = mcp_find_connection(conn_name)?;
+    let session = mcp_create_ssh_session(&conn)?;
 
     let mut channel = session.channel_session()
         .map_err(|e| format!("Channel error: {e}"))?;
@@ -5347,6 +5377,56 @@ fn tool_deploy_ssh_execute(domain: &str, conn_name: &str, command: &str) -> Resu
     channel.wait_close().ok();
 
     Ok(output)
+}
+
+fn tool_deploy_list_targets(domain: &str) -> Result<String, String> {
+    let targets = mcp_read_targets(domain)?;
+    Ok(serde_json::to_string_pretty(&json!({
+        "domain": domain,
+        "targets": targets
+    })).unwrap())
+}
+
+fn tool_deploy_assign_target(domain: &str, conn_name: &str, remote_path: &str) -> Result<String, String> {
+    // Verify connection exists
+    let _conn = mcp_find_connection(conn_name)?;
+
+    let targets_path = get_config_dir().join("deploy-targets.json");
+    let mut all: std::collections::HashMap<String, Vec<Value>> = if targets_path.exists() {
+        let data = fs::read_to_string(&targets_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&data).map_err(|e| e.to_string())?
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    let targets = all.entry(domain.to_string()).or_default();
+    targets.retain(|t| t.get("connection").and_then(|v| v.as_str()) != Some(conn_name));
+    targets.push(json!({ "connection": conn_name, "remote_path": remote_path }));
+
+    let json_str = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
+    fs::write(&targets_path, json_str).map_err(|e| e.to_string())?;
+
+    Ok(format!("Target assigned: {} → {} ({})", domain, conn_name, remote_path))
+}
+
+fn tool_deploy_unassign_target(domain: &str, conn_name: &str) -> Result<String, String> {
+    let targets_path = get_config_dir().join("deploy-targets.json");
+    if !targets_path.exists() {
+        return Ok("No targets configured".to_string());
+    }
+
+    let data = fs::read_to_string(&targets_path).map_err(|e| e.to_string())?;
+    let mut all: std::collections::HashMap<String, Vec<Value>> =
+        serde_json::from_str(&data).map_err(|e| e.to_string())?;
+
+    if let Some(targets) = all.get_mut(domain) {
+        targets.retain(|t| t.get("connection").and_then(|v| v.as_str()) != Some(conn_name));
+    }
+
+    let json_str = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
+    fs::write(&targets_path, json_str).map_err(|e| e.to_string())?;
+
+    Ok(format!("Target unassigned: {} ← {}", domain, conn_name))
 }
 
 fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
@@ -5370,6 +5450,19 @@ fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
         }
     };
 
+    // Find connection and target
+    let conn = mcp_find_connection(conn_name)?;
+    let targets = mcp_read_targets(domain)?;
+    let target = targets.iter()
+        .find(|t| t.get("connection").and_then(|v| v.as_str()) == Some(conn_name))
+        .ok_or_else(|| format!("No deploy target for '{}' on '{}'", conn_name, domain))?;
+    let remote_path = target.get("remote_path").and_then(|v| v.as_str()).unwrap_or("/");
+
+    let protocol = conn.get("protocol").and_then(|v| v.as_str()).unwrap_or("SSH");
+    let host = conn.get("host").and_then(|v| v.as_str()).unwrap_or("");
+    let port = conn.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
+    let username = conn.get("username").and_then(|v| v.as_str()).unwrap_or("");
+
     // Hash local files using ignore crate
     let mut builder = ignore::WalkBuilder::new(project_root);
     builder.hidden(false).git_ignore(true).git_global(false);
@@ -5387,7 +5480,6 @@ fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
             .to_string_lossy()
             .replace('\\', "/");
 
-        // Mandatory exclusions
         if relative.starts_with(".git/") || relative == ".git"
             || relative == ".env" || relative.starts_with(".env.")
             || relative.starts_with("node_modules/")
@@ -5398,24 +5490,6 @@ fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
         let size = content.len() as u64;
         local_files.push(json!({ "path": relative, "hash": hash, "size": size }));
     }
-
-    // Load connection info
-    let config_path = get_config_dir().join("deploy-connections.json");
-    if !config_path.exists() {
-        return Err("No deploy connections configured".to_string());
-    }
-    let data = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
-    let all: std::collections::HashMap<String, Vec<Value>> =
-        serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    let connections = all.get(domain).ok_or("No connections for this site")?;
-    let conn = connections.iter().find(|c| c.get("name").and_then(|v| v.as_str()) == Some(conn_name))
-        .ok_or_else(|| format!("Connection '{}' not found", conn_name))?;
-
-    let protocol = conn.get("protocol").and_then(|v| v.as_str()).unwrap_or("SSH");
-    let host = conn.get("host").and_then(|v| v.as_str()).unwrap_or("");
-    let port = conn.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
-    let username = conn.get("username").and_then(|v| v.as_str()).unwrap_or("");
-    let remote_path = conn.get("remote_path").and_then(|v| v.as_str()).unwrap_or("/");
 
     // Load previous manifest for diff
     let manifest_dir = get_config_dir().join("deploy-manifests").join(domain);
@@ -5472,37 +5546,14 @@ fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
 
     // Perform sync based on protocol
     match protocol {
-        "SSH" | "SFTP" => {
-            let addr = format!("{}:{}", host, port);
-            let tcp = std::net::TcpStream::connect(&addr)
-                .map_err(|e| format!("Connection failed: {e}"))?;
-            let mut session = ssh2::Session::new().map_err(|e| format!("SSH error: {e}"))?;
-            session.set_tcp_stream(tcp);
-            session.handshake().map_err(|e| format!("Handshake failed: {e}"))?;
-
-            let auth_val = conn.get("auth");
-            if let Some(Value::Object(kf)) = auth_val {
-                if let Some(path) = kf.get("KeyFile").and_then(|v| v.as_str()) {
-                    session.userauth_pubkey_file(username, None, std::path::Path::new(path), None)
-                        .map_err(|e| format!("Key auth failed: {e}"))?;
-                }
-            } else {
-                let key = format!("orbit:deploy:{}:{}", domain, conn_name);
-                let entry = keyring::Entry::new("orbit-deploy", &key)
-                    .map_err(|e| format!("Keyring error: {e}"))?;
-                let password = entry.get_password()
-                    .map_err(|e| format!("Failed to get password: {e}"))?;
-                session.userauth_password(username, &password)
-                    .map_err(|e| format!("Auth failed: {e}"))?;
-            }
-
+        "SSH" => {
+            let session = mcp_create_ssh_session(&conn)?;
             let sftp = session.sftp().map_err(|e| format!("SFTP error: {e}"))?;
 
             for relative in &to_upload {
                 let local_p = project_root.join(relative);
                 let remote_full = format!("{}/{}", remote_path.trim_end_matches('/'), relative);
 
-                // Create parent dirs
                 if let Some(parent) = std::path::Path::new(&remote_full).parent() {
                     let parent_str = parent.to_string_lossy().to_string();
                     let parts: Vec<&str> = parent_str.split('/').filter(|p| !p.is_empty()).collect();
@@ -5529,7 +5580,7 @@ fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
             let addr = format!("{}:{}", host, port);
             let mut ftp = suppaftp::FtpStream::connect(&addr)
                 .map_err(|e| format!("FTP connection failed: {e}"))?;
-            let key = format!("orbit:deploy:{}:{}", domain, conn_name);
+            let key = format!("orbit:deploy:{}", conn_name);
             let entry = keyring::Entry::new("orbit-deploy", &key)
                 .map_err(|e| format!("Keyring error: {e}"))?;
             let password = entry.get_password()

@@ -1,4 +1,4 @@
-use crate::services::deploy_store::{AuthMethod, DeployConnection, DeployStore, Protocol};
+use crate::services::deploy_store::{AuthMethod, DeployStore, Protocol, ServerConnection};
 use serde::{Deserialize, Serialize};
 use ssh2::Session;
 use std::fs;
@@ -46,25 +46,15 @@ pub struct DeployService;
 impl DeployService {
     // ─── Connection Testing ──────────────────────────────────────────
 
-    pub fn test_connection(
-        app: &AppHandle,
-        domain: &str,
-        conn_name: &str,
-    ) -> Result<String, String> {
-        let connections = DeployStore::load_for_site(app, domain)?;
-        let conn = connections
-            .iter()
-            .find(|c| c.name == conn_name)
-            .ok_or_else(|| format!("Connection not found: {conn_name}"))?;
-
+    pub fn test_connection(conn: &ServerConnection) -> Result<String, String> {
         match conn.protocol {
-            Protocol::SSH | Protocol::SFTP => Self::test_ssh(conn, domain),
-            Protocol::FTP => Self::test_ftp(conn, domain),
+            Protocol::SSH => Self::test_ssh(conn),
+            Protocol::FTP => Self::test_ftp(conn),
         }
     }
 
-    fn test_ssh(conn: &DeployConnection, domain: &str) -> Result<String, String> {
-        let session = Self::create_ssh_session(conn, domain)?;
+    fn test_ssh(conn: &ServerConnection) -> Result<String, String> {
+        let session = Self::create_ssh_session(conn)?;
         if session.authenticated() {
             Ok(format!("SSH connection successful to {}", conn.host))
         } else {
@@ -72,13 +62,13 @@ impl DeployService {
         }
     }
 
-    fn test_ftp(conn: &DeployConnection, domain: &str) -> Result<String, String> {
+    fn test_ftp(conn: &ServerConnection) -> Result<String, String> {
         let addr = format!("{}:{}", conn.host, conn.port);
         let mut ftp =
             FtpStream::connect(&addr).map_err(|e| format!("FTP connection failed: {e}"))?;
 
         let password = match &conn.auth {
-            AuthMethod::Password => DeployStore::get_password(domain, &conn.name)?,
+            AuthMethod::Password => DeployStore::get_password(&conn.name)?,
             AuthMethod::KeyFile(_) => {
                 return Err("FTP does not support key authentication".to_string())
             }
@@ -93,7 +83,7 @@ impl DeployService {
 
     // ─── SSH Session Factory ─────────────────────────────────────────
 
-    fn create_ssh_session(conn: &DeployConnection, domain: &str) -> Result<Session, String> {
+    fn create_ssh_session(conn: &ServerConnection) -> Result<Session, String> {
         let addr = format!("{}:{}", conn.host, conn.port);
         let tcp =
             TcpStream::connect(&addr).map_err(|e| format!("Connection failed: {e}"))?;
@@ -105,7 +95,7 @@ impl DeployService {
 
         match &conn.auth {
             AuthMethod::Password => {
-                let password = DeployStore::get_password(domain, &conn.name)?;
+                let password = DeployStore::get_password(&conn.name)?;
                 session
                     .userauth_password(&conn.username, &password)
                     .map_err(|e| format!("Auth failed: {e}"))?;
@@ -127,19 +117,8 @@ impl DeployService {
 
     // ─── Remote Execution ────────────────────────────────────────────
 
-    pub fn ssh_execute(
-        app: &AppHandle,
-        domain: &str,
-        conn_name: &str,
-        command: &str,
-    ) -> Result<String, String> {
-        let connections = DeployStore::load_for_site(app, domain)?;
-        let conn = connections
-            .iter()
-            .find(|c| c.name == conn_name)
-            .ok_or("Connection not found")?;
-
-        let session = Self::create_ssh_session(conn, domain)?;
+    pub fn ssh_execute(conn: &ServerConnection, command: &str) -> Result<String, String> {
+        let session = Self::create_ssh_session(conn)?;
         let mut channel = session
             .channel_session()
             .map_err(|e| format!("Channel error: {e}"))?;
@@ -225,7 +204,6 @@ impl DeployService {
         let mut modified = Vec::new();
         let mut deleted = Vec::new();
 
-        // Files in local but not remote = added; hash differs = modified
         for file in local {
             match remote_map.get(file.path.as_str()) {
                 None => added.push(file.path.clone()),
@@ -237,7 +215,6 @@ impl DeployService {
             }
         }
 
-        // Files in remote but not local = deleted
         for file in remote {
             if !local_map.contains_key(file.path.as_str()) {
                 deleted.push(file.path.clone());
@@ -247,24 +224,35 @@ impl DeployService {
         (added, modified, deleted)
     }
 
-    // ─── SFTP Sync ──────────────────────────────────────────────────
+    // ─── Unified Sync Entry Point ────────────────────────────────────
 
-    pub fn sync_sftp(
+    pub fn sync(
         app: &AppHandle,
         domain: &str,
-        conn_name: &str,
+        conn: &ServerConnection,
+        remote_path: &str,
+        site_path: &Path,
+    ) -> Result<DeployManifest, String> {
+        match conn.protocol {
+            Protocol::SSH => Self::sync_sftp(app, domain, conn, remote_path, site_path),
+            Protocol::FTP => Self::sync_ftp(app, domain, conn, remote_path, site_path),
+        }
+    }
+
+    // ─── SFTP Sync ──────────────────────────────────────────────────
+
+    fn sync_sftp(
+        app: &AppHandle,
+        domain: &str,
+        conn: &ServerConnection,
+        remote_path: &str,
         site_path: &Path,
     ) -> Result<DeployManifest, String> {
         Self::acquire_lock(app, domain)?;
 
+        let conn_name = conn.name.clone();
         let result = (|| {
-            let connections = DeployStore::load_for_site(app, domain)?;
-            let conn = connections
-                .iter()
-                .find(|c| c.name == conn_name)
-                .ok_or("Connection not found")?;
-
-            let session = Self::create_ssh_session(conn, domain)?;
+            let session = Self::create_ssh_session(conn)?;
             let sftp = session.sftp().map_err(|e| format!("SFTP error: {e}"))?;
 
             // Hash local files
@@ -272,7 +260,7 @@ impl DeployService {
                 "deploy-progress",
                 DeployProgress {
                     domain: domain.to_string(),
-                    connection: conn_name.to_string(),
+                    connection: conn_name.clone(),
                     phase: "hashing".to_string(),
                     current: 0,
                     total: 0,
@@ -283,8 +271,8 @@ impl DeployService {
 
             let local_files = Self::hash_local_files(site_path)?;
 
-            // Load previous manifest for diff (if exists)
-            let manifest_path = Self::manifest_path(app, domain, conn_name)?;
+            // Load previous manifest for diff
+            let manifest_path = Self::manifest_path(app, domain, &conn_name)?;
             let remote_files: Vec<FileHash> = if manifest_path.exists() {
                 let data = fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
                 let manifest: DeployManifest =
@@ -307,11 +295,10 @@ impl DeployService {
                 let local_path = site_path.join(relative);
                 let remote_full = format!(
                     "{}/{}",
-                    conn.remote_path.trim_end_matches('/'),
+                    remote_path.trim_end_matches('/'),
                     relative
                 );
 
-                // Create parent directories on remote
                 if let Some(parent) = Path::new(&remote_full).parent() {
                     Self::sftp_mkdir_recursive(&sftp, &parent.to_string_lossy())?;
                 }
@@ -327,7 +314,7 @@ impl DeployService {
                     "deploy-progress",
                     DeployProgress {
                         domain: domain.to_string(),
-                        connection: conn_name.to_string(),
+                        connection: conn_name.clone(),
                         phase: "uploading".to_string(),
                         current: i + 1,
                         total,
@@ -341,16 +328,16 @@ impl DeployService {
             for (i, relative) in deleted.iter().enumerate() {
                 let remote_full = format!(
                     "{}/{}",
-                    conn.remote_path.trim_end_matches('/'),
+                    remote_path.trim_end_matches('/'),
                     relative
                 );
-                sftp.unlink(Path::new(&remote_full)).ok(); // Best effort
+                sftp.unlink(Path::new(&remote_full)).ok();
 
                 app.emit(
                     "deploy-progress",
                     DeployProgress {
                         domain: domain.to_string(),
-                        connection: conn_name.to_string(),
+                        connection: conn_name.clone(),
                         phase: "deleting".to_string(),
                         current: upload_list.len() + i + 1,
                         total,
@@ -363,16 +350,15 @@ impl DeployService {
             // Save manifest
             let timestamp = chrono::Utc::now().to_rfc3339();
             let manifest = DeployManifest {
-                timestamp: timestamp.clone(),
+                timestamp,
                 domain: domain.to_string(),
-                connection: conn_name.to_string(),
+                connection: conn_name.clone(),
                 files: local_files,
                 status: DeployStatus::Completed,
             };
             let json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
             fs::write(&manifest_path, &json).map_err(|e| e.to_string())?;
 
-            // Cleanup old snapshots
             Self::cleanup_old_manifests(app, domain).ok();
 
             Ok(manifest)
@@ -384,23 +370,19 @@ impl DeployService {
 
     // ─── FTP Sync ───────────────────────────────────────────────────
 
-    pub fn sync_ftp(
+    fn sync_ftp(
         app: &AppHandle,
         domain: &str,
-        conn_name: &str,
+        conn: &ServerConnection,
+        remote_path: &str,
         site_path: &Path,
     ) -> Result<DeployManifest, String> {
         Self::acquire_lock(app, domain)?;
 
+        let conn_name = conn.name.clone();
         let result = (|| {
-            let connections = DeployStore::load_for_site(app, domain)?;
-            let conn = connections
-                .iter()
-                .find(|c| c.name == conn_name)
-                .ok_or("Connection not found")?;
-
             let password = match &conn.auth {
-                AuthMethod::Password => DeployStore::get_password(domain, &conn.name)?,
+                AuthMethod::Password => DeployStore::get_password(&conn.name)?,
                 AuthMethod::KeyFile(_) => {
                     return Err("FTP does not support key authentication".to_string())
                 }
@@ -415,7 +397,7 @@ impl DeployService {
             let local_files = Self::hash_local_files(site_path)?;
 
             // Load previous manifest for diff
-            let manifest_path = Self::manifest_path(app, domain, conn_name)?;
+            let manifest_path = Self::manifest_path(app, domain, &conn_name)?;
             let remote_files: Vec<FileHash> = if manifest_path.exists() {
                 let data = fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
                 let manifest: DeployManifest =
@@ -438,11 +420,10 @@ impl DeployService {
                 let local_path = site_path.join(relative);
                 let remote_full = format!(
                     "{}/{}",
-                    conn.remote_path.trim_end_matches('/'),
+                    remote_path.trim_end_matches('/'),
                     relative
                 );
 
-                // Create parent directories
                 if let Some(parent) = Path::new(&remote_full).parent() {
                     Self::ftp_mkdir_recursive(&mut ftp, &parent.to_string_lossy())?;
                 }
@@ -456,7 +437,7 @@ impl DeployService {
                     "deploy-progress",
                     DeployProgress {
                         domain: domain.to_string(),
-                        connection: conn_name.to_string(),
+                        connection: conn_name.clone(),
                         phase: "uploading".to_string(),
                         current: i + 1,
                         total,
@@ -470,7 +451,7 @@ impl DeployService {
             for (i, relative) in deleted.iter().enumerate() {
                 let remote_full = format!(
                     "{}/{}",
-                    conn.remote_path.trim_end_matches('/'),
+                    remote_path.trim_end_matches('/'),
                     relative
                 );
                 ftp.rm(&remote_full).ok();
@@ -479,7 +460,7 @@ impl DeployService {
                     "deploy-progress",
                     DeployProgress {
                         domain: domain.to_string(),
-                        connection: conn_name.to_string(),
+                        connection: conn_name.clone(),
                         phase: "deleting".to_string(),
                         current: upload_list.len() + i + 1,
                         total,
@@ -495,7 +476,7 @@ impl DeployService {
             let manifest = DeployManifest {
                 timestamp,
                 domain: domain.to_string(),
-                connection: conn_name.to_string(),
+                connection: conn_name.clone(),
                 files: local_files,
                 status: DeployStatus::Completed,
             };
@@ -589,7 +570,6 @@ impl DeployService {
             .collect();
         entries.sort_by_key(|e| e.file_name());
         entries.reverse();
-        // Keep first 10, delete rest
         for entry in entries.iter().skip(10) {
             fs::remove_file(entry.path()).ok();
         }
@@ -603,7 +583,6 @@ impl DeployService {
         let mut current = String::new();
         for part in parts {
             current = format!("{}/{}", current, part);
-            // Try to create; ignore error if already exists
             sftp.mkdir(Path::new(&current), 0o755).ok();
         }
         Ok(())

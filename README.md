@@ -1,13 +1,15 @@
 # Orbit
 
-AI-ready local development environment for **Windows, Linux and macOS**. 16 services, MCP integration, CLI — all from a single interface.
+AI-ready local development environment for **Windows, Linux and macOS**. 17 services, MCP integration, CLI — all from a single interface.
 
 ## Features
 
-- **Service Management** — Install, start, stop and configure 16 services with one click
-- **MCP Integration** — 51 tools across 10 domains for Claude Code, Cursor and Windsurf
+- **Service Management** — Install, start, stop and configure 17 services with one click
+- **MCP Integration** — 72+ tools across 12 domains for Claude Code, Cursor and Windsurf
 - **Orbit CLI** — Full command-line interface: start, stop, install, status, db, hosts and more
+- **AI Tools** — Launch Claude Code and Gemini CLI directly from Orbit with project context and MCP auto-config
 - **Site Management** — Local sites with custom domains (.test), Nginx/Apache vhosts, templates
+- **Deploy** — SSH/SFTP/FTP deploy with diff-based sync, global connections and per-site targets
 - **Local SSL** — Self-signed certificates via mkcert, one-click HTTPS
 - **Database Tools** — MariaDB + PostgreSQL management, Adminer, phpMyAdmin
 - **Multi-version PHP** — Run multiple PHP versions side by side with per-site selection
@@ -15,10 +17,11 @@ AI-ready local development environment for **Windows, Linux and macOS**. 16 serv
 - **Integrated Terminal** — Built-in terminal with PTY support
 - **PATH Management** — Service directories added to system PATH automatically on install
 - **Autostart** — Per-service autostart on app launch
+- **Blueprints** — Scaffold Laravel, Next.js, Astro, WordPress and more with one click
 
 ## Supported Services
 
-Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js, Python, Bun, Deno, Go, Rust, Composer, Mailpit, Meilisearch
+Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Meilisearch, Node.js, Python, Bun, Deno, Go, Rust, Composer, Mailpit, Ngrok
 
 ## Platform Support
 
@@ -41,7 +44,7 @@ Nginx, Apache, PHP (multi-version), MariaDB, PostgreSQL, MongoDB, Redis, Node.js
 
 ## MCP Integration
 
-Orbit exposes 65 tools via the Model Context Protocol for Claude Code, Cursor, Antigravity, Windsurf and any MCP-compatible client.
+Orbit exposes 72+ tools via the Model Context Protocol for Claude Code, Cursor, Antigravity, Windsurf and any MCP-compatible client.
 
 After installing MCP from the Orbit app, add the following to your AI tool's config:
 
@@ -56,6 +59,29 @@ After installing MCP from the Orbit app, add the following to your AI tool's con
 ```
 
 > Orbit automatically adds `orbit-mcp` to your system PATH on install — no full path needed.
+
+### MCP Domains
+
+Services, Sites, MariaDB, PostgreSQL, MongoDB, Redis, PHP Config, SSL, Logs, Composer, Mailpit, Config/Hosts, Deploy
+
+## AI Tools
+
+Orbit integrates Claude Code and Gemini CLI as first-class AI tools:
+
+- Install/update/uninstall from the AI Tools tab
+- Launch with project context — Orbit writes `.claude/orbit-context.md` with active services, deploy targets, git info
+- Auto-configures `orbit-mcp` in Claude Code's MCP config on install
+- Multi-session terminal with project selector
+
+## Deploy
+
+SSH/SFTP/FTP deploy with global server connections and per-site targets:
+
+- Diff-based file sync using blake3 hashing — only changed files uploaded
+- Credentials stored in OS keyring
+- `.deployignore` support (falls back to `.gitignore`)
+- Real-time progress tracking
+- Deploy manifests for incremental syncs
 
 ## CLI
 

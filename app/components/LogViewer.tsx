@@ -264,13 +264,7 @@ export function LogViewer() {
   const getBadge = (logType: string) => SERVICE_BADGE[logType] || SERVICE_BADGE.other;
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      {/* Header */}
-      <header className="mb-6">
-        <h2 className="text-2xl font-bold">Logs</h2>
-        <p className="text-content-secondary">View and analyze server logs</p>
-      </header>
-
+    <div className="h-full flex flex-col">
       <div className="flex gap-6 flex-1 min-h-0">
         {/* Log Files Sidebar */}
         <aside className="w-64 flex-shrink-0 flex flex-col">

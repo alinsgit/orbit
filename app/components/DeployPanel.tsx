@@ -1,25 +1,22 @@
 import { useState, useEffect } from 'react'
 import {
   deployListConnections,
-  deployAddConnection,
-  deployRemoveConnection,
-  deployTestConnection,
+  deployListTargets,
+  deployAssignTarget,
+  deployUnassignTarget,
   deploySync,
   deployGetStatus,
-  DeployConnection,
   DeployManifest,
 } from '../lib/api'
+import type { ServerConnection, DeployTarget } from '../lib/api'
 import { listen } from '@tauri-apps/api/event'
 import { useApp } from '../lib/AppContext'
 import {
   Plus,
   Trash2,
-  Wifi,
   Upload,
   RefreshCw,
   Server,
-  Key,
-  FileKey,
   Check,
   X,
   Loader2,
@@ -39,61 +36,51 @@ interface DeployProgressPayload {
   file: string | null
 }
 
-const DEFAULT_PORTS: Record<string, number> = {
-  SSH: 22,
-  SFTP: 22,
-  FTP: 21,
-}
-
 export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
   const { addToast } = useApp()
-  const [connections, setConnections] = useState<DeployConnection[]>([])
+  const [connections, setConnections] = useState<ServerConnection[]>([])
+  const [targets, setTargets] = useState<DeployTarget[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [testing, setTesting] = useState<string | null>(null)
   const [deploying, setDeploying] = useState<string | null>(null)
   const [deployProgress, setDeployProgress] = useState<DeployProgressPayload | null>(null)
   const [lastDeploy, setLastDeploy] = useState<Record<string, DeployManifest | null>>({})
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   // Form state
-  const [form, setForm] = useState({
-    name: '',
-    protocol: 'SSH' as 'SSH' | 'SFTP' | 'FTP',
-    host: '',
-    port: 22,
-    username: '',
-    authType: 'password' as 'password' | 'keyfile',
-    password: '',
-    keyFilePath: '',
-    remotePath: '/',
-  })
-  const [formSaving, setFormSaving] = useState(false)
+  const [selectedConn, setSelectedConn] = useState('')
+  const [remotePath, setRemotePath] = useState('/')
 
-  const loadConnections = async () => {
+  const loadData = async () => {
     try {
       setLoading(true)
-      const conns = await deployListConnections(domain)
+      const [conns, tgts] = await Promise.all([
+        deployListConnections(),
+        deployListTargets(domain),
+      ])
       setConnections(conns)
-      // Load last deploy status for each
+      setTargets(tgts)
+
+      // Load last deploy status for each target
       const statuses: Record<string, DeployManifest | null> = {}
-      for (const conn of conns) {
+      for (const t of tgts) {
         try {
-          statuses[conn.name] = await deployGetStatus(domain, conn.name)
+          statuses[t.connection] = await deployGetStatus(domain, t.connection)
         } catch {
-          statuses[conn.name] = null
+          statuses[t.connection] = null
         }
       }
       setLastDeploy(statuses)
     } catch {
-      // No connections yet
       setConnections([])
+      setTargets([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadConnections()
+    loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domain])
 
@@ -107,72 +94,33 @@ export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
     return () => { unlisten.then(fn => fn()) }
   }, [domain])
 
-  const resetForm = () => {
-    setForm({
-      name: '',
-      protocol: 'SSH',
-      host: '',
-      port: 22,
-      username: '',
-      authType: 'password',
-      password: '',
-      keyFilePath: '',
-      remotePath: '/',
-    })
-  }
-
-  const handleAdd = async () => {
-    if (!form.name || !form.host || !form.username) {
-      addToast({ type: 'warning', message: 'Name, host, and username are required' })
-      return
-    }
-
+  const handleAssign = async () => {
+    if (!selectedConn || !remotePath) return
     try {
-      setFormSaving(true)
-      const connection: DeployConnection = {
-        name: form.name,
-        protocol: form.protocol,
-        host: form.host,
-        port: form.port,
-        username: form.username,
-        auth: form.authType === 'keyfile' ? { KeyFile: form.keyFilePath } : 'Password',
-        remote_path: form.remotePath,
-      }
-      await deployAddConnection(
-        domain,
-        connection,
-        form.authType === 'password' ? form.password : undefined,
-      )
-      addToast({ type: 'success', message: `Connection "${form.name}" added` })
-      resetForm()
+      setActionLoading('assign')
+      await deployAssignTarget(domain, selectedConn, remotePath)
+      addToast({ type: 'success', message: `Target assigned: ${selectedConn}` })
+      setSelectedConn('')
+      setRemotePath('/')
       setShowForm(false)
-      await loadConnections()
+      await loadData()
     } catch (err) {
-      addToast({ type: 'error', message: `Failed to add connection: ${err}` })
+      addToast({ type: 'error', message: `Failed to assign target: ${err}` })
     } finally {
-      setFormSaving(false)
+      setActionLoading(null)
     }
   }
 
-  const handleRemove = async (connName: string) => {
+  const handleUnassign = async (connName: string) => {
     try {
-      await deployRemoveConnection(domain, connName)
-      addToast({ type: 'success', message: `Connection "${connName}" removed` })
-      await loadConnections()
+      setActionLoading(`remove-${connName}`)
+      await deployUnassignTarget(domain, connName)
+      addToast({ type: 'success', message: `Target removed: ${connName}` })
+      await loadData()
     } catch (err) {
-      addToast({ type: 'error', message: `Failed to remove: ${err}` })
-    }
-  }
-
-  const handleTest = async (connName: string) => {
-    try {
-      setTesting(connName)
-      const result = await deployTestConnection(domain, connName)
-      addToast({ type: 'success', message: result })
-    } catch (err) {
-      addToast({ type: 'error', message: `Connection test failed: ${err}` })
+      addToast({ type: 'error', message: `Failed to remove target: ${err}` })
     } finally {
-      setTesting(null)
+      setActionLoading(null)
     }
   }
 
@@ -182,7 +130,7 @@ export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
       setDeployProgress(null)
       await deploySync(domain, connName, sitePath)
       addToast({ type: 'success', message: `Deploy to "${connName}" completed` })
-      await loadConnections()
+      await loadData()
     } catch (err) {
       addToast({ type: 'error', message: `Deploy failed: ${err}` })
     } finally {
@@ -190,6 +138,11 @@ export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
       setDeployProgress(null)
     }
   }
+
+  // Connections not yet assigned to this site
+  const availableConnections = connections.filter(
+    c => !targets.some(t => t.connection === c.name)
+  )
 
   if (loading) {
     return (
@@ -201,76 +154,58 @@ export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
 
   return (
     <div className="space-y-3">
-      {/* Connection List */}
-      {connections.length === 0 && !showForm && (
+      {/* Target List */}
+      {targets.length === 0 && !showForm && (
         <div className="text-xs text-content-muted text-center py-3">
-          No deploy connections configured
+          No deploy targets configured.
+          {connections.length === 0
+            ? ' Add server connections in Settings first.'
+            : ' Click + to assign a connection.'}
         </div>
       )}
 
-      {connections.map(conn => {
-        const status = lastDeploy[conn.name]
-        const isDeploying = deploying === conn.name
-        const isTesting = testing === conn.name
+      {targets.map(target => {
+        const conn = connections.find(c => c.name === target.connection)
+        const status = lastDeploy[target.connection]
+        const isDeploying = deploying === target.connection
 
         return (
           <div
-            key={conn.name}
+            key={target.connection}
             className="p-3 bg-surface-inset rounded-lg border border-edge/50"
           >
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2">
                 <Server size={14} className="text-content-muted" />
-                <span className="text-sm font-medium">{conn.name}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-raised text-content-muted">
-                  {conn.protocol}
-                </span>
+                <span className="text-sm font-medium">{target.connection}</span>
+                {conn && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${conn.protocol === 'SSH' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                    {conn.protocol}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => handleTest(conn.name)}
-                  disabled={isTesting || isDeploying}
-                  className="p-1 text-content-muted hover:text-emerald-500 hover:bg-emerald-500/10 rounded transition-colors disabled:opacity-50"
-                  title="Test Connection"
-                >
-                  {isTesting ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Wifi size={12} />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDeploy(conn.name)}
-                  disabled={isTesting || isDeploying}
+                  onClick={() => handleDeploy(target.connection)}
+                  disabled={isDeploying || actionLoading !== null}
                   className="p-1 text-content-muted hover:text-blue-500 hover:bg-blue-500/10 rounded transition-colors disabled:opacity-50"
                   title="Deploy"
                 >
-                  {isDeploying ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Upload size={12} />
-                  )}
+                  {isDeploying ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
                 </button>
                 <button
-                  onClick={() => handleRemove(conn.name)}
-                  disabled={isTesting || isDeploying}
+                  onClick={() => handleUnassign(target.connection)}
+                  disabled={isDeploying || actionLoading !== null}
                   className="p-1 text-content-muted hover:text-red-500 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
-                  title="Remove"
+                  title="Remove target"
                 >
-                  <Trash2 size={12} />
+                  {actionLoading === `remove-${target.connection}` ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 </button>
               </div>
             </div>
             <div className="text-xs text-content-muted space-y-0.5">
-              <div>{conn.username}@{conn.host}:{conn.port}</div>
-              <div className="font-mono truncate">{conn.remote_path}</div>
-              <div className="flex items-center gap-1">
-                {conn.auth === 'Password' ? (
-                  <><Key size={10} /> Password</>
-                ) : (
-                  <><FileKey size={10} /> Key File</>
-                )}
-              </div>
+              {conn && <div>{conn.username}@{conn.host}:{conn.port}</div>}
+              <div className="font-mono truncate">{target.remote_path}</div>
             </div>
 
             {/* Deploy Progress */}
@@ -317,117 +252,51 @@ export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
         )
       })}
 
-      {/* Add Connection Form */}
+      {/* Assign Target Form */}
       {showForm && (
         <div className="p-3 bg-surface-inset rounded-lg border border-edge/50 space-y-2.5">
-          <div className="text-xs font-medium text-content-secondary mb-2">New Connection</div>
+          <div className="text-xs font-medium text-content-secondary mb-1">Assign Deploy Target</div>
 
-          <input
-            type="text"
-            placeholder="Connection name"
-            value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-          />
-
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              value={form.protocol}
-              onChange={e => {
-                const protocol = e.target.value as 'SSH' | 'SFTP' | 'FTP'
-                setForm(f => ({ ...f, protocol, port: DEFAULT_PORTS[protocol] }))
-              }}
-              className="px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="SSH">SSH</option>
-              <option value="SFTP">SFTP</option>
-              <option value="FTP">FTP</option>
-            </select>
-            <input
-              type="number"
-              placeholder="Port"
-              value={form.port}
-              onChange={e => setForm(f => ({ ...f, port: parseInt(e.target.value) || 22 }))}
-              className="px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-
-          <input
-            type="text"
-            placeholder="Host (e.g., example.com)"
-            value={form.host}
-            onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
-            className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-          />
-
-          <input
-            type="text"
-            placeholder="Username"
-            value={form.username}
-            onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-            className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-          />
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => setForm(f => ({ ...f, authType: 'password' }))}
-              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs transition-colors ${
-                form.authType === 'password'
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-surface border border-edge text-content-muted hover:text-content-secondary'
-              }`}
-            >
-              <Key size={10} /> Password
-            </button>
-            <button
-              onClick={() => setForm(f => ({ ...f, authType: 'keyfile' }))}
-              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs transition-colors ${
-                form.authType === 'keyfile'
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-surface border border-edge text-content-muted hover:text-content-secondary'
-              }`}
-            >
-              <FileKey size={10} /> Key File
-            </button>
-          </div>
-
-          {form.authType === 'password' ? (
-            <input
-              type="password"
-              placeholder="Password"
-              value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-            />
+          {availableConnections.length === 0 ? (
+            <p className="text-xs text-content-muted">
+              No available connections. Add server connections in Settings first.
+            </p>
           ) : (
-            <input
-              type="text"
-              placeholder="Key file path (e.g., ~/.ssh/id_rsa)"
-              value={form.keyFilePath}
-              onChange={e => setForm(f => ({ ...f, keyFilePath: e.target.value }))}
-              className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-            />
-          )}
+            <>
+              <select
+                value={selectedConn}
+                onChange={e => setSelectedConn(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="">Select a connection...</option>
+                {availableConnections.map(c => (
+                  <option key={c.name} value={c.name}>
+                    {c.name} ({c.username}@{c.host} · {c.protocol})
+                  </option>
+                ))}
+              </select>
 
-          <input
-            type="text"
-            placeholder="Remote path (e.g., /var/www/html)"
-            value={form.remotePath}
-            onChange={e => setForm(f => ({ ...f, remotePath: e.target.value }))}
-            className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
-          />
+              <input
+                type="text"
+                placeholder="Remote path (e.g., /var/www/html)"
+                value={remotePath}
+                onChange={e => setRemotePath(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-surface rounded border border-edge text-xs focus:border-emerald-500 focus:outline-none"
+              />
+            </>
+          )}
 
           <div className="flex gap-2 pt-1">
             <button
-              onClick={handleAdd}
-              disabled={formSaving}
+              onClick={handleAssign}
+              disabled={!selectedConn || !remotePath || actionLoading === 'assign'}
               className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium text-white transition-colors disabled:opacity-50"
             >
-              {formSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-              Save
+              {actionLoading === 'assign' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Assign
             </button>
             <button
-              onClick={() => { setShowForm(false); resetForm() }}
+              onClick={() => { setShowForm(false); setSelectedConn(''); setRemotePath('/') }}
               className="px-3 py-1.5 bg-surface hover:bg-hover rounded text-xs text-content-muted transition-colors border border-edge"
             >
               Cancel
@@ -443,7 +312,7 @@ export function DeployPanel({ domain, sitePath }: DeployPanelProps) {
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-surface-raised hover:bg-hover border border-edge/50 rounded-lg text-xs text-content-secondary transition-colors"
         >
           <Plus size={12} />
-          Add Connection
+          Add Deploy Target
         </button>
       )}
     </div>

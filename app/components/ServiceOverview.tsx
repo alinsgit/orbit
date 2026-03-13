@@ -84,19 +84,15 @@ export function ServiceOverview({ onNavigateToInstall }: ServiceOverviewProps) {
 
   return (
     <div>
-      {/* Header */}
       <header className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold mb-1">Overview</h2>
-          <p className="text-content-secondary text-sm">
-            {runningCount}/{daemonServices.length} services running
-            {services.length > daemonServices.length && (
-              <span className="ml-2 text-content-muted">
-                · {services.length - daemonServices.length} dev tools installed
-              </span>
-            )}
-          </p>
-        </div>
+        <p className="text-content-secondary text-sm">
+          {runningCount}/{daemonServices.length} services running
+          {services.length > daemonServices.length && (
+            <span className="ml-2 text-content-muted">
+              · {services.length - daemonServices.length} dev tools installed
+            </span>
+          )}
+        </p>
         <div className="flex gap-2">
           <button
             onClick={handleRefresh}

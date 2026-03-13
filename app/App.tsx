@@ -1,10 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Server, Settings, Minus, Square, X, ScrollText, Database, Globe, TerminalSquare, Loader2, Bot, Sparkles } from 'lucide-react'
+import { Server, Settings, Minus, Square, X, Database, Globe, TerminalSquare, Loader2, Bot, BrainCircuit, Sparkles } from 'lucide-react'
 import { useApp } from './lib/AppContext'
 import { ServiceManager } from './components/ServiceManager'
 import { SitesManager } from './components/SitesManager'
 import { SettingsManager } from './components/SettingsManager'
-import { LogViewer } from './components/LogViewer'
 import DatabaseViewer from './components/DatabaseViewer'
 import { Terminal } from './components/Terminal'
 import { AiToolView } from './components/AiToolView'
@@ -28,8 +27,6 @@ function App() {
     claudeCodeInstalled,
     geminiCliInstalled,
   } = useApp()
-
-  const isAiTerminalActive = activeTab === 'claude-code' || activeTab === 'gemini-cli'
 
   // Lazy mount: mount tab on first visit, keep mounted forever (preserves state)
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set([activeTab]))
@@ -165,22 +162,16 @@ function App() {
             title="Database"
           />
           <NavButton
-            active={activeTab === 'logs'}
-            onClick={() => setActiveTab('logs')}
-            icon={<ScrollText size={24} />}
-            title="Logs"
-          />
-          <NavButton
             active={activeTab === 'ai' || activeTab === 'claude-code' || activeTab === 'gemini-cli'}
             onClick={() => setActiveTab('ai')}
-            icon={<Bot size={24} />}
+            icon={<BrainCircuit size={24} />}
             title="AI Tools"
           />
           {claudeCodeInstalled && (
             <NavButton
               active={activeTab === 'claude-code'}
               onClick={() => setActiveTab('claude-code')}
-              icon={<span className="text-[11px] font-bold leading-none">CC</span>}
+              icon={<Bot size={20} />}
               title="Claude Code"
             />
           )}
@@ -220,11 +211,6 @@ function App() {
                 <SitesManager />
               </div>
             )}
-            {mountedTabs.has('logs') && (
-              <div className="h-full overflow-auto" style={{ display: activeTab === 'logs' ? undefined : 'none' }}>
-                <LogViewer />
-              </div>
-            )}
             {mountedTabs.has('database') && (
               <div className="h-full overflow-auto" style={{ display: activeTab === 'database' ? undefined : 'none' }}>
                 <DatabaseViewer />
@@ -254,12 +240,12 @@ function App() {
 
           {/* Docked Terminal — mounted on first open, hidden via CSS to preserve PTY sessions */}
           {terminalMounted && (
-            <div style={{ display: isTerminalOpen && !isAiTerminalActive ? undefined : 'none' }}>
+            <div style={{ display: isTerminalOpen ? undefined : 'none' }}>
               <div
-                className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors"
+                className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors relative z-50"
                 onMouseDown={handleDragStart}
               />
-              <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0d1117] relative z-40 flex flex-col">
+              <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0d1117] relative z-50 flex flex-col">
                 <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
               </div>
             </div>

@@ -294,11 +294,16 @@ pub fn run() {
         commands::ai_tools::generate_ai_context_cmd,
         // MCP Auto-Configuration
         commands::ai_tools::setup_mcp_config,
-        // Deploy
+        // Deploy — Global Connections
         commands::deploy::deploy_list_connections,
         commands::deploy::deploy_add_connection,
         commands::deploy::deploy_remove_connection,
         commands::deploy::deploy_test_connection,
+        // Deploy — Site Targets
+        commands::deploy::deploy_list_targets,
+        commands::deploy::deploy_assign_target,
+        commands::deploy::deploy_unassign_target,
+        // Deploy — Operations
         commands::deploy::deploy_ssh_execute,
         commands::deploy::deploy_sync,
         commands::deploy::deploy_get_status,

@@ -22,8 +22,6 @@ import {
   X,
   Globe,
   FolderOpen,
-  ChevronRight,
-  ChevronLeft,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { XTERM_THEME_DARK, XTERM_THEME_LIGHT, XTERM_OPTIONS } from '../lib/xterm-config'
@@ -53,16 +51,13 @@ function getProjectRoot(sitePath: string): string {
 }
 
 export function AiToolView({ tool }: AiToolViewProps) {
-  const { services, addToast } = useApp()
+  const { addToast } = useApp()
   const { resolvedTheme } = useTheme()
 
   const [sessions, setSessions] = useState<AiSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sites, setSites] = useState<SiteWithStatus[]>([])
   const [showSiteSelector, setShowSiteSelector] = useState(false)
-  const [infoPanelOpen, setInfoPanelOpen] = useState(() => {
-    return localStorage.getItem('orbit-ai-info-panel') !== 'collapsed'
-  })
 
   const nextSessionNum = useRef(1)
   const xtermsRef = useRef<Map<string, {
@@ -82,11 +77,6 @@ export function AiToolView({ tool }: AiToolViewProps) {
     const themeToApply = resolvedTheme === 'light' ? XTERM_THEME_LIGHT : XTERM_THEME_DARK
     xtermsRef.current.forEach(({ term }) => { term.options.theme = themeToApply })
   }, [resolvedTheme])
-
-  // Persist info panel state
-  useEffect(() => {
-    localStorage.setItem('orbit-ai-info-panel', infoPanelOpen ? 'open' : 'collapsed')
-  }, [infoPanelOpen])
 
   // Load sites
   useEffect(() => {
@@ -225,7 +215,7 @@ export function AiToolView({ tool }: AiToolViewProps) {
       } catch { /* fit may fail */ }
     }, 50)
     return () => clearTimeout(timer)
-  }, [activeSessionId, infoPanelOpen])
+  }, [activeSessionId])
 
   // ResizeObserver
   useEffect(() => {
@@ -264,15 +254,6 @@ export function AiToolView({ tool }: AiToolViewProps) {
     if (el) containersRef.current.set(sessionId, el)
   }, [])
 
-  // Active session info
-  const activeSession = sessions.find(s => s.id === activeSessionId)
-  const activeSite = activeSession ? sites.find(s => s.domain === activeSession.domain) : null
-
-  // Running daemons for info panel
-  const runningServices = services.filter(s =>
-    ['nginx', 'apache', 'php', 'mariadb', 'postgresql', 'mongodb', 'redis', 'mailpit', 'meilisearch']
-      .includes(s.service_type) && s.status === 'running'
-  )
 
   return (
     <div className="flex flex-col h-full">
@@ -390,79 +371,6 @@ export function AiToolView({ tool }: AiToolViewProps) {
           ))}
         </div>
 
-        {/* Info Panel */}
-        {infoPanelOpen && activeSession && (
-          <div className="w-56 border-l border-edge bg-surface-inset flex flex-col overflow-y-auto custom-scrollbar shrink-0">
-            {/* Project */}
-            {activeSite && (
-              <div className="p-3 border-b border-edge/50">
-                <div className="text-[10px] text-content-muted uppercase tracking-wider mb-2">Project</div>
-                <div className="text-xs text-content-secondary space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <Globe className="w-3 h-3 text-emerald-500 shrink-0" />
-                    <span className="truncate">{activeSite.domain}</span>
-                  </div>
-                  {activeSite.template && (
-                    <div className="text-content-muted">Template: {activeSite.template}</div>
-                  )}
-                  {activeSite.php_version && (
-                    <div className="text-content-muted">PHP: {activeSite.php_version}</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Services */}
-            {runningServices.length > 0 && (
-              <div className="p-3 border-b border-edge/50">
-                <div className="text-[10px] text-content-muted uppercase tracking-wider mb-2">Services</div>
-                <div className="space-y-1">
-                  {runningServices.map(svc => (
-                    <div key={svc.name} className="flex items-center gap-1.5 text-xs text-content-secondary">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span>{svc.name}</span>
-                      {svc.port && <span className="text-content-muted ml-auto">:{svc.port}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* MCP */}
-            <div className="p-3 border-b border-edge/50">
-              <div className="text-[10px] text-content-muted uppercase tracking-wider mb-2">MCP Tools</div>
-              <div className="text-[11px] text-content-muted space-y-0.5">
-                <p>orbit-mcp provides:</p>
-                <p>- Service management</p>
-                <p>- Database operations</p>
-                <p>- Site management</p>
-                <p>- Logs, SSL, PHP config</p>
-              </div>
-            </div>
-
-            {/* Collapse button */}
-            <div className="p-2 mt-auto">
-              <button
-                onClick={() => setInfoPanelOpen(false)}
-                className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] text-content-muted hover:text-content-secondary hover:bg-hover rounded transition-colors"
-              >
-                <ChevronRight className="w-3 h-3" />
-                Collapse
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Collapsed info panel toggle */}
-        {!infoPanelOpen && activeSession && (
-          <button
-            onClick={() => setInfoPanelOpen(true)}
-            className="w-8 shrink-0 border-l border-edge bg-surface-inset flex items-center justify-center hover:bg-hover transition-colors"
-            title="Expand info panel"
-          >
-            <ChevronLeft className="w-4 h-4 text-content-muted" />
-          </button>
-        )}
       </div>
     </div>
   )

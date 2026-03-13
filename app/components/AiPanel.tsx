@@ -128,8 +128,8 @@ export function AiPanel() {
   const hasGeminiUpdate = geminiLatest && geminiCliStatus?.version && geminiLatest !== geminiCliStatus.version
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="p-6 h-full flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Claude Code Card */}
         <ToolCard
           name="Claude Code"
@@ -279,8 +279,9 @@ export function AiPanel() {
         </ToolCard>
       </div>
 
-      {/* MCP Server Manager */}
-      <McpManager />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <McpManager />
+      </div>
     </div>
   )
 }

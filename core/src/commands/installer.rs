@@ -124,6 +124,12 @@ pub async fn download_service(
             // Note: PostgreSQL ZIP extracts to postgresql/pgsql/bin/ (nested).
             // Scanner and service.rs handle both flattened and nested structures.
 
+            // Redis: ZIP has double-nested folder (e.g., Redis-8.6.1-Windows-x64-cygwin-with-Service/)
+            // After strip_root, one subfolder may remain. Flatten it.
+            if service_type == "redis" {
+                configure_redis(&extract_target)?;
+            }
+
             Ok(format!("Service installed to {extract_target:?}"))
         },
         Err(e) => Err(format!("Extraction failed: {e}")),
@@ -339,6 +345,35 @@ fn configure_php(php_path: &PathBuf) -> Result<(), String> {
 
     log::info!("PHP configured successfully at {php_path:?}");
     Ok(())
+}
+
+/// Flatten Redis directory if binaries are in a subfolder
+fn configure_redis(redis_path: &Path) -> Result<(), String> {
+    // If redis-server.exe is directly in redis/, nothing to do
+    if redis_path.join("redis-server.exe").exists() {
+        return Ok(());
+    }
+
+    // Find the subfolder containing redis-server.exe
+    let entries: Vec<_> = std::fs::read_dir(redis_path)
+        .map_err(|e| format!("Failed to read redis dir: {e}"))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .collect();
+
+    for entry in &entries {
+        if entry.path().join("redis-server.exe").exists() {
+            log::info!("Redis: flattening subfolder {:?}", entry.file_name());
+            move_subfolder_up(&entry.path(), redis_path)?;
+            return Ok(());
+        }
+    }
+
+    // List contents for debugging
+    let contents: Vec<_> = std::fs::read_dir(redis_path)
+        .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect())
+        .unwrap_or_default();
+    Err(format!("redis-server.exe not found after extraction. Directory contents: {contents:?}"))
 }
 
 #[command]

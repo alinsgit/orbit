@@ -9,6 +9,7 @@ import { ComposerManager } from './ComposerManager';
 import { MailManager } from './MailManager';
 import { MeilisearchManager } from './MeilisearchManager';
 import { CliManager, CliCommandReference } from './CliManager';
+import { LogViewer } from './LogViewer';
 
 import { getServiceIcon } from '../lib/serviceIcons';
 import { ask } from '@tauri-apps/plugin-dialog';
@@ -24,7 +25,7 @@ export function ServiceManager() {
     addToast
   } = useApp();
 
-  const [subTab, setSubTab] = useState<'overview' | 'manage' | 'install' | 'tools'>('overview');
+  const [subTab, setSubTab] = useState<'overview' | 'manage' | 'install' | 'tools' | 'logs'>('overview');
   // Service catalog - single source of truth for installable services
   const SERVICE_CATALOG = [
     { key: 'nginx', title: 'Nginx Web Server', icon: '🌐', group: 'server' },
@@ -308,60 +309,66 @@ export function ServiceManager() {
 
   return (
     <div className="p-6 h-full flex flex-col">
-      <header className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Services</h2>
-          <p className="text-content-secondary">Manage your local server components</p>
-        </div>
+      <header className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-semibold">Services</h2>
         <div className="flex items-center gap-3">
-          {(subTab === 'install') && (
-            <button
-              onClick={handleRefreshVersions}
-              disabled={refreshing || loading}
-              className="p-2 rounded-lg bg-surface-raised hover:bg-hover text-content-secondary hover:text-content transition-colors disabled:opacity-50"
-              title="Refresh versions from server"
-            >
-              <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-            </button>
-          )}
-          <div className="flex bg-surface-raised p-1 rounded-lg">
-            <button
-              onClick={() => setSubTab('overview')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'overview'
-                ? 'bg-surface-inset text-content shadow'
-                : 'text-content-secondary hover:text-content'
-                }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setSubTab('manage')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'manage'
-                ? 'bg-surface-inset text-content shadow'
-                : 'text-content-secondary hover:text-content'
-                }`}
-            >
-              Manage ({services.length})
-            </button>
-            <button
-              onClick={() => setSubTab('install')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'install'
-                ? 'bg-surface-inset text-content shadow'
-                : 'text-content-secondary hover:text-content'
-                }`}
-            >
-              Install
-            </button>
-            <button
-              onClick={() => setSubTab('tools')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'tools'
-                ? 'bg-surface-inset text-content shadow'
-                : 'text-content-secondary hover:text-content'
-                }`}
-            >
-              Tools
-            </button>
-          </div>
+        <div className="flex bg-surface-raised p-1 rounded-lg">
+          <button
+            onClick={() => setSubTab('overview')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'overview'
+              ? 'bg-surface-inset text-content shadow'
+              : 'text-content-secondary hover:text-content'
+              }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setSubTab('manage')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'manage'
+              ? 'bg-surface-inset text-content shadow'
+              : 'text-content-secondary hover:text-content'
+              }`}
+          >
+            Manage ({services.length})
+          </button>
+          <button
+            onClick={() => setSubTab('install')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'install'
+              ? 'bg-surface-inset text-content shadow'
+              : 'text-content-secondary hover:text-content'
+              }`}
+          >
+            Install
+          </button>
+          <button
+            onClick={() => setSubTab('tools')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'tools'
+              ? 'bg-surface-inset text-content shadow'
+              : 'text-content-secondary hover:text-content'
+              }`}
+          >
+            Tools
+          </button>
+          <button
+            onClick={() => setSubTab('logs')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'logs'
+              ? 'bg-surface-inset text-content shadow'
+              : 'text-content-secondary hover:text-content'
+              }`}
+          >
+            Logs
+          </button>
+        </div>
+        {(subTab === 'install') && (
+          <button
+            onClick={handleRefreshVersions}
+            disabled={refreshing || loading}
+            className="p-2 rounded-lg bg-surface-raised hover:bg-hover text-content-secondary hover:text-content transition-colors disabled:opacity-50"
+            title="Refresh versions from server"
+          >
+            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+        )}
         </div>
       </header>
 
@@ -601,6 +608,10 @@ export function ServiceManager() {
             </div>
             <CliCommandReference />
           </div>
+        )}
+
+        {subTab === 'logs' && (
+          <LogViewer />
         )}
       </div>
 
