@@ -57,3 +57,11 @@ core/mcp_stderr.txt
 CLAUDE.md
 .claude/settings.local.json
 .claude/CLAUDE.local.md
+
+# Superpowers (AI planning artifacts)
+.superpowers/
+docs/superpowers/
+
+# Test artifacts
+ziptest/
+core/cargo_errors.txt
