@@ -59,9 +59,6 @@ jobs:
           - platform: "macos-latest"
             args: "--target aarch64-apple-darwin"
             name: "macOS-arm64"
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
-            name: "macOS-x64"
           - platform: "ubuntu-22.04"
             args: ""
             name: "Linux"
@@ -81,21 +78,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Install OpenSSL (macOS x64 cross-compile)
-        if: matrix.platform == 'macos-latest' && contains(matrix.args, 'x86_64')
-        run: |
-          brew fetch --force --bottle-tag=ventura openssl@3 || true
-          brew install openssl@3
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Install frontend dependencies
         run: bun install
@@ -119,7 +108,7 @@ jobs:
           updaterJsonPreferNsis: true
 
       - name: Build CLI binary
-        run: cargo build --release --bin orbit-cli --features cli --manifest-path core/Cargo.toml ${{ matrix.platform == 'macos-latest' && format('--target {0}', contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
+        run: cargo build --release --bin orbit-cli --features cli --manifest-path core/Cargo.toml ${{ matrix.platform == 'macos-latest' && '--target aarch64-apple-darwin' || '' }}
 
       - name: Rename CLI binary (Windows)
         if: matrix.platform == 'windows-latest'
@@ -132,20 +121,14 @@ jobs:
           cp core/target/release/orbit-cli orbit-cli-linux-x64
           chmod +x orbit-cli-linux-x64
 
-      - name: Rename CLI binary (macOS arm64)
-        if: matrix.platform == 'macos-latest' && contains(matrix.args, 'aarch64')
+      - name: Rename CLI binary (macOS)
+        if: matrix.platform == 'macos-latest'
         run: |
           cp core/target/aarch64-apple-darwin/release/orbit-cli orbit-cli-macos-arm64
           chmod +x orbit-cli-macos-arm64
 
-      - name: Rename CLI binary (macOS x64)
-        if: matrix.platform == 'macos-latest' && contains(matrix.args, 'x86_64')
-        run: |
-          cp core/target/x86_64-apple-darwin/release/orbit-cli orbit-cli-macos-x64
-          chmod +x orbit-cli-macos-x64
-
       - name: Build MCP binary
-        run: cargo build --release --bin orbit-mcp --features mcp --manifest-path core/Cargo.toml ${{ matrix.platform == 'macos-latest' && format('--target {0}', contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
+        run: cargo build --release --bin orbit-mcp --features mcp --manifest-path core/Cargo.toml ${{ matrix.platform == 'macos-latest' && '--target aarch64-apple-darwin' || '' }}
 
       - name: Rename MCP binary (Windows)
         if: matrix.platform == 'windows-latest'
@@ -158,17 +141,11 @@ jobs:
           cp core/target/release/orbit-mcp orbit-mcp-linux-x64
           chmod +x orbit-mcp-linux-x64
 
-      - name: Rename MCP binary (macOS arm64)
-        if: matrix.platform == 'macos-latest' && contains(matrix.args, 'aarch64')
+      - name: Rename MCP binary (macOS)
+        if: matrix.platform == 'macos-latest'
         run: |
           cp core/target/aarch64-apple-darwin/release/orbit-mcp orbit-mcp-macos-arm64
           chmod +x orbit-mcp-macos-arm64
-
-      - name: Rename MCP binary (macOS x64)
-        if: matrix.platform == 'macos-latest' && contains(matrix.args, 'x86_64')
-        run: |
-          cp core/target/x86_64-apple-darwin/release/orbit-mcp orbit-mcp-macos-x64
-          chmod +x orbit-mcp-macos-x64
 
       - name: Upload CLI & MCP to Release
         uses: softprops/action-gh-release@v2
