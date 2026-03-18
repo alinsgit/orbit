@@ -58,7 +58,7 @@ portable-pty = "0.8.1"
 keyring = { version = "3", features = ["sync-secret-service", "windows-native"] }
 dirs = "6"
 ssh2 = "0.9"
-suppaftp = { version = "6", features = ["native-tls"] }
+suppaftp = { version = "8", features = ["native-tls"] }
 blake3 = "1"
 walkdir = "2"
 ignore = "0.4"
