@@ -1,32 +1,70 @@
 # Dependencies
 node_modules/
+bun.lockb
 
 # Build outputs
 dist/
+!core/dist/
 
 # Tauri build
-src-tauri/target/
-src-tauri/gen/schemas
+core/target/
+core/gen/schemas
 
-# Tools binaries
-tools/
-
-# TypeScript build info
+# TypeScript build artifacts
 *.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 
-# Environment
+# Environment files
 .env
 .env.local
 .env.*.local
 
+# Credentials & secrets
+*.pem
+*.key
+credentials.json
+
 # OS
 .DS_Store
 Thumbs.db
-nul
+desktop.ini
 
 # IDE
-.vscode/
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
 
-# Claude local settings
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+ziptest/
+
+# Temp files
+*.tmp
+*.temp
+.cache/
+
+# MCP
+.mcp.json
+core/mcp_stdout.txt
+core/mcp_stderr.txt
+core/cargo_errors.txt
+
+# Claude / AI
+CLAUDE.md
 .claude/settings.local.json
+.claude/CLAUDE.local.md
+
+# Superpowers
+.superpowers/
+docs/superpowers/
+
+# Legacy (pre-refactor paths)
+/src/
+/src-tauri/

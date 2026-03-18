@@ -1,0 +1,251 @@
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Server, Settings, Minus, Square, X, Database, Globe, TerminalSquare, Loader2, BrainCircuit } from 'lucide-react'
+import { useApp } from './lib/AppContext'
+import { ServiceManager } from './components/ServiceManager'
+import { SitesManager } from './components/SitesManager'
+import { SettingsManager } from './components/SettingsManager'
+import DatabaseViewer from './components/DatabaseViewer'
+import { Terminal } from './components/Terminal'
+import { AiPanel } from './components/AiPanel'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+
+const appWindow = getCurrentWindow()
+
+const TERMINAL_HEIGHT_KEY = 'orbit-terminal-height'
+const DEFAULT_TERMINAL_HEIGHT = 300
+const MIN_TERMINAL_HEIGHT = 150
+const MAX_TERMINAL_RATIO = 0.8
+
+function App() {
+  const {
+    activeTab,
+    setActiveTab,
+    isTerminalOpen,
+    setIsTerminalOpen,
+    isLoading,
+  } = useApp()
+
+  // Lazy mount: mount tab on first visit, keep mounted forever (preserves state)
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set([activeTab]))
+  useEffect(() => {
+    setMountedTabs(prev => {
+      if (prev.has(activeTab)) return prev
+      return new Set([...prev, activeTab])
+    })
+  }, [activeTab])
+
+  // Terminal: mount on first open, keep mounted forever (preserves PTY sessions)
+  const [terminalMounted, setTerminalMounted] = useState(false)
+  useEffect(() => {
+    if (isTerminalOpen) setTerminalMounted(true)
+  }, [isTerminalOpen])
+
+  // Drag resize state
+  const [terminalHeight, setTerminalHeight] = useState(() => {
+    const saved = localStorage.getItem(TERMINAL_HEIGHT_KEY)
+    return saved ? parseInt(saved, 10) : DEFAULT_TERMINAL_HEIGHT
+  })
+  const isDragging = useRef(false)
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Persist terminal height
+  useEffect(() => {
+    localStorage.setItem(TERMINAL_HEIGHT_KEY, String(terminalHeight))
+  }, [terminalHeight])
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !mainRef.current) return
+      const mainRect = mainRef.current.getBoundingClientRect()
+      const maxH = mainRect.height * MAX_TERMINAL_RATIO
+      const newHeight = mainRect.bottom - e.clientY
+      setTerminalHeight(Math.max(MIN_TERMINAL_HEIGHT, Math.min(maxH, newHeight)))
+    }
+
+    const onMouseUp = () => {
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [])
+
+  return (
+    <div className="app-container text-content font-sans select-none relative">
+      {/* Global Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-200">
+          <div className="bg-surface border border-edge shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+            <Loader2 size={32} className="animate-spin text-emerald-500" />
+            <p className="text-sm font-medium text-content-secondary">Waking up services...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Title Bar */}
+      <div className="h-11 bg-surface flex items-center px-4 border-b border-edge shrink-0" data-tauri-drag-region>
+        <div className="flex items-center gap-2.5 pointer-events-none">
+          {/* Logo */}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="url(#orbit-gradient)" strokeWidth="2" />
+            <circle cx="12" cy="12" r="4" fill="url(#orbit-gradient)" />
+            <circle cx="12" cy="4" r="2" fill="#10b981" />
+            <defs>
+              <linearGradient id="orbit-gradient" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#34d399" />
+                <stop offset="1" stopColor="#059669" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-semibold text-sm text-content">Orbit</span>
+            <span className="text-[10px] text-content-muted font-medium uppercase tracking-wider">Dev Environment</span>
+          </div>
+        </div>
+        <div className="flex-1 h-full" data-tauri-drag-region />
+        <div className="flex gap-1 items-center">
+          <button
+            onClick={() => appWindow.minimize()}
+            className="p-1.5 hover:bg-hover rounded transition-colors cursor-pointer"
+            title="Minimize"
+          >
+            <Minus size={14} className="text-content-secondary" />
+          </button>
+          <button
+            onClick={() => appWindow.toggleMaximize()}
+            className="p-1.5 hover:bg-hover rounded transition-colors cursor-pointer"
+            title="Maximize"
+          >
+            <Square size={12} className="text-content-secondary" />
+          </button>
+          <button
+            onClick={() => appWindow.close()}
+            className="p-1.5 hover:bg-red-500/20 hover:text-red-500 rounded transition-colors cursor-pointer"
+            title="Close"
+          >
+            <X size={14} className="text-content-muted hover:text-red-500" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar */}
+        <aside className="w-16 shrink-0 bg-surface flex flex-col items-center py-4 gap-4 border-r border-edge">
+          <NavButton
+            active={activeTab === 'services'}
+            onClick={() => setActiveTab('services')}
+            icon={<Server size={24} />}
+            title="Services"
+          />
+          <NavButton
+            active={activeTab === 'sites'}
+            onClick={() => setActiveTab('sites')}
+            icon={<Globe size={24} />}
+            title="Sites"
+          />
+          <NavButton
+            active={activeTab === 'database'}
+            onClick={() => setActiveTab('database')}
+            icon={<Database size={24} />}
+            title="Database"
+          />
+          <NavButton
+            active={activeTab === 'ai'}
+            onClick={() => setActiveTab('ai')}
+            icon={<BrainCircuit size={24} />}
+            title="AI Tools"
+          />
+          <div className="flex-1" />
+          <NavButton
+            active={isTerminalOpen}
+            onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            icon={<TerminalSquare size={24} />}
+            title="Terminal"
+          />
+          <NavButton
+            active={activeTab === 'settings'}
+            onClick={() => { setActiveTab('settings'); setIsTerminalOpen(false); }}
+            icon={<Settings size={24} />}
+            title="Settings"
+          />
+        </aside>
+
+        {/* Main Content */}
+        <main ref={mainRef} className="flex-1 min-h-0 relative flex flex-col bg-surface-alt overflow-hidden">
+          <div className="flex-1 min-h-0">
+            {mountedTabs.has('services') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'services' ? undefined : 'none' }}>
+                <ServiceManager />
+              </div>
+            )}
+            {mountedTabs.has('sites') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'sites' ? undefined : 'none' }}>
+                <SitesManager />
+              </div>
+            )}
+            {mountedTabs.has('database') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'database' ? undefined : 'none' }}>
+                <DatabaseViewer />
+              </div>
+            )}
+            {mountedTabs.has('ai') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'ai' ? undefined : 'none' }}>
+                <AiPanel />
+              </div>
+            )}
+            {mountedTabs.has('settings') && (
+              <div className="h-full overflow-auto" style={{ display: activeTab === 'settings' ? undefined : 'none' }}>
+                <SettingsManager />
+              </div>
+            )}
+          </div>
+
+          {/* Docked Terminal — mounted on first open, hidden via CSS to preserve PTY sessions */}
+          {terminalMounted && (
+            <div style={{ display: isTerminalOpen ? undefined : 'none' }}>
+              <div
+                className="h-1 bg-edge hover:bg-emerald-500/50 cursor-row-resize shrink-0 transition-colors relative z-50"
+                onMouseDown={handleDragStart}
+              />
+              <div style={{ height: terminalHeight }} className="min-h-[150px] bg-[#0d1117] relative z-50 flex flex-col">
+                <Terminal onClose={() => setIsTerminalOpen(false)} className="w-full h-full border-0 rounded-none" />
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+// Navigation Button Component
+function NavButton({ active, onClick, icon, title }: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  title: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-3 rounded-xl transition-all duration-200 cursor-pointer ${active
+        ? 'bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+        : 'text-content-muted hover:text-content-secondary hover:bg-hover'
+        }`}
+    >
+      {icon}
+    </button>
+  )
+}
+
+export default App

@@ -1,0 +1,316 @@
+mod commands;
+mod services;
+
+use services::process::ServiceManager;
+use services::site_process::SiteProcessManager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::Manager;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+  let service_manager = ServiceManager::new();
+  let site_process_manager = SiteProcessManager::new();
+
+  tauri::Builder::default()
+    .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_store::Builder::default().build())
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_sql::Builder::default().build())
+    .manage(service_manager) // Register state
+    .manage(site_process_manager) // Register site app process state
+    .manage(services::terminal::TerminalState::default()) // Register terminal state
+    .setup(|app| {
+        // System Tray Setup
+        let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+        let show_i = MenuItem::with_id(app, "show", "Show Dashboard", true, None::<&str>)?;
+        let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+
+        // Get icon with proper error handling
+        let icon = app.default_window_icon()
+            .cloned()
+            .ok_or_else(|| tauri::Error::AssetNotFound("window icon".to_string()))?;
+
+        let _tray = TrayIconBuilder::with_id("orbit-tray")
+            .icon(icon)
+            .menu(&menu)
+            .on_menu_event(|app, event| match event.id.as_ref() {
+                "quit" => {
+                    // Stop all site apps and services before quitting
+                    let _ = app.state::<SiteProcessManager>().stop_all();
+                    let _ = app.state::<ServiceManager>().stop_all();
+                    app.exit(0);
+                }
+                "show" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+                _ => {}
+            })
+            .on_tray_icon_event(|tray, event| if let TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    ..
+                } = event {
+                let app = tray.app_handle();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            })
+            .build(app)?;
+
+        // Show window on first start
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+        }
+        Ok(())
+    })
+    .on_window_event(|window, event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            // Instead of closing, hide the window
+            let _ = window.hide();
+            api.prevent_close();
+        }
+    })
+    .invoke_handler(tauri::generate_handler![
+        // Service management
+        commands::service::start_service,
+        commands::service::stop_service,
+        commands::service::reload_service,
+        commands::service::get_service_status,
+        commands::service::uninstall_service,
+        commands::service::initialize_mariadb,
+        commands::service::assign_php_port,
+        commands::service::check_port_conflict,
+        // Hosts file
+        commands::hosts::add_host,
+        commands::hosts::add_host_elevated,
+        commands::hosts::remove_host,
+        // Installer
+        commands::installer::download_service,
+        commands::installer::check_vc_redist,
+        commands::versions::get_available_versions,
+        commands::versions::refresh_all_versions,
+        commands::scanner::get_installed_services,
+        // Sites
+        commands::sites::create_site,
+        commands::sites::get_sites,
+        commands::sites::get_site,
+        commands::sites::update_site,
+        commands::sites::delete_site,
+        commands::sites::regenerate_site_config,
+        commands::sites::read_site_config,
+        commands::sites::write_site_config,
+        commands::sites::scaffold_basic_project,
+        // Nginx
+        commands::sites::nginx_test_config,
+        commands::sites::nginx_reload,
+        commands::sites::nginx_status,
+        // Site app process management
+        commands::sites::start_site_app,
+        commands::sites::stop_site_app,
+        commands::sites::get_site_app_status,
+        // Export/Import
+        commands::sites::export_sites,
+        commands::sites::import_sites,
+        // Logs
+        commands::logs::get_log_files,
+        commands::logs::read_log_file,
+        commands::logs::clear_log_file,
+        commands::logs::clear_all_logs,
+        // SSL
+        commands::ssl::get_ssl_status,
+        commands::ssl::install_mkcert,
+        commands::ssl::install_ssl_ca,
+        commands::ssl::generate_ssl_cert,
+        commands::ssl::get_ssl_cert,
+        commands::ssl::list_ssl_certs,
+        commands::ssl::delete_ssl_cert,
+        // PATH management
+        commands::path::add_to_path,
+        commands::path::check_path_status,
+        commands::path::remove_from_path,
+        commands::path::add_service_to_path,
+        commands::path::remove_service_from_path,
+        commands::path::check_service_path_status,
+        commands::path::get_user_path,
+        commands::path::save_user_path,
+        // Hosts editor
+        commands::hosts::get_hosts_file,
+        commands::hosts::save_hosts_file,
+        // PHP config
+        commands::php_config::get_php_config,
+        commands::php_config::set_php_extension,
+        commands::php_config::set_php_setting,
+        commands::php_config::get_php_ini_raw,
+        commands::php_config::save_php_ini_raw,
+        commands::php_config::configure_php_mailpit,
+        commands::php_config::get_php_mailpit_status,
+        commands::php_config::configure_php_redis_session,
+        commands::php_config::get_php_redis_session_status,
+        // PHP registry
+        commands::php_registry::get_php_services,
+        commands::php_registry::get_php_service,
+        commands::php_registry::get_php_port,
+        commands::php_registry::register_php_version,
+        commands::php_registry::unregister_php_version,
+        commands::php_registry::mark_php_running,
+        commands::php_registry::mark_php_stopped,
+        commands::php_registry::scan_php_versions,
+        commands::php_registry::get_running_php_services,
+        commands::php_registry::calculate_php_port,
+        // Database (Adminer)
+        commands::database::get_database_status,
+        commands::database::get_database_tools_status,
+        commands::database::install_adminer,
+        commands::database::uninstall_adminer,
+        commands::database::setup_adminer_nginx,
+        commands::database::remove_adminer_nginx,
+        // Database (PhpMyAdmin)
+        commands::database::get_phpmyadmin_status,
+        commands::database::install_phpmyadmin,
+        commands::database::uninstall_phpmyadmin,
+        commands::database::setup_phpmyadmin_nginx,
+        commands::database::remove_phpmyadmin_nginx,
+        // Autostart
+        commands::autostart::auto_start_services,
+        // Requirements
+        commands::requirements::check_system_requirements,
+        // Templates
+        commands::templates::list_templates,
+        commands::templates::get_template,
+        commands::templates::save_template,
+        commands::templates::reset_template,
+        commands::templates::delete_template,
+        // Cache (Redis)
+        commands::cache::get_cache_status,
+        commands::cache::install_redis,
+        commands::cache::uninstall_redis,
+        commands::cache::update_redis_config,
+        commands::cache::get_redis_exe_path,
+        // Composer
+        commands::composer::get_composer_status,
+        commands::composer::install_composer,
+        commands::composer::uninstall_composer,
+        commands::composer::update_composer,
+        commands::composer::composer_install,
+        commands::composer::composer_update,
+        commands::composer::composer_require,
+        commands::composer::composer_remove,
+        commands::composer::get_composer_project,
+        commands::composer::composer_run,
+        // Performance
+        commands::performance::get_performance_status,
+        commands::performance::get_opcache_config,
+        commands::performance::set_opcache_config,
+        commands::performance::get_nginx_gzip_config,
+        commands::performance::set_nginx_gzip_config,
+        commands::performance::get_nginx_conf_raw,
+        commands::performance::save_nginx_conf_raw,
+        commands::performance::get_mariadb_conf_raw,
+        commands::performance::save_mariadb_conf_raw,
+        commands::performance::get_apache_conf_raw,
+        commands::performance::save_apache_conf_raw,
+        commands::performance::clear_all_caches,
+        // Mailpit (Mail server)
+        commands::mailpit::get_mailpit_status,
+        commands::mailpit::install_mailpit,
+        commands::mailpit::uninstall_mailpit,
+        commands::mailpit::start_mailpit,
+        commands::mailpit::stop_mailpit,
+        commands::mailpit::get_mailpit_exe_path,
+        // Meilisearch (Search engine)
+        commands::meilisearch::get_meilisearch_status,
+        commands::meilisearch::install_meilisearch,
+        commands::meilisearch::uninstall_meilisearch,
+        commands::meilisearch::start_meilisearch,
+        commands::meilisearch::stop_meilisearch,
+        commands::meilisearch::get_meilisearch_exe_path,
+        // PECL Extension Manager
+        commands::pecl::get_available_extensions,
+        commands::pecl::install_pecl_extension,
+        commands::pecl::uninstall_pecl_extension,
+        commands::pecl::search_pecl_extensions,
+        // Database Backup/Import
+        commands::backup::export_database,
+        commands::backup::export_all_databases,
+        commands::backup::import_sql,
+        commands::backup::rebuild_database,
+        // PostgreSQL Backup/Import
+        commands::backup::pg_export_database,
+        commands::backup::pg_import_sql,
+        // Updater
+        commands::updater::check_for_updates,
+        commands::updater::get_current_version,
+        // Terminal
+        services::terminal::spawn_terminal,
+        services::terminal::write_terminal,
+        services::terminal::resize_terminal,
+        services::terminal::close_terminal,
+        // Tunnel
+        commands::tunnel::start_tunnel,
+        commands::tunnel::stop_tunnel,
+        commands::tunnel::get_tunnel_url,
+        // Wizards
+        commands::wizards::scaffold_project,
+        // MCP Server
+        commands::mcp::get_mcp_status,
+        commands::mcp::install_mcp,
+        commands::mcp::uninstall_mcp,
+        commands::mcp::start_mcp,
+        commands::mcp::stop_mcp,
+        commands::mcp::get_mcp_binary_path,
+        commands::mcp::check_mcp_update,
+        commands::mcp::update_mcp,
+        // CLI
+        commands::cli::get_cli_status,
+        commands::cli::install_cli,
+        commands::cli::uninstall_cli,
+        commands::cli::check_cli_update,
+        commands::cli::update_cli,
+        // MongoDB
+        commands::mongodb::mongo_list_databases,
+        commands::mongodb::mongo_list_collections,
+        commands::mongodb::mongo_db_stats,
+        commands::mongodb::mongo_drop_database,
+        commands::mongodb::mongo_run_command,
+        // Blueprints
+        commands::blueprints::list_blueprints,
+        commands::blueprints::create_from_blueprint,
+        // AI Tools (Claude Code, Gemini CLI)
+        commands::ai_tools::get_claude_code_status,
+        commands::ai_tools::install_claude_code,
+        commands::ai_tools::uninstall_claude_code,
+        commands::ai_tools::get_gemini_cli_status,
+        commands::ai_tools::install_gemini_cli,
+        commands::ai_tools::uninstall_gemini_cli,
+        // AI Context Generation
+        commands::ai_tools::generate_ai_context_cmd,
+        // MCP Auto-Configuration
+        commands::ai_tools::setup_mcp_config,
+        // Open project in OS terminal with AI tool
+        commands::ai_tools::open_in_terminal,
+        // Deploy — Global Connections
+        commands::deploy::deploy_list_connections,
+        commands::deploy::deploy_add_connection,
+        commands::deploy::deploy_remove_connection,
+        commands::deploy::deploy_test_connection,
+        // Deploy — Site Targets
+        commands::deploy::deploy_list_targets,
+        commands::deploy::deploy_assign_target,
+        commands::deploy::deploy_unassign_target,
+        // Deploy — Operations
+        commands::deploy::deploy_ssh_execute,
+        commands::deploy::deploy_sync,
+        commands::deploy::deploy_get_status,
+    ])
+    .run(tauri::generate_context!())
+    .unwrap_or_else(|e| {
+        log::error!("Failed to run Tauri application: {e}");
+        std::process::exit(1);
+    });
+}
