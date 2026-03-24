@@ -1,6 +1,7 @@
 [
   {
     "category": "Orbit CLI",
+    "requires": null,
     "items": [
       { "label": "Service Status", "cmd": "orbit-cli status" },
       { "label": "Start All", "cmd": "orbit-cli start --all" },
@@ -19,6 +20,7 @@
   },
   {
     "category": "Laravel / PHP",
+    "requires": ["php"],
     "items": [
       { "label": "Artisan Serve", "cmd": "php artisan serve" },
       { "label": "Run Migrations", "cmd": "php artisan migrate" },
@@ -36,6 +38,7 @@
   },
   {
     "category": "Composer",
+    "requires": ["php"],
     "items": [
       { "label": "Install", "cmd": "composer install" },
       { "label": "Update", "cmd": "composer update" },
@@ -46,6 +49,7 @@
   },
   {
     "category": "Node / NPM",
+    "requires": ["node"],
     "items": [
       { "label": "NPM Install", "cmd": "npm install" },
       { "label": "NPM Run Dev", "cmd": "npm run dev" },
@@ -56,6 +60,7 @@
   },
   {
     "category": "Modern JS / Tools",
+    "requires": ["node"],
     "items": [
       { "label": "Vite Dev", "cmd": "npx vite" },
       { "label": "Vite Build", "cmd": "npx vite build" },
@@ -70,6 +75,7 @@
   },
   {
     "category": "WordPress (WP-CLI)",
+    "requires": ["php"],
     "items": [
       { "label": "WP Info", "cmd": "wp info" },
       { "label": "Search & Replace", "cmd": "wp search-replace 'http://old' 'http://new'" },
@@ -82,6 +88,7 @@
   },
   {
     "category": "Databases & Services",
+    "requires": ["mariadb", "postgresql", "redis"],
     "items": [
       { "label": "MySQL Login (root)", "cmd": "mysql -u root" },
       { "label": "Postgres Login", "cmd": "psql -U postgres" },
@@ -91,6 +98,7 @@
   },
   {
     "category": "Git / Source Control",
+    "requires": null,
     "items": [
       { "label": "Git Status", "cmd": "git status" },
       { "label": "Git Add All", "cmd": "git add ." },
@@ -104,6 +112,7 @@
   },
   {
     "category": "Go & Deno",
+    "requires": null,
     "items": [
       { "label": "Go Run", "cmd": "go run ." },
       { "label": "Go Build", "cmd": "go build" },

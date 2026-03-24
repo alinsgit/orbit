@@ -85,16 +85,17 @@ pub fn open_in_terminal(app: AppHandle, tool: String, project_path: String, doma
             .unwrap_or(false);
 
         if has_wt {
-            Command::new("cmd")
+            // Spawn wt.exe directly so it inherits the custom PATH
+            Command::new("wt.exe")
                 .env("PATH", &orbit_path)
-                .args(["/c", "start", "", "wt.exe", "-d", &project_path, "cmd", "/k", tool_cmd])
+                .args(["-d", &project_path, "cmd", "/k", tool_cmd])
                 .spawn()
                 .map_err(|e| format!("Failed to open Windows Terminal: {e}"))?;
             Ok("Opened in Windows Terminal".to_string())
         } else {
-            let run = format!("cd /d \"{}\" && {}", project_path, tool_cmd);
+            // Embed PATH into the cmd /k script so the child process has it
+            let run = format!("cd /d \"{}\" && set \"PATH={}\" && {}", project_path, orbit_path, tool_cmd);
             Command::new("cmd")
-                .env("PATH", &orbit_path)
                 .args(["/c", "start", "", "cmd.exe", "/k", &run])
                 .spawn()
                 .map_err(|e| format!("Failed to open terminal: {e}"))?;

@@ -17,7 +17,6 @@ import {
   Database,
   ShoppingCart,
   Sparkles,
-  Bot,
   CheckCircle,
   FileDown,
   FileUp,
@@ -65,7 +64,6 @@ import {
   listBlueprints,
   createFromBlueprint,
   Blueprint,
-  openInTerminal,
 } from "../lib/api";
 import { useApp } from "../lib/AppContext";
 import { DeployPanel } from "./DeployPanel";
@@ -177,7 +175,7 @@ const TEMPLATE_INFO: Record<
 };
 
 export function SitesManager() {
-  const { getInstalledPhpVersions, services, addToast, openTerminalForSite, claudeCodeInstalled, geminiCliInstalled } =
+  const { getInstalledPhpVersions, services, addToast, openTerminalForSite } =
     useApp();
 
   // Check which web servers are installed
@@ -2143,38 +2141,6 @@ export function SitesManager() {
                         </button>
                       )}
 
-                      {/* AI Tool Launchers */}
-                      {(claudeCodeInstalled || geminiCliInstalled) && (
-                        <>
-                          <div className="h-3 w-px bg-edge" />
-                          {claudeCodeInstalled && (
-                            <button
-                              onClick={() => {
-                                openInTerminal('claude-code', site.path, site.domain)
-                                addToast({ type: 'info', message: `Opening ${site.domain} with Claude Code...` })
-                              }}
-                              className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors cursor-pointer"
-                              title="Open project with Claude Code in terminal"
-                            >
-                              <Bot size={12} />
-                              Claude
-                            </button>
-                          )}
-                          {geminiCliInstalled && (
-                            <button
-                              onClick={() => {
-                                openInTerminal('gemini-cli', site.path, site.domain)
-                                addToast({ type: 'info', message: `Opening ${site.domain} with Gemini CLI...` })
-                              }}
-                              className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
-                              title="Open project with Gemini CLI in terminal"
-                            >
-                              <Sparkles size={12} />
-                              Gemini
-                            </button>
-                          )}
-                        </>
-                      )}
                     </div>
 
                     {/* Deploy Section */}

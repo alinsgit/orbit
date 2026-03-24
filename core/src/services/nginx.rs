@@ -51,7 +51,6 @@ impl NginxManager {
     }
 
     /// Get logs directory
-    #[allow(dead_code)]
     pub fn get_logs_dir(app: &AppHandle) -> Result<PathBuf, String> {
         let logs_dir = app
             .path()

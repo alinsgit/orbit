@@ -507,15 +507,23 @@ impl SiteManager {
         // Remove from hosts
         let _ = HostsManager::remove_domain(domain);
 
-        // Delete SSL certificates if they exist
-        if let Some(ref site) = site {
-            if site.ssl_enabled {
-                if let Ok(config_dir) = NginxManager::get_config_dir(app) {
-                    let ssl_dir = config_dir.join("ssl").join(domain);
-                    if ssl_dir.exists() {
-                        let _ = fs::remove_dir_all(&ssl_dir);
-                    }
-                }
+        // Delete site-specific nginx log files
+        if let Ok(logs_dir) = NginxManager::get_logs_dir(app) {
+            let access_log = logs_dir.join(format!("{domain}.access.log"));
+            let error_log = logs_dir.join(format!("{domain}.error.log"));
+            if access_log.exists() {
+                let _ = fs::remove_file(&access_log);
+            }
+            if error_log.exists() {
+                let _ = fs::remove_file(&error_log);
+            }
+        }
+
+        // Delete SSL certificates if they exist (unconditional — certs may remain from earlier config)
+        if let Ok(config_dir) = NginxManager::get_config_dir(app) {
+            let ssl_dir = config_dir.join("ssl").join(domain);
+            if ssl_dir.exists() {
+                let _ = fs::remove_dir_all(&ssl_dir);
             }
         }
 

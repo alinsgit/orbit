@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "Orbit",
-        "width": 1024,
-        "height": 768,
+        "width": 1080,
+        "height": 940,
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
