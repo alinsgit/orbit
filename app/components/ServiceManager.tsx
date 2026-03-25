@@ -312,7 +312,7 @@ export function ServiceManager() {
       <header className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold">Services</h2>
         <div className="flex items-center gap-3">
-        <div className="flex bg-surface-raised p-1 rounded-lg">
+        <div className="flex flex-wrap bg-surface-raised p-1 rounded-lg">
           <button
             onClick={() => setSubTab('overview')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === 'overview'
@@ -600,7 +600,7 @@ export function ServiceManager() {
 
         {subTab === 'tools' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <ComposerManager />
               <MailManager />
               <MeilisearchManager />
@@ -686,7 +686,7 @@ function ServiceGroup({
           {sourceLabel}
         </span>
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {versions.map((v) => {
           const installed = isInstalled(v.version);
           const isProcessing = processing === `${type}-${v.version}`;

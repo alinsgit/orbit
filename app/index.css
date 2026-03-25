@@ -140,6 +140,15 @@ body {
   background: #a0a0a0;
 }
 
+/* Hide scrollbar but keep scrolling */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Selection */
 ::selection {
   background: rgba(16, 185, 129, 0.3);
@@ -155,15 +164,6 @@ body {
 .select-none {
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* Smooth transitions */
-* {
-  transition-property:
-    background-color, border-color, color, fill, stroke, opacity, box-shadow,
-    transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
 }
 
 /* App container */

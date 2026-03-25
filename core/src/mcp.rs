@@ -751,7 +751,7 @@ fn write_sites_store(store: &SiteStore) -> Result<(), String> {
 }
 
 fn add_hosts_entry(domain: &str) -> Result<(), String> {
-    let hosts_path = PathBuf::from(r"C:\Windows\System32\drivers\etc\hosts");
+    let hosts_path = get_hosts_path();
     let content = fs::read_to_string(&hosts_path)
         .map_err(|e| format!("Failed to read hosts file: {}", e))?;
 
@@ -761,12 +761,19 @@ fn add_hosts_entry(domain: &str) -> Result<(), String> {
     }
 
     let new_content = format!("{}\n{}\n", content.trim_end(), entry);
-    fs::write(&hosts_path, new_content)
-        .map_err(|e| format!("Failed to write hosts file (run as admin?): {}", e))
+
+    // Try direct write first
+    match fs::write(&hosts_path, &new_content) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            // Fallback: elevated write
+            elevated_hosts_write(&new_content)
+        }
+    }
 }
 
 fn remove_hosts_entry(domain: &str) -> Result<(), String> {
-    let hosts_path = PathBuf::from(r"C:\Windows\System32\drivers\etc\hosts");
+    let hosts_path = get_hosts_path();
     let content = fs::read_to_string(&hosts_path)
         .map_err(|e| format!("Failed to read hosts file: {}", e))?;
 
@@ -776,9 +783,86 @@ fn remove_hosts_entry(domain: &str) -> Result<(), String> {
         .collect::<Vec<_>>()
         .join("\n");
 
-    fs::write(&hosts_path, format!("{}\n", new_content.trim_end()))
-        .map_err(|e| format!("Failed to write hosts file (run as admin?): {}", e))
+    let final_content = format!("{}\n", new_content.trim_end());
+
+    // Try direct write first
+    match fs::write(&hosts_path, &final_content) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            // Fallback: elevated write
+            elevated_hosts_write(&final_content)
+        }
+    }
 }
+
+/// Write hosts file content with elevated privileges
+fn elevated_hosts_write(content: &str) -> Result<(), String> {
+    let temp_dir = std::env::temp_dir();
+    let random_suffix: u64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+
+    // Write content to a temp file
+    let temp_hosts = temp_dir.join(format!("orbit_hosts_{}.tmp", random_suffix));
+    fs::write(&temp_hosts, content)
+        .map_err(|e| format!("Failed to write temp hosts: {e}"))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let hosts_path = get_hosts_path();
+        let script_path = temp_dir.join(format!("orbit_hosts_{}.ps1", random_suffix));
+        let script_content = format!(
+            "Copy-Item -Path '{}' -Destination '{}' -Force",
+            temp_hosts.display().to_string().replace("'", "''"),
+            hosts_path.display().to_string().replace("'", "''")
+        );
+
+        fs::write(&script_path, &script_content)
+            .map_err(|e| format!("Failed to create temp script: {e}"))?;
+
+        let output = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden",
+                "-Command",
+                &format!(
+                    "Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', '{}'",
+                    script_path.display()
+                ),
+            ])
+            .output()
+            .map_err(|e| format!("Failed to execute elevated command: {e}"))?;
+
+        let _ = fs::remove_file(&script_path);
+        let _ = fs::remove_file(&temp_hosts);
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err("Failed to update hosts file (elevation denied or failed)".to_string())
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let hosts_path = get_hosts_path();
+        let output = std::process::Command::new("pkexec")
+            .args(["cp", &temp_hosts.to_string_lossy(), &hosts_path.to_string_lossy()])
+            .output()
+            .map_err(|e| format!("Failed to execute pkexec: {e}"))?;
+
+        let _ = fs::remove_file(&temp_hosts);
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err("Failed to update hosts file (elevation denied or failed)".to_string())
+        }
+    }
+}
+
 
 fn generate_site_nginx_config(
     domain: &str,
@@ -1991,6 +2075,33 @@ fn handle_tools_list(id: &Value) -> Value {
                 },
                 "required": ["domain", "connection_name"]
             }
+        },
+        // ─── SFTP File Transfer ─────────────────────────────
+        {
+            "name": "deploy_download_file",
+            "description": "Download a file from a remote server via SFTP. Requires an existing SSH connection. Use this to pull database backups, config files, logs, or any remote file to the local machine.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "connection_name": { "type": "string", "description": "SSH connection name" },
+                    "remote_path": { "type": "string", "description": "Absolute path on the remote server (e.g., /tmp/backup.sql)" },
+                    "local_path": { "type": "string", "description": "Local path to save the file (e.g., C:\\Users\\user\\backup.sql)" }
+                },
+                "required": ["connection_name", "remote_path", "local_path"]
+            }
+        },
+        {
+            "name": "deploy_upload_file",
+            "description": "Upload a local file to a remote server via SFTP. Requires an existing SSH connection. Creates parent directories on the remote server automatically.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "connection_name": { "type": "string", "description": "SSH connection name" },
+                    "local_path": { "type": "string", "description": "Local file path to upload" },
+                    "remote_path": { "type": "string", "description": "Absolute destination path on the remote server" }
+                },
+                "required": ["connection_name", "local_path", "remote_path"]
+            }
         }
     ]);
 
@@ -2314,6 +2425,19 @@ fn handle_tool_call(id: &Value, name: &str, args: &Value) -> Value {
             let domain = args.get("domain").and_then(|v| v.as_str()).unwrap_or("");
             let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
             tool_deploy_status(domain, conn_name)
+        }
+        // Deploy — File Transfer
+        "deploy_download_file" => {
+            let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
+            let remote_path = args.get("remote_path").and_then(|v| v.as_str()).unwrap_or("");
+            let local_path = args.get("local_path").and_then(|v| v.as_str()).unwrap_or("");
+            tool_deploy_download_file(conn_name, remote_path, local_path)
+        }
+        "deploy_upload_file" => {
+            let conn_name = args.get("connection_name").and_then(|v| v.as_str()).unwrap_or("");
+            let local_path = args.get("local_path").and_then(|v| v.as_str()).unwrap_or("");
+            let remote_path = args.get("remote_path").and_then(|v| v.as_str()).unwrap_or("");
+            tool_deploy_upload_file(conn_name, local_path, remote_path)
         }
         _ => Err(format!("Unknown tool: {}", name)),
     };
@@ -5657,6 +5781,81 @@ fn tool_deploy_status(domain: &str, conn_name: &str) -> Result<String, String> {
         "status": manifest.get("status"),
         "file_count": file_count
     })).unwrap())
+}
+
+// ─── SFTP File Transfer ──────────────────────────────────────────
+
+fn tool_deploy_download_file(conn_name: &str, remote_path: &str, local_path: &str) -> Result<String, String> {
+    if remote_path.is_empty() {
+        return Err("remote_path is required".to_string());
+    }
+    if local_path.is_empty() {
+        return Err("local_path is required".to_string());
+    }
+
+    let conn = mcp_find_connection(conn_name)?;
+    let session = mcp_create_ssh_session(&conn)?;
+    let sftp = session.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+
+    let mut remote_file = sftp
+        .open(std::path::Path::new(remote_path))
+        .map_err(|e| format!("Failed to open remote file '{}': {}", remote_path, e))?;
+
+    let mut contents = Vec::new();
+    remote_file
+        .read_to_end(&mut contents)
+        .map_err(|e| format!("Failed to read remote file: {e}"))?;
+
+    // Ensure local parent directory exists
+    if let Some(parent) = std::path::Path::new(local_path).parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create local directory: {e}"))?;
+    }
+
+    fs::write(local_path, &contents)
+        .map_err(|e| format!("Failed to write local file: {e}"))?;
+
+    let size = contents.len();
+    Ok(format!("Downloaded '{}' -> '{}' ({} bytes)", remote_path, local_path, size))
+}
+
+fn tool_deploy_upload_file(conn_name: &str, local_path: &str, remote_path: &str) -> Result<String, String> {
+    if local_path.is_empty() {
+        return Err("local_path is required".to_string());
+    }
+    if remote_path.is_empty() {
+        return Err("remote_path is required".to_string());
+    }
+
+    let conn = mcp_find_connection(conn_name)?;
+    let session = mcp_create_ssh_session(&conn)?;
+    let sftp = session.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+
+    let contents = fs::read(local_path)
+        .map_err(|e| format!("Failed to read local file '{}': {}", local_path, e))?;
+
+    // Create remote parent directories
+    if let Some(parent) = std::path::Path::new(remote_path).parent() {
+        let parent_str = parent.to_string_lossy();
+        if !parent_str.is_empty() && parent_str != "/" {
+            // Try creating each directory component
+            let mut current = String::new();
+            for component in parent_str.split('/').filter(|s| !s.is_empty()) {
+                current.push('/');
+                current.push_str(component);
+                let _ = sftp.mkdir(std::path::Path::new(&current), 0o755);
+            }
+        }
+    }
+
+    let mut remote_file = sftp
+        .create(std::path::Path::new(remote_path))
+        .map_err(|e| format!("Failed to create remote file '{}': {}", remote_path, e))?;
+    std::io::Write::write_all(&mut remote_file, &contents)
+        .map_err(|e| format!("Failed to write remote file: {e}"))?;
+
+    let size = contents.len();
+    Ok(format!("Uploaded '{}' -> '{}' ({} bytes)", local_path, remote_path, size))
 }
 
 // ─── Utilities ───────────────────────────────────────────────────

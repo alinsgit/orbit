@@ -135,6 +135,70 @@ impl DeployService {
         Ok(output)
     }
 
+    // ─── SFTP File Transfer ─────────────────────────────────────────
+
+    /// Download a file from remote server via SFTP
+    pub fn sftp_download(
+        conn: &ServerConnection,
+        remote_path: &str,
+        local_path: &str,
+    ) -> Result<String, String> {
+        let session = Self::create_ssh_session(conn)?;
+        let sftp = session.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+
+        let mut remote_file = sftp
+            .open(Path::new(remote_path))
+            .map_err(|e| format!("Failed to open remote file '{}': {}", remote_path, e))?;
+
+        let mut contents = Vec::new();
+        remote_file
+            .read_to_end(&mut contents)
+            .map_err(|e| format!("Failed to read remote file: {e}"))?;
+
+        // Ensure local parent directory exists
+        if let Some(parent) = Path::new(local_path).parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create local directory: {e}"))?;
+        }
+
+        fs::write(local_path, &contents)
+            .map_err(|e| format!("Failed to write local file: {e}"))?;
+
+        let size = contents.len();
+        log::info!("Downloaded '{}' -> '{}' ({} bytes)", remote_path, local_path, size);
+
+        Ok(format!("Downloaded {} ({} bytes)", remote_path, size))
+    }
+
+    /// Upload a local file to remote server via SFTP
+    pub fn sftp_upload(
+        conn: &ServerConnection,
+        local_path: &str,
+        remote_path: &str,
+    ) -> Result<String, String> {
+        let session = Self::create_ssh_session(conn)?;
+        let sftp = session.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+
+        let contents = fs::read(local_path)
+            .map_err(|e| format!("Failed to read local file '{}': {}", local_path, e))?;
+
+        // Ensure remote parent directory exists
+        if let Some(parent) = Path::new(remote_path).parent() {
+            Self::sftp_mkdir_recursive(&sftp, &parent.to_string_lossy())?;
+        }
+
+        let mut remote_file = sftp
+            .create(Path::new(remote_path))
+            .map_err(|e| format!("Failed to create remote file '{}': {}", remote_path, e))?;
+        std::io::Write::write_all(&mut remote_file, &contents)
+            .map_err(|e| format!("Failed to write remote file: {e}"))?;
+
+        let size = contents.len();
+        log::info!("Uploaded '{}' -> '{}' ({} bytes)", local_path, remote_path, size);
+
+        Ok(format!("Uploaded {} ({} bytes)", remote_path, size))
+    }
+
     // ─── File Hashing ────────────────────────────────────────────────
 
     pub fn hash_local_files(site_path: &Path) -> Result<Vec<FileHash>, String> {

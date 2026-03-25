@@ -307,6 +307,9 @@ pub fn run() {
         commands::deploy::deploy_ssh_execute,
         commands::deploy::deploy_sync,
         commands::deploy::deploy_get_status,
+        // Deploy — File Transfer
+        commands::deploy::deploy_sftp_download,
+        commands::deploy::deploy_sftp_upload,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

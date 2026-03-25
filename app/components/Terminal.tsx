@@ -561,32 +561,41 @@ export function Terminal({ className, onClose }: TerminalProps) {
 
         {/* Sites shortcuts */}
         {sites.length > 0 && (
-          <div className="flex items-center gap-1 px-2 border-l border-edge/30 shrink-0">
-            {sites.slice(0, 4).map((site) => {
-              const isActive = tabs.some((t) => t.siteOrigin === site.domain);
+          <div className="flex items-center border-l border-edge/30 shrink-0" style={{ maxWidth: "45%" }}>
+            <div
+              className="flex items-center gap-1 px-1 overflow-x-auto scrollbar-none"
+              ref={(el) => {
+                if (el) {
+                  el.onwheel = (e) => {
+                    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                      e.preventDefault();
+                      el.scrollLeft += e.deltaY;
+                    }
+                  };
+                }
+              }}
+            >
+              {sites.map((site) => {
+                const isActive = tabs.some((t) => t.siteOrigin === site.domain);
 
-              return (
-                <button
-                  key={site.domain}
-                  onClick={() => handleSiteClick(site)}
-                  className={clsx(
-                    "flex items-center gap-1 px-2 py-1 text-[10px] font-medium whitespace-nowrap transition-all rounded",
-                    isActive
-                      ? "text-emerald-500 bg-emerald-500/10"
-                      : "text-content-muted hover:text-content-secondary hover:bg-hover",
-                  )}
-                  title={`Open terminal in ${site.domain}`}
-                >
-                  <FolderOpen className="w-2.5 h-2.5" />
-                  {site.domain.replace(".test", "")}
-                </button>
-              );
-            })}
-            {sites.length > 4 && (
-              <span className="text-[10px] text-content-muted px-1">
-                +{sites.length - 4}
-              </span>
-            )}
+                return (
+                  <button
+                    key={site.domain}
+                    onClick={() => handleSiteClick(site)}
+                    className={clsx(
+                      "flex items-center gap-1 px-2 py-1 text-[10px] font-medium whitespace-nowrap transition-all rounded shrink-0",
+                      isActive
+                        ? "text-emerald-500 bg-emerald-500/10"
+                        : "text-content-muted hover:text-content-secondary hover:bg-hover",
+                    )}
+                    title={`Open terminal in ${site.domain}`}
+                  >
+                    <FolderOpen className="w-2.5 h-2.5" />
+                    {site.domain.replace(".test", "")}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

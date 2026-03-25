@@ -208,6 +208,8 @@ impl SiteManager {
             ssl_key_path = Some(cert.key_path.clone());
 
             vars.insert("ssl_port", "443".to_string());
+            // Force port 80 for HTTP→HTTPS redirect block to prevent infinite redirect loop
+            vars.insert("port", "80".to_string());
             // Use absolute paths for SSL certificates
             vars.insert("ssl_cert", cert.cert_path.replace('\\', "/"));
             vars.insert("ssl_key", cert.key_path.replace('\\', "/"));

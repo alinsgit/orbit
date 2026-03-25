@@ -109,3 +109,29 @@ pub fn deploy_get_status(
 ) -> Result<Option<DeployManifest>, String> {
     DeployService::get_last_manifest(&app, &domain, &connection)
 }
+
+// ── File Transfer ──
+
+#[command]
+pub fn deploy_sftp_download(
+    app: AppHandle,
+    connection: String,
+    remote_path: String,
+    local_path: String,
+) -> Result<String, String> {
+    let conn = DeployStore::get_connection(&app, &connection)?
+        .ok_or_else(|| format!("Connection not found: {connection}"))?;
+    DeployService::sftp_download(&conn, &remote_path, &local_path)
+}
+
+#[command]
+pub fn deploy_sftp_upload(
+    app: AppHandle,
+    connection: String,
+    local_path: String,
+    remote_path: String,
+) -> Result<String, String> {
+    let conn = DeployStore::get_connection(&app, &connection)?
+        .ok_or_else(|| format!("Connection not found: {connection}"))?;
+    DeployService::sftp_upload(&conn, &local_path, &remote_path)
+}

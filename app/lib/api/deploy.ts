@@ -89,3 +89,21 @@ export const deployGetStatus = async (
 ): Promise<DeployManifest | null> => {
   return await invoke('deploy_get_status', { domain, connection })
 }
+
+// ── File Transfer ──
+
+export const deploySftpDownload = async (
+  connection: string,
+  remotePath: string,
+  localPath: string,
+): Promise<string> => {
+  return await invoke('deploy_sftp_download', { connection, remotePath, localPath })
+}
+
+export const deploySftpUpload = async (
+  connection: string,
+  localPath: string,
+  remotePath: string,
+): Promise<string> => {
+  return await invoke('deploy_sftp_upload', { connection, localPath, remotePath })
+}
