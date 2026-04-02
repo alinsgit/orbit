@@ -343,7 +343,41 @@ impl DeployService {
                     serde_json::from_str(&data).map_err(|e| e.to_string())?;
                 manifest.files
             } else {
-                Vec::new()
+                // No manifest — scan remote file sizes for smart first sync
+                log::info!("No manifest found for {domain}, scanning remote files...");
+                app.emit(
+                    "deploy-progress",
+                    DeployProgress {
+                        domain: domain.to_string(),
+                        connection: conn_name.clone(),
+                        phase: "scanning_remote".to_string(),
+                        current: 0,
+                        total: 0,
+                        file: None,
+                    },
+                )
+                .ok();
+
+                let remote_sizes = Self::get_remote_file_sizes(&session, remote_path)
+                    .unwrap_or_default();
+
+                // Build pseudo-manifest: files with matching size are assumed identical
+                local_files
+                    .iter()
+                    .filter_map(|f| {
+                        remote_sizes.get(&f.path).and_then(|&remote_size| {
+                            if remote_size == f.size {
+                                Some(FileHash {
+                                    path: f.path.clone(),
+                                    hash: f.hash.clone(),
+                                    size: remote_size,
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect()
             };
 
             let (added, modified, deleted) = Self::calculate_diff(&local_files, &remote_files);
@@ -638,6 +672,44 @@ impl DeployService {
             fs::remove_file(entry.path()).ok();
         }
         Ok(())
+    }
+
+    // ─── Remote File Scanning ────────────────────────────────────────
+
+    /// Get remote file sizes via SSH for first-sync comparison.
+    /// Returns a map of relative_path → file_size.
+    fn get_remote_file_sizes(
+        session: &Session,
+        remote_path: &str,
+    ) -> Result<std::collections::HashMap<String, u64>, String> {
+        let mut channel = session
+            .channel_session()
+            .map_err(|e| format!("Channel error: {e}"))?;
+
+        let cmd = format!(
+            "cd '{}' && find . -type f -printf '%P\\t%s\\n' 2>/dev/null",
+            remote_path
+        );
+        channel
+            .exec(&cmd)
+            .map_err(|e| format!("Exec error: {e}"))?;
+
+        let mut output = String::new();
+        channel
+            .read_to_string(&mut output)
+            .map_err(|e| format!("Read error: {e}"))?;
+        channel.wait_close().ok();
+
+        let mut sizes = std::collections::HashMap::new();
+        for line in output.lines() {
+            if let Some((path, size_str)) = line.split_once('\t') {
+                if let Ok(size) = size_str.parse::<u64>() {
+                    sizes.insert(path.to_string(), size);
+                }
+            }
+        }
+
+        Ok(sizes)
     }
 
     // ─── SFTP Helpers ────────────────────────────────────────────────
