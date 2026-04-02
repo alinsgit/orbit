@@ -1,0 +1,42 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the issue
+      placeholder: |
+        1. Open Orbit
+        2. Go to...
+        3. Click...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Orbit Version
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "Windows 11 Pro 24H2"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant logs from the Logs tab (if applicable)
+      render: shell
