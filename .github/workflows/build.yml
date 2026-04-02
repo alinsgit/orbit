@@ -4,14 +4,10 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
   pull_request:
     branches:
       - main
   workflow_dispatch:
-
-# master push → quality only, tag push → quality + build
 
 permissions:
   contents: write
