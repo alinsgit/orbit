@@ -1,7 +1,7 @@
 {
   "name": "orbit-local-server",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Modern local development environment - Manage Nginx, PHP, MariaDB and more",
   "author": "alins",
   "license": "MIT",
@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "TAURI_DIR=core tauri",
-    "bump": "node scripts/bump-version.js"
+    "bump": "node scripts/bump-version.cjs"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
