@@ -44,10 +44,11 @@ impl MeilisearchManager {
         Ok(exe_path.exists())
     }
 
-    /// Check if Meilisearch is running (port 7700)
+    /// Check if Meilisearch is running (port 7700, IPv4 or IPv6 loopback)
     pub fn is_running() -> bool {
         use std::net::TcpListener;
         TcpListener::bind("127.0.0.1:7700").is_err()
+            || TcpListener::bind("[::1]:7700").is_err()
     }
 
     /// Get full Meilisearch status
@@ -141,8 +142,10 @@ impl MeilisearchManager {
 
         hidden_command(&exe_path)
             .args([
+                // Bind dual-stack: [::] accepts IPv6 connections, and on
+                // dual-stack capable hosts also receives IPv4-mapped traffic.
                 "--http-addr",
-                "127.0.0.1:7700",
+                "[::]:7700",
                 "--db-path",
                 &db_path.to_string_lossy(),
                 "--dump-dir",

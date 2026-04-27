@@ -206,6 +206,7 @@ impl TemplateEngine {
 /// HTTP-only nginx site template
 pub const TEMPLATE_HTTP: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     root         "{{path}}";
 
@@ -253,6 +254,7 @@ pub const TEMPLATE_HTTP: &str = r#"server {
 pub const TEMPLATE_HTTPS: &str = r#"# HTTP to HTTPS redirect
 server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     return 301   https://$server_name$request_uri;
 }
@@ -260,6 +262,7 @@ server {
 # HTTPS server
 server {
     listen       {{ssl_port}} ssl;
+    listen       [::]:{{ssl_port}} ssl;
     http2        on;
     server_name  {{domain}};
     root         "{{path}}";
@@ -318,6 +321,7 @@ server {
 /// Static site template (no PHP)
 pub const TEMPLATE_STATIC: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     root         "{{path}}";
 
@@ -351,6 +355,7 @@ pub const TEMPLATE_STATIC: &str = r#"server {
 /// Laravel-specific template
 pub const TEMPLATE_LARAVEL: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     root         "{{path}}/public";
 
@@ -402,6 +407,7 @@ pub const TEMPLATE_LARAVEL: &str = r#"server {
 /// LiteCart e-commerce template (based on official documentation)
 pub const TEMPLATE_LITECART: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     root         "{{path}}";
 
@@ -470,6 +476,7 @@ pub const TEMPLATE_LITECART: &str = r#"server {
 pub const TEMPLATE_LITECART_SSL: &str = r#"# HTTP to HTTPS redirect
 server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     return 301   https://$server_name$request_uri;
 }
@@ -477,6 +484,7 @@ server {
 # HTTPS server
 server {
     listen       {{ssl_port}} ssl;
+    listen       [::]:{{ssl_port}} ssl;
     http2        on;
     server_name  {{domain}};
     root         "{{path}}";
@@ -555,6 +563,7 @@ server {
 /// WordPress-specific template
 pub const TEMPLATE_WORDPRESS: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     root         "{{path}}";
 
@@ -609,6 +618,7 @@ pub const TEMPLATE_WORDPRESS: &str = r#"server {
 /// Reverse proxy nginx template (for JS frameworks: Next.js, Astro, Nuxt, Vue)
 pub const TEMPLATE_REVERSE_PROXY: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
 
     access_log  logs/{{domain}}.access.log;
@@ -632,6 +642,7 @@ pub const TEMPLATE_REVERSE_PROXY: &str = r#"server {
 pub const TEMPLATE_REVERSE_PROXY_SSL: &str = r#"# HTTP to HTTPS redirect
 server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
     return 301   https://$server_name$request_uri;
 }
@@ -639,6 +650,7 @@ server {
 # HTTPS server
 server {
     listen       {{ssl_port}} ssl;
+    listen       [::]:{{ssl_port}} ssl;
     http2        on;
     server_name  {{domain}};
 
@@ -838,6 +850,7 @@ pub const APACHE_TEMPLATE_LITECART: &str = r#"<VirtualHost *:{{port}}>
 /// Django reverse proxy template (Python WSGI/ASGI apps)
 pub const TEMPLATE_DJANGO: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
 
     access_log  logs/{{domain}}.access.log;
@@ -879,6 +892,7 @@ pub const TEMPLATE_DJANGO: &str = r#"server {
 /// SvelteKit reverse proxy template with WebSocket support
 pub const TEMPLATE_SVELTEKIT: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
 
     access_log  logs/{{domain}}.access.log;
@@ -915,6 +929,7 @@ pub const TEMPLATE_SVELTEKIT: &str = r#"server {
 /// Remix reverse proxy template
 pub const TEMPLATE_REMIX: &str = r#"server {
     listen       {{port}};
+    listen       [::]:{{port}};
     server_name  {{domain}};
 
     access_log  logs/{{domain}}.access.log;

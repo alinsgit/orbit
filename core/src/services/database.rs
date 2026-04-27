@@ -209,6 +209,7 @@ post_max_size = 128M
         let config = format!(r#"# Adminer Database Manager
 server {{
     listen       8080;
+    listen       [::]:8080;
     server_name  localhost;
     root         "{}";
 

@@ -85,10 +85,11 @@ impl CacheManager {
         6379
     }
 
-    /// Check if a port is in use
+    /// Check if a port is in use (checks both IPv4 and IPv6 loopback)
     fn check_port_in_use(port: u16) -> bool {
         use std::net::TcpListener;
         TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
+            || TcpListener::bind(format!("[::1]:{port}")).is_err()
     }
 
     /// Get full cache status
@@ -111,7 +112,7 @@ impl CacheManager {
 
         let config_content = format!(
             r#"# Redis configuration
-bind 127.0.0.1
+bind 127.0.0.1 ::1
 port {}
 maxmemory {}
 maxmemory-policy allkeys-lru

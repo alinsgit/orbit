@@ -22,6 +22,7 @@ function App() {
     setActiveTab,
     isTerminalOpen,
     setIsTerminalOpen,
+    pendingTerminalSite,
     isLoading,
   } = useApp()
 
@@ -34,11 +35,17 @@ function App() {
     })
   }, [activeTab])
 
-  // Terminal: mount on first open, keep mounted forever (preserves PTY sessions)
+  // Terminal: mount on first open *or* when something requests a session
+  // (pendingTerminalSite). Mounting on isTerminalOpen alone races against
+  // openTerminalForSite — the pending site is set in the same batch, but
+  // Terminal isn't mounted yet so its useEffect can't pick it up; by the
+  // time Terminal mounts, pendingTerminalSite has been cleared by another
+  // flow. Mounting eagerly when a site is pending fixes the "site created
+  // but no terminal opens" symptom.
   const [terminalMounted, setTerminalMounted] = useState(false)
   useEffect(() => {
-    if (isTerminalOpen) setTerminalMounted(true)
-  }, [isTerminalOpen])
+    if (isTerminalOpen || pendingTerminalSite) setTerminalMounted(true)
+  }, [isTerminalOpen, pendingTerminalSite])
 
   // Drag resize state
   const [terminalHeight, setTerminalHeight] = useState(() => {

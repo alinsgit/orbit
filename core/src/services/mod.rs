@@ -24,6 +24,8 @@ pub mod templates;
 pub mod backup;
 pub mod validation;
 pub mod versions;
+pub mod version_manager;
+pub mod shared_data;
 pub mod tunnel;
 pub mod terminal;
 pub mod mcp;

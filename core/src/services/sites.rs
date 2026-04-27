@@ -262,8 +262,8 @@ impl SiteManager {
                     Err(e) => {
                         log::warn!("Could not update hosts file: {e}");
                         Some(format!(
-                            "Could not add {} to hosts file. Add manually: 127.0.0.1 {}",
-                            site.domain, site.domain
+                            "Could not add {} to hosts file. Add manually:\n127.0.0.1 {}\n::1 {}",
+                            site.domain, site.domain, site.domain
                         ))
                     }
                 }
@@ -272,10 +272,23 @@ impl SiteManager {
 
         // Create site metadata
         let now = chrono::Utc::now().to_rfc3339();
-        // Only store dev_port for reverse proxy templates
-        let stored_dev_port = match template {
-            SiteTemplate::ReverseProxy => Some(dev_port),
-            _ => None,
+        // Persist dev_port whenever a dev server is associated with the site:
+        //   - any reverse-proxy-style template (nginx forwards to it), OR
+        //   - the user supplied a dev_command (so Start App injects PORT).
+        // Previously only SiteTemplate::ReverseProxy stored it, which silently
+        // dropped Django/SvelteKit/Remix and any PHP/Laravel project running
+        // its own dev server.
+        let is_proxy_template = matches!(
+            template,
+            SiteTemplate::ReverseProxy
+                | SiteTemplate::Django
+                | SiteTemplate::SvelteKit
+                | SiteTemplate::Remix
+        );
+        let stored_dev_port = if is_proxy_template || site.dev_command.is_some() {
+            Some(dev_port)
+        } else {
+            None
         };
 
         let metadata = SiteMetadata {

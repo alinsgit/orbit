@@ -100,6 +100,21 @@ export const regenerateSiteConfig = async (domain: string): Promise<string> => {
   }
 };
 
+export interface RegenerateAllResult {
+  regenerated: number;
+  failed: number;
+  errors: string[];
+}
+
+export const regenerateAllSiteConfigs = async (): Promise<RegenerateAllResult> => {
+  try {
+    return await invoke('regenerate_all_site_configs');
+  } catch (error) {
+    console.error('Failed to regenerate all configs:', error);
+    throw error;
+  }
+};
+
 export const startSiteApp = async (domain: string): Promise<number> => {
   return await invoke('start_site_app', { domain });
 };

@@ -1,6 +1,20 @@
-import { useState, useEffect } from 'react';
-import { Download, Loader2, Trash2, RefreshCw, Play, Square, CheckCircle, Terminal, CheckCircle2, RotateCw, Settings2, Zap } from 'lucide-react';
-import { getAvailableVersions, downloadService, uninstallService, refreshAllVersions, ServiceVersion, addServiceToPath, removeServiceFromPath, checkServicePathStatus, ServicePathStatus, reloadService } from '../lib/api';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Download, Loader2, Trash2, RefreshCw, Play, Square, CheckCircle, Terminal, CheckCircle2, RotateCw, Settings2, Zap, ChevronDown, Check } from 'lucide-react';
+import {
+  getAvailableVersions,
+  downloadService,
+  uninstallService,
+  refreshAllVersions,
+  ServiceVersion,
+  addServiceToPath,
+  removeServiceFromPath,
+  checkServicePathStatus,
+  ServicePathStatus,
+  reloadService,
+  listServiceVersions,
+  setActiveServiceVersion,
+  removeServiceVersion,
+} from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import { settingsStore } from '../lib/store';
 import { ServiceConfigDrawer } from './ServiceConfigDrawer';
@@ -44,6 +58,11 @@ export function ServiceManager() {
   ] as const;
 
   const [available, setAvailable] = useState<Record<string, ServiceVersion[]>>({});
+  // Per-service-type list of installed version directory names (e.g.
+  // {"nginx": ["1.27.3", "1.28.1"]}). The scanner only reports the *active*
+  // version for junction-based services, so we need this to know which
+  // entries in the registry are already on disk.
+  const [installedDirs, setInstalledDirs] = useState<Record<string, string[]>>({});
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,12 +118,48 @@ export function ServiceManager() {
     setConfigDrawer({ ...configDrawer, isOpen: false });
   };
 
-  // Check if a version is already installed
+  // Check if a version is already installed.
+  //
+  // Two sources of truth:
+  //   1. `services` — what scanner reports (only the *active* version for
+  //      junction-based services, all PHP versions).
+  //   2. `installedDirs` — directory names under `bin/.versions/<svc>/` and
+  //      `bin/php/`. This catches non-active multi-version installs that
+  //      scanner doesn't surface.
   const isVersionInstalled = (type: string, version: string) => {
+    const available = version.trim();
+
+    // (2) Direct directory match. installedDirs are dir names, which for
+    // versioned services come straight from the registry version string
+    // we wrote at install time, so an exact match here is reliable.
+    const dirs = installedDirs[type];
+    if (dirs && dirs.length > 0) {
+      if (dirs.includes(available)) return true;
+      // Apache registry uses "2.4.66-VS18"; install dir uses raw string.
+      // Strip the VS suffix and compare prefix.
+      if (type === 'apache') {
+        const numeric = available.replace(/-VS\d+$/, '');
+        if (dirs.some((d) => d === numeric || d.startsWith(numeric))) return true;
+      }
+      // Bun/nodejs registry can be more granular than the dir name.
+      if (type === 'bun' || type === 'nodejs') {
+        const aParts = available.split('.');
+        if (
+          dirs.some((d) => {
+            const iParts = d.split('.');
+            if (type === 'nodejs') return iParts[0] === aParts[0];
+            return iParts[0] === aParts[0] && iParts[1] === aParts[1];
+          })
+        ) {
+          return true;
+        }
+      }
+    }
+
+    // (1) Fall back to the scanner-derived match logic.
     return services.some(s => {
       if (s.service_type !== type) return false;
       const installed = s.version.trim();
-      const available = version.trim();
 
       // Exact match
       if (installed === available) return true;
@@ -173,7 +228,7 @@ export function ServiceManager() {
     setRefreshing(true);
     try {
       await refreshAllVersions();
-      await fetchAvailable(true);
+      await Promise.all([fetchAvailable(true), fetchInstalledDirs()]);
       addToast({ type: 'success', message: 'Versions refreshed' });
     } catch (e) {
       console.error(e);
@@ -181,6 +236,27 @@ export function ServiceManager() {
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // Pull every installed version directory for every service in the catalog
+  // (also picks up PHP, which uses its own non-junction layout). Used to
+  // mark Install-tab cards as "Installed" even when the scanner only sees
+  // the active version.
+  const fetchInstalledDirs = async () => {
+    const keys = SERVICE_CATALOG.map((s) => s.key);
+    const results = await Promise.allSettled(
+      keys.map((key) => listServiceVersions(key)),
+    );
+    const next: Record<string, string[]> = {};
+    results.forEach((res, i) => {
+      const key = keys[i];
+      if (res.status === 'fulfilled') {
+        next[key] = res.value.installed;
+      } else {
+        next[key] = [];
+      }
+    });
+    setInstalledDirs(next);
   };
 
   // Check PATH status for all services
@@ -222,8 +298,16 @@ export function ServiceManager() {
 
   useEffect(() => {
     fetchAvailable();
+    fetchInstalledDirs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh the installed-dirs cache whenever scanner-reported services change
+  // (e.g. after install / uninstall / version switch). Cheap parallel calls.
+  useEffect(() => {
+    fetchInstalledDirs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [services.length]);
 
   // Check PATH statuses when services change (debounced)
   useEffect(() => {
@@ -247,8 +331,11 @@ export function ServiceManager() {
         typeParam = `php-${majorMinor}`;
       }
 
-      await downloadService(version.download_url, filename, typeParam);
-      await refreshServices();
+      // Pass the explicit version string so the backend knows where to land
+      // it under bin/.versions/<svc>/<ver>/ (irrelevant for PHP, which keeps
+      // its own `bin/php/<ver>/` layout, but harmless).
+      await downloadService(version.download_url, filename, typeParam, version.version);
+      await Promise.all([refreshServices(), fetchInstalledDirs()]);
       addToast({ type: 'success', message: `${serviceType} ${version.version} installed successfully` });
       setSubTab('manage');
     } catch (e: any) {
@@ -266,7 +353,7 @@ export function ServiceManager() {
     setProcessing(name);
     try {
       await uninstallService(name, serviceType, path);
-      await refreshServices();
+      await Promise.all([refreshServices(), fetchInstalledDirs()]);
       addToast({ type: 'success', message: `${name} uninstalled` });
     } catch (e: any) {
       console.error(e);
@@ -306,6 +393,41 @@ export function ServiceManager() {
   const supportsReload = (serviceType: string) => {
     return serviceType === 'nginx' || serviceType === 'apache';
   };
+
+  // Collapse PHP entries into a single "primary" card so each installed PHP
+  // version isn't shown both as its own card AND inside the version dropdown.
+  // Picks the first running PHP if any, otherwise the highest version. The
+  // remaining versions stay reachable through the picker, with per-row
+  // Start/Stop and remove buttons.
+  const consolidatedServices = useMemo(() => {
+    const phpEntries = services.filter((s) => s.service_type === 'php');
+    if (phpEntries.length <= 1) return services;
+    const sorted = [...phpEntries].sort((a, b) =>
+      b.version.localeCompare(a.version, undefined, { numeric: true }),
+    );
+    const primary = phpEntries.find((p) => p.status === 'running') || sorted[0];
+    const others = services.filter((s) => s.service_type !== 'php');
+    // Preserve the original order: drop in primary at the position of the
+    // first PHP entry so the card list doesn't reshuffle on every render.
+    const firstPhpIdx = services.findIndex((s) => s.service_type === 'php');
+    const out = [...others];
+    out.splice(firstPhpIdx, 0, primary);
+    return out;
+  }, [services]);
+
+  // Per-version PHP status map (keyed by directory name "8.4" — matches what
+  // list_service_versions returns). Drives Start/Stop buttons in the dropdown.
+  const phpStatusMap = useMemo<
+    Record<string, { name: string; status: string; port?: number | null }>
+  >(() => {
+    const m: Record<string, { name: string; status: string; port?: number | null }> = {};
+    for (const s of services) {
+      if (s.service_type !== 'php') continue;
+      const dirVersion = s.name.replace(/^php-/, '');
+      m[dirVersion] = { name: s.name, status: s.status, port: s.port };
+    }
+    return m;
+  }, [services]);
 
   return (
     <div className="p-6 h-full flex flex-col">
@@ -391,7 +513,7 @@ export function ServiceManager() {
                 </button>
               </div>
             )}
-            {services.map((service) => (
+            {consolidatedServices.map((service) => (
               <div
                 key={service.name}
                 className="bg-surface-raised p-4 rounded-xl border border-edge-subtle hover:border-edge transition-all"
@@ -404,9 +526,51 @@ export function ServiceManager() {
                     <div>
                       <h3 className="font-semibold flex items-center gap-2">
                         {service.name}
-                        <span className="text-xs font-normal text-content-muted bg-surface-raised px-2 py-0.5 rounded">
-                          v{service.version}
-                        </span>
+                        {MULTI_VERSION_SERVICES.has(service.service_type) ? (
+                          <VersionPicker
+                            serviceType={service.service_type}
+                            currentVersion={service.version}
+                            serviceStatus={service.status}
+                            onChanged={async () => {
+                              await refreshServices();
+                              await fetchInstalledDirs();
+                            }}
+                          />
+                        ) : service.service_type === 'php' ? (
+                          // PHP runs every installed version concurrently on
+                          // its own port — there is no "active" PHP. The
+                          // picker is shown in info-only mode: lists all
+                          // installed PHP versions, exposes per-row Start/
+                          // Stop, and lets the user uninstall a specific
+                          // version. No switch action.
+                          <VersionPicker
+                            serviceType="php"
+                            currentVersion={service.version}
+                            serviceStatus={service.status}
+                            onChanged={async () => {
+                              await refreshServices();
+                              await fetchInstalledDirs();
+                            }}
+                            disableSwitch
+                            versionStatuses={phpStatusMap}
+                            onToggleVersion={async (_dirVer, name, currentStatus) => {
+                              setProcessing(name);
+                              try {
+                                if (currentStatus === 'running') {
+                                  await stopServiceByName(name);
+                                } else {
+                                  await startServiceByName(name);
+                                }
+                              } finally {
+                                setProcessing(null);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="text-xs font-normal text-content-muted bg-surface-raised px-2 py-0.5 rounded">
+                            v{service.version}
+                          </span>
+                        )}
                       </h3>
                       <p className="text-sm text-content-secondary truncate max-w-[300px]">
                         {service.path}
@@ -674,11 +838,21 @@ function ServiceGroup({
     );
   }
 
+  // Find any installed version of this service so we can surface it even
+  // when isVersionInstalled() can't match against registry version strings
+  // (e.g. registry has "3.13.5" but local exe reports "3.13.6").
+  const installedSummary = installedServices?.find((s) => s.service_type === type);
+
   return (
     <div>
       <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
         <span className="text-xl">{icon}</span>
         {title}
+        {installedSummary && (
+          <span className="text-xs font-normal text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <CheckCircle size={12} /> v{installedSummary.version} installed
+          </span>
+        )}
         <span className="text-xs font-normal text-content-muted bg-surface-raised px-2 py-0.5 rounded-full">
           {versions.length} versions
         </span>
@@ -717,11 +891,12 @@ function ServiceGroup({
               ) : (
                 <button
                   onClick={() => onInstall(type, v)}
-                  disabled={processing !== null}
+                  disabled={isProcessing}
                   className={`p-2 rounded-md transition-colors ${isProcessing
                     ? 'bg-surface-raised text-content-secondary'
-                    : 'bg-surface-raised hover:bg-emerald-600 hover:text-content text-content-secondary'
+                    : 'bg-surface-raised hover:bg-emerald-600 hover:text-content text-content-secondary cursor-pointer'
                     }`}
+                  title={`Download ${type} ${v.version}`}
                 >
                   {isProcessing ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -737,3 +912,269 @@ function ServiceGroup({
     </div>
   );
 }
+
+// ─── VersionPicker ─────────────────────────────────────────────────────
+// Dropdown attached to each ServiceCard. Lists all installed versions for
+// the service, marks the active one, and lets the user switch or remove a
+// version. Versioned services only — PHP gets its own per-version cards
+// (handled elsewhere) so the picker is hidden for PHP.
+
+function VersionPicker({
+  serviceType,
+  currentVersion,
+  serviceStatus,
+  onChanged,
+  disableSwitch = false,
+  versionStatuses,
+  onToggleVersion,
+}: {
+  serviceType: string;
+  currentVersion: string;
+  serviceStatus: string;
+  onChanged: () => void | Promise<void>;
+  /// PHP-style services run all versions concurrently — no "active" version
+  /// to switch to. With `disableSwitch=true` the picker becomes info-only:
+  /// lists installed versions + lets the user remove a single version, but
+  /// clicking a row does nothing.
+  disableSwitch?: boolean;
+  /// Per-version runtime info, keyed by the directory name returned from
+  /// list_service_versions ("8.4"). When provided, each row shows a status
+  /// dot and (with `onToggleVersion`) a Start/Stop button.
+  versionStatuses?: Record<string, { name: string; status: string; port?: number | null }>;
+  /// Callback invoked when the per-row Start/Stop button is clicked. Only
+  /// used when `versionStatuses` is provided.
+  onToggleVersion?: (
+    dirVersion: string,
+    serviceName: string,
+    currentStatus: string,
+  ) => Promise<void> | void;
+}) {
+  const { addToast } = useApp();
+  const [open, setOpen] = useState(false);
+  const [installed, setInstalled] = useState<string[]>([]);
+  const [active, setActive] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const list = await listServiceVersions(serviceType);
+      setInstalled(list.installed);
+      setActive(list.active);
+    } catch (e) {
+      console.error('Failed to list versions:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Lazy-load on first open
+  useEffect(() => {
+    if (open) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Click-outside to close
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (ref.current && target && !ref.current.contains(target)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  const handleActivate = async (version: string) => {
+    if (disableSwitch) return; // info-only mode (e.g. PHP)
+    if (version === active) return;
+    setBusy(version);
+    try {
+      // set_active_service_version kills the running binary first; warn
+      // the user the service will need a restart.
+      const wasRunning = serviceStatus === 'running';
+      await setActiveServiceVersion(serviceType, version);
+      addToast({
+        type: 'success',
+        message: wasRunning
+          ? `Switched ${serviceType} to v${version}. Restart the service to apply.`
+          : `Switched ${serviceType} to v${version}.`,
+      });
+      setActive(version);
+      setOpen(false);
+      await onChanged();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Switch failed: ${e}` });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRemove = async (version: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Path layout differs: junction-based services live under .versions/,
+    // PHP keeps the legacy `bin/php/<ver>/` direct layout.
+    const path = disableSwitch
+      ? `bin/${serviceType}/${version}/`
+      : `bin/.versions/${serviceType}/${version}/`;
+    if (
+      !window.confirm(
+        `Remove ${serviceType} v${version}? Files in ${path} will be deleted.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(version);
+    try {
+      await removeServiceVersion(serviceType, version);
+      addToast({ type: 'success', message: `Removed ${serviceType} v${version}` });
+      await refresh();
+      await onChanged();
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Remove failed: ${err}` });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Hide picker entirely if there's only one version installed and it's the
+  // current one — no choice to make. Still show on hover to confirm version.
+  const hasMultiple = installed.length > 1;
+
+  // PHP-style: every installed version is the "current" one for that card.
+  // The button text and the per-row indicator should reflect "this is THE
+  // version this card represents", not "switch active".
+  const headerLabel = loading
+    ? 'Loading…'
+    : disableSwitch
+      ? hasMultiple
+        ? `${installed.length} PHP versions installed`
+        : 'Only PHP version installed'
+      : hasMultiple
+        ? `${installed.length} versions installed`
+        : 'Only one version installed';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs font-normal text-content-muted bg-surface-raised hover:bg-hover px-2 py-0.5 rounded transition-colors cursor-pointer"
+        title={disableSwitch ? 'Show all installed PHP versions' : 'Switch version'}
+      >
+        v{currentVersion}
+        <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] bg-surface-raised border border-edge rounded-lg shadow-xl overflow-hidden">
+          <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-content-muted border-b border-edge/50">
+            {headerLabel}
+          </div>
+          {!loading && installed.length === 0 && (
+            <div className="px-3 py-3 text-xs text-content-muted">
+              Install another version from the Install tab.
+            </div>
+          )}
+          {installed.map((v) => {
+            // For switchable services the row's "selected" highlight tracks
+            // which version is *active* (the junction target). For PHP
+            // (info-only) we highlight rows that are currently running so
+            // the user sees runtime state at a glance.
+            const isActive = !disableSwitch && v === active;
+            const isRunning = versionStatuses?.[v]?.status === 'running';
+            const showCheck = disableSwitch ? isRunning : isActive;
+            const highlight = disableSwitch ? isRunning : isActive;
+            const isBusy = busy === v;
+            const rowClickable = !disableSwitch && !isBusy;
+            return (
+              <div
+                key={v}
+                className={`group flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                  highlight ? 'bg-emerald-500/5 text-emerald-400' : 'hover:bg-hover'
+                } ${rowClickable ? 'cursor-pointer' : disableSwitch ? 'cursor-default' : ''}`}
+                onClick={() => rowClickable && handleActivate(v)}
+              >
+                <div className="flex items-center gap-2">
+                  {showCheck ? (
+                    <Check size={12} className="text-emerald-500" />
+                  ) : (
+                    <span className="w-3" />
+                  )}
+                  {/* Per-version runtime indicator (PHP). Switchable services
+                      have a single card-level status, so we skip the dot. */}
+                  {versionStatuses && (
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        versionStatuses[v]?.status === 'running'
+                          ? 'bg-emerald-500'
+                          : 'bg-content-muted/40'
+                      }`}
+                      title={versionStatuses[v]?.status ?? 'stopped'}
+                    />
+                  )}
+                  <span className="font-mono">v{v}</span>
+                  {versionStatuses?.[v]?.port && (
+                    <span className="text-[10px] text-content-muted font-mono">
+                      :{versionStatuses[v]!.port}
+                    </span>
+                  )}
+                  {isActive && (
+                    <span className="text-[10px] text-emerald-500/80">active</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {isBusy && <Loader2 size={12} className="animate-spin" />}
+                  {/* Per-row Start/Stop (PHP only — versionStatuses+toggle). */}
+                  {versionStatuses && onToggleVersion && versionStatuses[v] && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const info = versionStatuses[v]!;
+                        onToggleVersion(v, info.name, info.status);
+                      }}
+                      disabled={isBusy}
+                      className={`p-1 rounded transition-colors ${
+                        versionStatuses[v]!.status === 'running'
+                          ? 'hover:bg-red-500/10 hover:text-red-400'
+                          : 'hover:bg-emerald-500/10 hover:text-emerald-400'
+                      }`}
+                      title={
+                        versionStatuses[v]!.status === 'running'
+                          ? `Stop ${versionStatuses[v]!.name}`
+                          : `Start ${versionStatuses[v]!.name}`
+                      }
+                    >
+                      {versionStatuses[v]!.status === 'running' ? (
+                        <Square size={11} />
+                      ) : (
+                        <Play size={11} />
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => handleRemove(v, e)}
+                    disabled={isBusy}
+                    className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 rounded transition-all"
+                    title={`Remove v${v}`}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/// Service types that use the multi-version layout. Mirror of the Rust list
+/// in `services/version_manager.rs::VERSIONED_SERVICES`. PHP intentionally
+/// excluded — it has its own per-version cards.
+const MULTI_VERSION_SERVICES = new Set([
+  'nginx', 'apache', 'mariadb', 'postgresql', 'mongodb', 'redis',
+  'nodejs', 'python', 'bun', 'go', 'deno', 'mailpit', 'meilisearch',
+]);

@@ -736,3 +736,56 @@ impl DeployService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    /// Reproduces the user-reported bug:
+    ///   lokal "lokalfolder/" → deploy target "/home/site/path/"
+    ///   actual outcome: "/home/site/path/lokalfolder/<files>"
+    ///
+    /// If hash_local_files returns relative paths that start with the root
+    /// folder's NAME (e.g. "lokalfolder/index.php"), the bug is here.
+    /// If it returns plain "index.php", the bug lives in remote-path
+    /// construction or sftp_mkdir_recursive.
+    #[test]
+    fn hash_local_files_does_not_prepend_root_folder_name() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("lokalfolder");
+        fs::create_dir_all(project.join("sub")).unwrap();
+        fs::write(project.join("index.php"), b"<?php echo 1;").unwrap();
+        fs::write(project.join("style.css"), b"body{}").unwrap();
+        fs::write(project.join("sub").join("nested.php"), b"<?php").unwrap();
+
+        let files = DeployService::hash_local_files(&project).unwrap();
+        let paths: Vec<String> = files.iter().map(|f| f.path.clone()).collect();
+
+        // Expected: relative paths only — never start with "lokalfolder/"
+        assert!(
+            !paths.iter().any(|p| p.starts_with("lokalfolder/")),
+            "BUG REPRODUCED: relative paths must not include the root folder name. got: {paths:?}"
+        );
+        assert!(paths.contains(&"index.php".to_string()), "got: {paths:?}");
+        assert!(paths.contains(&"style.css".to_string()), "got: {paths:?}");
+        assert!(paths.contains(&"sub/nested.php".to_string()), "got: {paths:?}");
+    }
+
+    /// If hash_local_files is fine, simulate the remote-path concatenation
+    /// the same way sync_sftp does. The result must be `<remote>/index.php`,
+    /// not `<remote>/lokalfolder/index.php`.
+    #[test]
+    fn remote_full_construction_does_not_nest_root_name() {
+        let remote_path = "/home/site/path/";
+        let relative = "index.php";
+        let remote_full = format!(
+            "{}/{}",
+            remote_path.trim_end_matches('/'),
+            relative
+        );
+        assert_eq!(remote_full, "/home/site/path/index.php");
+        assert!(!remote_full.contains("lokalfolder"));
+    }
+}

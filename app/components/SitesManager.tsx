@@ -9,6 +9,7 @@ import {
   Shield,
   AlertTriangle,
   RefreshCw,
+  RotateCw,
   CheckCircle2,
   XCircle,
   Settings2,
@@ -35,6 +36,7 @@ import {
   deleteSite,
   updateSite,
   regenerateSiteConfig,
+  regenerateAllSiteConfigs,
   generateSslCert,
   nginxTestConfig,
   nginxReload,
@@ -416,11 +418,13 @@ export function SitesManager() {
     });
   }, []);
 
-  // Poll app status when sites change
+  // Poll app status when sites change + every 4s so external kills/crashes
+  // (terminal Ctrl-C, OOM, etc.) are reflected in the UI without a refresh.
   useEffect(() => {
-    if (sites.length > 0) {
-      refreshAppStatus(sites);
-    }
+    if (sites.length === 0) return;
+    refreshAppStatus(sites);
+    const id = window.setInterval(() => refreshAppStatus(sites), 4000);
+    return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sites.length]);
 
@@ -646,6 +650,8 @@ export function SitesManager() {
         ssl_enabled: false,
         template: "http",
         web_server: defaultWebServer,
+        dev_command: undefined,
+        dev_port: undefined,
       });
       setShowAddForm(false);
       await refreshSites();
@@ -694,6 +700,8 @@ export function SitesManager() {
       ssl_enabled: site.ssl_enabled,
       template: site.template || "http",
       web_server: site.web_server || "nginx",
+      dev_command: site.dev_command,
+      dev_port: site.dev_port,
     });
   };
 
@@ -854,6 +862,40 @@ export function SitesManager() {
       addToast({ type: "error", message: `Blueprint creation failed: ${e}` });
     } finally {
       setBlueprintCreating(false);
+    }
+  };
+
+  const handleRegenerateAllConfigs = async () => {
+    if (
+      !window.confirm(
+        "Tüm site config dosyalarını yeniden oluştur?\n\n" +
+        "Bu işlem mevcut özelleştirmeleri (manuel düzenlemeleri) varsayılan şablona geri döndürür. " +
+        "Özellikle yeni eklenen IPv6 listen direktiflerini uygulamak için kullanılır."
+      )
+    ) {
+      return;
+    }
+
+    setProcessing("__all__");
+    try {
+      const result = await regenerateAllSiteConfigs();
+      if (result.failed === 0) {
+        addToast({
+          type: "success",
+          message: `${result.regenerated} site config'i yeniden oluşturuldu.`,
+        });
+      } else {
+        addToast({
+          type: "warning",
+          message: `${result.regenerated} başarılı, ${result.failed} başarısız:\n${result.errors.slice(0, 3).join("\n")}`,
+        });
+      }
+      await refreshSites();
+    } catch (e: any) {
+      console.error(e);
+      addToast({ type: "error", message: `Toplu regenerate başarısız: ${e}` });
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -1116,6 +1158,20 @@ export function SitesManager() {
             title="Refresh Sites"
           >
             <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+          </button>
+
+          {/* Regenerate All Configs */}
+          <button
+            onClick={handleRegenerateAllConfigs}
+            disabled={processing === "__all__"}
+            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50 border border-edge"
+            title="Tüm site config'lerini yeniden oluştur (IPv6 vb. şablon güncellemelerini uygulamak için)"
+          >
+            <RotateCw
+              size={16}
+              className={processing === "__all__" ? "animate-spin" : ""}
+            />
+            <span className="sr-only">Regenerate All</span>
           </button>
 
           {/* Add Site */}
@@ -1687,6 +1743,57 @@ export function SitesManager() {
                     </p>
                   )}
                 </div>
+
+                {/* Dev Server (optional) — fills the Start/Stop App button on the site card */}
+                <div className="col-span-2 grid grid-cols-3 gap-3 pt-1 border-t border-edge/40">
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-xs text-content-secondary flex items-center gap-1">
+                      <Play size={12} />
+                      Dev Command
+                      <span className="text-content-muted">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newSite.dev_command || ""}
+                      placeholder="e.g. bun dev, npm run dev, php artisan serve"
+                      onChange={(e) =>
+                        setNewSite({
+                          ...newSite,
+                          dev_command: e.target.value || undefined,
+                        })
+                      }
+                      className="px-3 py-2 bg-surface-inset rounded-lg text-sm border border-edge focus:border-emerald-500 focus:outline-none font-mono"
+                    />
+                    <p className="text-[11px] text-content-muted">
+                      Set this to enable the Start/Stop App button on the site card.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-content-secondary">
+                      Dev Port
+                      <span className="text-content-muted ml-1">(optional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={newSite.dev_port ?? ""}
+                      placeholder="3000"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setNewSite({
+                          ...newSite,
+                          dev_port: v ? parseInt(v, 10) : undefined,
+                        });
+                      }}
+                      className="px-3 py-2 bg-surface-inset rounded-lg text-sm border border-edge focus:border-emerald-500 focus:outline-none"
+                    />
+                    <p className="text-[11px] text-content-muted">
+                      Injected as PORT env var.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Actions */}
@@ -1916,6 +2023,48 @@ export function SitesManager() {
                       </div>
                     </div>
 
+                    {/* Dev Server (optional) */}
+                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-edge/40">
+                      <div className="col-span-2 flex flex-col gap-1">
+                        <label className="text-[11px] text-content-secondary flex items-center gap-1">
+                          <Play size={10} />
+                          Dev Command
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.dev_command || ""}
+                          placeholder="bun dev / npm run dev"
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              dev_command: e.target.value || undefined,
+                            })
+                          }
+                          className="px-2 py-1 bg-surface-inset rounded text-xs border border-edge focus:border-emerald-500 focus:outline-none font-mono"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] text-content-secondary">
+                          Dev Port
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="65535"
+                          value={editForm.dev_port ?? ""}
+                          placeholder="3000"
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setEditForm({
+                              ...editForm,
+                              dev_port: v ? parseInt(v, 10) : undefined,
+                            });
+                          }}
+                          className="px-2 py-1 bg-surface-inset rounded text-xs border border-edge focus:border-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
                     {/* Actions */}
                     <div className="flex gap-2 pt-1">
                       <button
@@ -2061,7 +2210,7 @@ export function SitesManager() {
                         className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400 transition-colors cursor-pointer"
                       >
                         <ExternalLink size={12} />
-                        Local Admin
+                        Open Site
                       </button>
 
                       {site.dev_command && (

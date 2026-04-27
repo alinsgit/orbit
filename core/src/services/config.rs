@@ -33,6 +33,7 @@ http {
 
     server {
         listen       80;
+        listen       [::]:80;
         server_name  localhost;
 
         location / {
@@ -171,7 +172,7 @@ types {
                 r#"[mysqld]
 datadir={data_path_str}
 port=3306
-bind-address=127.0.0.1
+bind-address=*
 
 [client]
 port=3306

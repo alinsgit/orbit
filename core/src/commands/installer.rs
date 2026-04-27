@@ -1,21 +1,80 @@
 use tauri::command;
 use std::path::{Path, PathBuf};
 use crate::services::download::{download_file, extract_archive};
+use crate::services::hidden_command;
 use tauri::AppHandle;
 use tauri::Manager;
 
+/// Image names of binaries we ship per service type. Killed before reinstall
+/// so an in-flight nginx.exe / php-cgi.exe doesn't keep its install dir as
+/// CWD and block `remove_dir_all` / `rename`.
+fn image_names_for(service_type: &str) -> &'static [&'static str] {
+    match service_type {
+        "nginx" => &["nginx.exe"],
+        "apache" => &["httpd.exe", "rotatelogs.exe"],
+        s if s.starts_with("php") => &["php-cgi.exe", "php.exe"],
+        "mariadb" => &["mariadbd.exe", "mysqld.exe", "mariadb.exe", "mysql.exe"],
+        "postgresql" => &["postgres.exe", "pg_ctl.exe", "psql.exe"],
+        "mongodb" => &["mongod.exe", "mongos.exe", "mongosh.exe"],
+        "redis" => &["redis-server.exe", "redis-cli.exe"],
+        "nodejs" => &["node.exe"],
+        "python" => &["python.exe", "pythonw.exe", "pip.exe"],
+        "bun" => &["bun.exe"],
+        "go" => &["go.exe", "gofmt.exe"],
+        "deno" => &["deno.exe"],
+        "mailpit" => &["mailpit.exe"],
+        "meilisearch" => &["meilisearch.exe"],
+        _ => &[],
+    }
+}
+
+/// Best-effort: kill any running instance of the service binaries so the
+/// install dir can be cleaned. Filters by image name only — narrow to the
+/// install target by relying on the fact that Orbit only ever spawns these
+/// from its own bin/. Users running unrelated copies of nginx/python/etc.
+/// from elsewhere will be impacted; that's the price of letting the user
+/// reinstall without manual cleanup.
+fn kill_running_binaries(service_type: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        for image in image_names_for(service_type) {
+            let _ = hidden_command("taskkill")
+                .args(["/F", "/T", "/IM", image])
+                .output();
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        for image in image_names_for(service_type) {
+            // Strip .exe on Unix for pkill compatibility
+            let name = image.trim_end_matches(".exe");
+            let _ = std::process::Command::new("pkill")
+                .args(["-9", "-f", name])
+                .output();
+        }
+    }
+}
+
+/// Download and install a service version.
+///
+/// `version` is the explicit registry version string (e.g. "1.27.3"). For
+/// PHP it's redundant (already encoded in `service_type` like "php-8.4")
+/// but accepted for uniformity.
 #[command]
 pub async fn download_service(
     app: AppHandle,
-    url: String, 
+    url: String,
     filename: String,
-    service_type: String
+    service_type: String,
+    version: Option<String>,
 ) -> Result<String, String> {
+    use crate::services::version_manager;
+
     // Base bin path - use app local data dir for portable storage
     let bin_path = app.path().app_local_data_dir()
         .map_err(|e| e.to_string())?
         .join("bin");
-    
+
     if !bin_path.exists() {
         std::fs::create_dir_all(&bin_path).map_err(|e| format!("Failed to create bin dir: {e}"))?;
     }
@@ -24,7 +83,7 @@ pub async fn download_service(
     if !downloads_dir.exists() {
         std::fs::create_dir_all(&downloads_dir).map_err(|e| format!("Failed to create downloads dir: {e}"))?;
     }
-    
+
     let dest_path = downloads_dir.join(&filename);
 
     log::info!("Downloading {service_type} from {url} to {dest_path:?}");
@@ -32,36 +91,70 @@ pub async fn download_service(
     // Download the file
     download_file(&url, &dest_path).await?;
 
-    // Determine extraction target and whether to strip root folder
+    // Resolve the version we'll record under .versions/<svc>/<ver>/. For
+    // PHP the version lives in service_type ("php-8.4"), for everything
+    // else we expect the caller to pass it.
+    let resolved_version: String = if service_type.starts_with("php") {
+        service_type.strip_prefix("php-").unwrap_or("latest").to_string()
+    } else {
+        match &version {
+            Some(v) if !v.is_empty() => v.clone(),
+            _ => {
+                // Fall back to a deterministic sentinel so we don't lose the
+                // install. Users can rename the dir later if needed.
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                format!("unknown-{ts}")
+            }
+        }
+    };
+
+    // Determine extraction target and whether to strip root folder.
+    // Versioned services land in `bin/.versions/<svc>/<ver>/` — `bin/<svc>`
+    // is a junction that we (re)point at this version after extraction.
     let (extract_target, strip_root) = match service_type.as_str() {
-        "nginx" => (bin_path.join("nginx"), true),           // nginx-x.x.x/ folder inside
-        "mariadb" => (bin_path.join("mariadb"), true),       // mariadb-x.x.x-winx64/ folder inside
-        "postgresql" => (bin_path.join("postgresql"), true), // pgsql/ folder inside
-        "mongodb" => (bin_path.join("mongodb"), true),       // mongodb-win32-x86_64-.../ folder inside
         s if s.starts_with("php") => {
-            let version = s.strip_prefix("php-").unwrap_or("latest");
-            let target = bin_path.join("php").join(version);
-            // Windows PHP zips are flat (no root folder); Linux/macOS tar.gz have one
+            // PHP keeps the legacy direct layout: `bin/php/<version>/`.
+            let target = bin_path.join("php").join(&resolved_version);
             let strip = filename.ends_with(".tar.gz") || filename.ends_with(".tgz");
             (target, strip)
         }
-        "nodejs" => (bin_path.join("nodejs"), true),         // node-vx.x.x-win-x64/ folder inside
-        "python" => (bin_path.join("python"), false),        // Python embed has flat structure
-        "bun" => (bin_path.join("bun"), true),               // bun-windows-x64/ folder inside
-        "apache" => (bin_path.join("apache"), true),         // Apache24/ folder inside
-        "go" => (bin_path.join("go"), true),                 // go/ folder inside
-        "redis" => (bin_path.join("redis"), true),             // Redis-x.x.x-Windows-.../ folder inside
-        "deno" => (bin_path.join("deno"), false),            // flat deno.exe inside
-        "rust" => (bin_path.join("rust"), false),            // raw executable, handled separately below
-        "mongosh" => (bin_path.join("mongosh_temp"), true),  // extract to temp, merged into mongodb/bin/ in post-install
+        "rust" => (bin_path.join("rust"), false),
+        "mongosh" => (bin_path.join("mongosh_temp"), true),
+        other if version_manager::is_versioned(other) => {
+            let target = version_manager::version_dir(&bin_path, other, &resolved_version);
+            // strip_root semantics preserved per service:
+            let strip = !matches!(other, "python" | "deno");
+            (target, strip)
+        }
         _ => (bin_path.join("misc").join(&service_type), false),
     };
 
     log::info!("Extracting to {extract_target:?} (strip_root: {strip_root})");
 
-    // Clean target directory for fresh install
+    // Step 1: Kill any running instance of this service's binaries. They
+    // hold a handle on (often a CWD reference into) the install dir, which
+    // is what makes both remove_dir_all *and* rename fail on Windows.
     if extract_target.exists() {
-        std::fs::remove_dir_all(&extract_target)
+        let kill_kind = if service_type.starts_with("php") {
+            "php"
+        } else {
+            service_type.as_str()
+        };
+        kill_running_binaries(kill_kind);
+        // Give Windows a moment to release the handles after taskkill.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+
+    // Step 2: Clean target directory. Strategy in clean_target_dir:
+    //   - clear read-only flags (nginx/MariaDB ZIPs preserve them)
+    //   - retry remove_dir_all with backoff (AV/Indexer hold handles ~ms)
+    //   - fall back to file-by-file delete (skip locked, rename aside)
+    //   - last resort: rename the whole directory aside
+    if extract_target.exists() {
+        clean_target_dir(&extract_target)
             .map_err(|e| format!("Failed to clean target dir: {e}"))?;
     }
     std::fs::create_dir_all(&extract_target)
@@ -132,10 +225,313 @@ pub async fn download_service(
                 configure_redis(&extract_target)?;
             }
 
+            // For versioned services, wire up the shared-data layer so
+            // user content (nginx conf/sites-enabled, ssl certs, logs)
+            // survives version switches. This MUST run before set_active —
+            // afterwards the install path is reachable through the junction
+            // and we'd be replacing real dirs through a symlinked location,
+            // which behaves inconsistently across Windows API surfaces.
+            if version_manager::is_versioned(&service_type) {
+                match crate::services::shared_data::link_shared_dirs(
+                    &bin_path,
+                    &service_type,
+                    &extract_target,
+                ) {
+                    Ok(wired) if !wired.is_empty() => {
+                        log::info!(
+                            "shared_data: wired {} cross-junction(s): {}",
+                            wired.len(),
+                            wired.join(", ")
+                        );
+                    }
+                    Ok(_) => {} // service has no shared subdirs, nothing to do
+                    Err(e) => {
+                        // Don't abort the install — user binaries are already
+                        // on disk. Surface a warning so the user knows their
+                        // configs may be version-local.
+                        log::warn!("shared_data wiring failed for {service_type}: {e}");
+                    }
+                }
+
+                version_manager::set_active(&bin_path, &service_type, &resolved_version)
+                    .map_err(|e| format!("Installed but failed to activate junction: {e}"))?;
+                log::info!(
+                    "Activated {service_type}@{resolved_version} via junction at {}",
+                    version_manager::active_link(&bin_path, &service_type).display()
+                );
+            }
+
             Ok(format!("Service installed to {extract_target:?}"))
         },
         Err(e) => Err(format!("Extraction failed: {e}")),
     }
+}
+
+// ─── Multi-version management commands ──────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct ServiceVersionList {
+    pub service_type: String,
+    pub installed: Vec<String>,
+    pub active: Option<String>,
+}
+
+/// List all installed versions for a service plus the currently active one.
+/// Returns an empty `installed` for unknown service types instead of erroring.
+#[command]
+pub fn list_service_versions(
+    app: AppHandle,
+    service_type: String,
+) -> Result<ServiceVersionList, String> {
+    use crate::services::version_manager;
+
+    let bin_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin");
+
+    if !version_manager::is_versioned(&service_type) {
+        // PHP and unknown types: no junction; just enumerate `bin/<svc>/<ver>`.
+        // For PHP this is `bin/php/8.4/`, `bin/php/8.5/`, etc.
+        let root = bin_path.join(&service_type);
+        let mut installed = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&root) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        installed.push(name.to_string());
+                    }
+                }
+            }
+        }
+        installed.sort();
+        return Ok(ServiceVersionList {
+            service_type,
+            installed,
+            active: None,
+        });
+    }
+
+    Ok(ServiceVersionList {
+        installed: version_manager::list_versions(&bin_path, &service_type),
+        active: version_manager::active_version(&bin_path, &service_type),
+        service_type,
+    })
+}
+
+/// Switch the active version for a service. The `bin/<svc>` junction is
+/// repointed at the requested version. Spawn paths pick this up automatically;
+/// callers should restart the service to make the new binary take effect.
+#[command]
+pub fn set_active_service_version(
+    app: AppHandle,
+    service_type: String,
+    version: String,
+) -> Result<String, String> {
+    use crate::services::version_manager;
+
+    if !version_manager::is_versioned(&service_type) {
+        return Err(format!(
+            "Service '{service_type}' does not use the multi-version layout"
+        ));
+    }
+
+    let bin_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin");
+
+    // Refuse to swap the binary out from under a running process — the user
+    // gets a clearer error than an "Access denied" later when something
+    // tries to read the junction.
+    let kill_kind = service_type.as_str();
+    kill_running_binaries(kill_kind);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    version_manager::set_active(&bin_path, &service_type, &version)?;
+    Ok(format!("Active {service_type} switched to {version}"))
+}
+
+/// Remove a single installed version. If it's the active one, the junction
+/// is dropped (and re-pointed to any remaining version), then the version
+/// dir is deleted.
+#[command]
+pub fn remove_service_version(
+    app: AppHandle,
+    service_type: String,
+    version: String,
+) -> Result<String, String> {
+    use crate::services::version_manager;
+
+    let bin_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin");
+
+    // Kill in case this version is the running one — same reasoning as
+    // download_service.
+    kill_running_binaries(&service_type);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    if version_manager::is_versioned(&service_type) {
+        version_manager::remove_version(&bin_path, &service_type, &version)?;
+    } else {
+        // PHP and others: each version dir is `bin/<svc>/<ver>/` directly.
+        let target = bin_path.join(&service_type).join(&version);
+        if target.exists() {
+            clean_target_dir(&target)?;
+        }
+    }
+
+    Ok(format!("Removed {service_type}@{version}"))
+}
+
+// ─── Robust target directory cleanup ────────────────────────────────────
+
+/// Robust replacement for `fs::remove_dir_all` on Windows. Layered fallbacks:
+///   1. Clear read-only attributes recursively.
+///   2. Retry `remove_dir_all` with backoff (transient AV/Indexer handles).
+///   3. Try renaming the whole directory aside (works unless the dir itself
+///      is held — e.g. it's some process's CWD).
+///   4. File-by-file: walk and delete each entry, renaming locked files
+///      aside. The directory ends up empty (or near-empty) — extract can
+///      then write into it without hitting "directory exists with files".
+///
+/// Public so `version_manager` can reuse it when removing a single version.
+pub fn clean_target_dir(path: &Path) -> Result<(), String> {
+    let _ = clear_readonly_recursive(path);
+
+    // (2) remove_dir_all with backoff
+    let mut last_err: Option<std::io::Error> = None;
+    for delay_ms in [0u64, 150, 400, 1000] {
+        if delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        }
+        match std::fs::remove_dir_all(path) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                log::warn!("remove_dir_all({}) failed (will retry): {e}", path.display());
+                last_err = Some(e);
+                let _ = clear_readonly_recursive(path);
+            }
+        }
+    }
+
+    // (3) Rename whole directory aside
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let aside = path.with_file_name(format!(
+        "{}.old-{}",
+        path.file_name().and_then(|s| s.to_str()).unwrap_or("orbit-stale"),
+        ts
+    ));
+    if std::fs::rename(path, &aside).is_ok() {
+        log::warn!(
+            "Renamed locked '{}' aside as '{}'.",
+            path.display(),
+            aside.display()
+        );
+        let aside_clone = aside.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let _ = std::fs::remove_dir_all(&aside_clone);
+        });
+        return Ok(());
+    }
+
+    // (4) File-by-file: dir itself is held (likely a process CWD). Empty
+    //     it as much as possible so extraction can overwrite the rest.
+    log::warn!(
+        "'{}' is held by a running process — falling back to file-by-file cleanup.",
+        path.display()
+    );
+    match drain_directory_aside(path, ts) {
+        Ok(stuck_count) => {
+            if stuck_count == 0 {
+                Ok(())
+            } else {
+                log::warn!(
+                    "{stuck_count} item(s) in '{}' could not be cleaned; \
+                     extraction will overwrite reachable files.",
+                    path.display()
+                );
+                Ok(())
+            }
+        }
+        Err(e) => {
+            let original = last_err
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            Err(format!(
+                "{original}. The folder is locked even at the file level: {e}. \
+                 Stop the running service (Services tab → Stop) or close any \
+                 program using files in '{}' and try again.",
+                path.display()
+            ))
+        }
+    }
+}
+
+/// Walk `path` and try to remove or rename-aside every entry inside it,
+/// without removing `path` itself. Returns the count of entries that
+/// resisted both delete and rename.
+fn drain_directory_aside(path: &Path, ts: u64) -> std::io::Result<usize> {
+    let mut stuck = 0usize;
+    let entries = std::fs::read_dir(path)?;
+    for entry in entries.flatten() {
+        let p = entry.path();
+        let _ = clear_readonly_recursive(&p);
+
+        // First try the cheap path: delete.
+        let delete_result = if p.is_dir() {
+            std::fs::remove_dir_all(&p)
+        } else {
+            std::fs::remove_file(&p)
+        };
+        if delete_result.is_ok() {
+            continue;
+        }
+
+        // Fall back to renaming this entry into a sibling .locked-<ts> dir
+        // so the original name is free for the upcoming extraction.
+        let parking = path.with_file_name(format!(
+            "{}.locked-{}",
+            path.file_name().and_then(|s| s.to_str()).unwrap_or("orbit-stale"),
+            ts
+        ));
+        let _ = std::fs::create_dir_all(&parking);
+        let target = parking.join(entry.file_name());
+        if std::fs::rename(&p, &target).is_err() {
+            stuck += 1;
+            log::warn!("Could not free '{}' — neither delete nor rename worked.", p.display());
+        }
+    }
+    Ok(stuck)
+}
+
+/// Walk a directory and clear the read-only attribute from every file/dir.
+/// Best-effort: errors are swallowed because this is just preparation for
+/// a delete that may itself succeed without it.
+fn clear_readonly_recursive(path: &Path) -> std::io::Result<()> {
+    let meta = std::fs::metadata(path)?;
+    let mut perms = meta.permissions();
+    if perms.readonly() {
+        perms.set_readonly(false);
+        let _ = std::fs::set_permissions(path, perms);
+    }
+    if meta.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let _ = clear_readonly_recursive(&entry.path());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Move contents from source directory to destination (used for Apache24 subfolder)

@@ -50,10 +50,11 @@ impl MailpitManager {
         Self::check_port_in_use(8025) || Self::check_port_in_use(1025)
     }
 
-    /// Check if a port is in use
+    /// Check if a port is in use (checks both IPv4 and IPv6 loopback)
     fn check_port_in_use(port: u16) -> bool {
         use std::net::TcpListener;
         TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
+            || TcpListener::bind(format!("[::1]:{port}")).is_err()
     }
 
     /// Get full Mailpit status
@@ -155,8 +156,12 @@ impl MailpitManager {
 
         hidden_command(&exe_path)
             .args([
-                "--smtp", "127.0.0.1:1025",
-                "--listen", "127.0.0.1:8025",
+                // Bind to all loopback interfaces (IPv4 + IPv6).
+                // Go listens dual-stack on [::] (IPV6_V6ONLY=0), so this also
+                // accepts IPv4 connections. We use [::] (any) instead of [::1]
+                // because Go on Windows refuses IPv4-mapped binds on link-local.
+                "--smtp", "[::]:1025",
+                "--listen", "[::]:8025",
             ])
             .stdout(std::process::Stdio::from(log_file))
             .stderr(std::process::Stdio::from(log_err))

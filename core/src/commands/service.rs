@@ -164,7 +164,17 @@ pub fn start_service(
 
             MongoDBManager::initialize(&data_dir)?;
 
-            vec!["--dbpath".to_string(), data_dir.display().to_string(), "--port".to_string(), "27017".to_string()]
+            vec![
+                "--dbpath".to_string(),
+                data_dir.display().to_string(),
+                "--port".to_string(),
+                "27017".to_string(),
+                // Dual-stack: bind IPv4 and IPv6 loopback so localhost works
+                // regardless of OS resolution order.
+                "--bind_ip".to_string(),
+                "127.0.0.1,::1".to_string(),
+                "--ipv6".to_string(),
+            ]
         }
         ServiceType::Apache => {
             // Apache httpd doesn't need special args on Windows

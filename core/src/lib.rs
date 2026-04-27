@@ -23,6 +23,46 @@ pub fn run() {
     .manage(site_process_manager) // Register site app process state
     .manage(services::terminal::TerminalState::default()) // Register terminal state
     .setup(|app| {
+        // One-shot migration of any legacy flat installs (`bin/<svc>/<exe>`)
+        // into the new multi-version layout (`bin/.versions/<svc>/<ver>/`
+        // + `bin/<svc>` junction). Idempotent — already-junctioned services
+        // are skipped. Failures are logged but never block startup.
+        if let Ok(app_data) = app.path().app_local_data_dir() {
+            let bin_path = app_data.join("bin");
+            if bin_path.exists() {
+                let migrated = services::version_manager::migrate_legacy(&bin_path);
+                if !migrated.is_empty() {
+                    log::info!(
+                        "Migrated {} legacy install(s) to multi-version layout: {}",
+                        migrated.len(),
+                        migrated.join(", ")
+                    );
+                }
+
+                // Wire shared-data junctions for every installed version of
+                // every versioned service. This catches both freshly-migrated
+                // installs (above) and pre-existing multi-version installs
+                // from earlier sessions that didn't yet have shared wiring.
+                // Idempotent — already-wired junctions are recreated, but the
+                // .shared content is left alone.
+                for &service in services::version_manager::VERSIONED_SERVICES {
+                    for ver in services::version_manager::list_versions(&bin_path, service) {
+                        let install_dir =
+                            services::version_manager::version_dir(&bin_path, service, &ver);
+                        if let Err(e) = services::shared_data::link_shared_dirs(
+                            &bin_path,
+                            service,
+                            &install_dir,
+                        ) {
+                            log::warn!(
+                                "shared_data wiring failed for {service}@{ver}: {e}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         // System Tray Setup
         let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
         let show_i = MenuItem::with_id(app, "show", "Show Dashboard", true, None::<&str>)?;
@@ -93,6 +133,9 @@ pub fn run() {
         // Installer
         commands::installer::download_service,
         commands::installer::check_vc_redist,
+        commands::installer::list_service_versions,
+        commands::installer::set_active_service_version,
+        commands::installer::remove_service_version,
         commands::versions::get_available_versions,
         commands::versions::refresh_all_versions,
         commands::scanner::get_installed_services,
@@ -103,6 +146,7 @@ pub fn run() {
         commands::sites::update_site,
         commands::sites::delete_site,
         commands::sites::regenerate_site_config,
+        commands::sites::regenerate_all_site_configs,
         commands::sites::read_site_config,
         commands::sites::write_site_config,
         commands::sites::scaffold_basic_project,

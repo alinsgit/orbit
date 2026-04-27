@@ -118,11 +118,11 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
         }
     }
 
-    // 5. Check Python
+    // 5. Check Python — search root + first-level subdirs because some embeds
+    //    extract into a versioned subfolder (e.g. python/python-3.13.5-embed-amd64/python.exe).
     let python_path = bin_path.join("python");
     if python_path.exists() {
-        let exe_path = python_path.join("python.exe");
-        if exe_path.exists() {
+        if let Some(exe_path) = find_executable_recursive(&python_path, "python.exe") {
             let version = parse_python_version(&exe_path).unwrap_or_else(|_| "unknown".to_string());
             services.push(InstalledService {
                 name: "python".to_string(),
@@ -222,11 +222,12 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
         }
     }
 
-    // 10. Check Redis
+    // 10. Check Redis — Cygwin-port and "with-Service" packages sometimes leave
+    //     redis-server.exe inside a nested folder even after configure_redis()
+    //     ran. Walk up to two levels deep so a stale layout is still detected.
     let redis_path = bin_path.join("redis");
     if redis_path.exists() {
-        let exe_path = redis_path.join("redis-server.exe");
-        if exe_path.exists() {
+        if let Some(exe_path) = find_executable_recursive(&redis_path, "redis-server.exe") {
             let version = parse_redis_version(&exe_path).unwrap_or_else(|_| "unknown".to_string());
             services.push(InstalledService {
                 name: "redis".to_string(),
@@ -299,6 +300,95 @@ pub fn get_installed_services(app: AppHandle) -> Result<Vec<InstalledService>, S
     }
 
     Ok(services)
+}
+
+/// Run the right `parse_<service>_version` for a given service type.
+/// Used by `version_manager` to detect a legacy flat install's version
+/// before migrating it into the multi-version layout.
+pub fn probe_version(service_type: &str, exe: &std::path::PathBuf) -> Result<String, String> {
+    match service_type {
+        "nginx" => parse_nginx_version(exe),
+        "apache" => parse_apache_version(exe),
+        "mariadb" => parse_mariadb_version(exe),
+        "postgresql" => parse_postgresql_version(exe),
+        "mongodb" => parse_mongodb_version(exe),
+        "redis" => parse_redis_version(exe),
+        "nodejs" => parse_nodejs_version(exe),
+        "python" => parse_python_version(exe),
+        "bun" => parse_bun_version(exe),
+        "go" => parse_go_version(exe),
+        "deno" => parse_deno_version(exe),
+        "mailpit" | "meilisearch" => parse_generic_version(exe),
+        other => Err(format!("Unknown service type for version probe: {other}")),
+    }
+}
+
+/// Generic `--version` parser: looks for the first dotted numeric token
+/// (e.g. "1.2.3") in either stdout or stderr. Used as a fallback for
+/// services without a hand-written parser.
+fn parse_generic_version(exe_path: &std::path::PathBuf) -> Result<String, String> {
+    let output = hidden_command(exe_path)
+        .arg("--version")
+        .output()
+        .map_err(|e| e.to_string())?;
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // First dotted-numeric run wins.
+    let mut start: Option<usize> = None;
+    let bytes = combined.as_bytes();
+    for (i, b) in bytes.iter().enumerate() {
+        let is_digit = b.is_ascii_digit();
+        if is_digit && start.is_none() {
+            start = Some(i);
+        } else if !is_digit && *b != b'.' {
+            if let Some(s) = start {
+                let candidate = &combined[s..i];
+                if candidate.contains('.') {
+                    return Ok(candidate.to_string());
+                }
+                start = None;
+            }
+        }
+    }
+    if let Some(s) = start {
+        let candidate = &combined[s..];
+        if candidate.contains('.') {
+            return Ok(candidate.trim().to_string());
+        }
+    }
+    Err("Could not parse version".to_string())
+}
+
+/// Look for an executable inside `root` and one level of its first-level
+/// subdirectories. Some installers extract into a versioned subfolder
+/// (e.g. `python/python-3.13.5-embed-amd64/python.exe`); without this the
+/// scanner would say "not installed" even though the files are there.
+fn find_executable_recursive(root: &std::path::Path, exe_name: &str) -> Option<std::path::PathBuf> {
+    let direct = root.join(exe_name);
+    if direct.exists() {
+        return Some(direct);
+    }
+
+    let entries = std::fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if !p.is_dir() {
+            continue;
+        }
+        // Common shapes:
+        //   <subdir>/<exe>
+        //   <subdir>/bin/<exe>
+        for candidate in [p.join(exe_name), p.join("bin").join(exe_name)] {
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 fn parse_nginx_version(exe_path: &std::path::PathBuf) -> Result<String, String> {

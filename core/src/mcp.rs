@@ -5559,20 +5559,14 @@ fn tool_deploy_sync(domain: &str, conn_name: &str) -> Result<String, String> {
     let site = store.sites.iter().find(|s| s.domain == domain)
         .ok_or_else(|| format!("Site '{}' not found", domain))?;
 
+    // The local site path IS the deploy source. Don't second-guess the user
+    // by stripping doc-root suffixes — that produced the nested-copy bug
+    // ("/remote/public_html/public_html/...") because Site.path normally
+    // already points at the document root (which Nginx needs for `root`).
+    // If the user wants to deploy a project parent, they set Site.path to
+    // the parent themselves.
     let site_path = std::path::Path::new(&site.path);
-
-    // Get project root (strip doc root suffixes)
-    let doc_roots = ["public_html", "public", "dist", "build", "www", "htdocs", "web"];
-    let project_root = {
-        let normalized = site.path.trim_end_matches(['/', '\\']);
-        let last_segment = normalized.rsplit(['/', '\\']).next().unwrap_or("").to_lowercase();
-        if doc_roots.contains(&last_segment.as_str()) {
-            let len = normalized.len() - last_segment.len() - 1;
-            std::path::Path::new(&normalized[..len])
-        } else {
-            site_path
-        }
-    };
+    let project_root = site_path;
 
     // Find connection and target
     let conn = mcp_find_connection(conn_name)?;

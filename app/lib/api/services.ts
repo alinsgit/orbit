@@ -49,13 +49,46 @@ export const reloadService = async (name: string): Promise<string> => {
   }
 };
 
-export const downloadService = async (url: string, filename: string, serviceType: string): Promise<string> => {
+export const downloadService = async (
+  url: string,
+  filename: string,
+  serviceType: string,
+  version?: string,
+): Promise<string> => {
   try {
-    return await invoke('download_service', { url, filename, serviceType });
+    return await invoke('download_service', { url, filename, serviceType, version });
   } catch (error) {
     console.error('Failed to download service:', error);
     throw error;
   }
+};
+
+// ─── Multi-version management ──────────────────────────────────────────
+
+export interface ServiceVersionList {
+  service_type: string;
+  installed: string[];
+  active: string | null;
+}
+
+export const listServiceVersions = async (
+  serviceType: string,
+): Promise<ServiceVersionList> => {
+  return await invoke('list_service_versions', { serviceType });
+};
+
+export const setActiveServiceVersion = async (
+  serviceType: string,
+  version: string,
+): Promise<string> => {
+  return await invoke('set_active_service_version', { serviceType, version });
+};
+
+export const removeServiceVersion = async (
+  serviceType: string,
+  version: string,
+): Promise<string> => {
+  return await invoke('remove_service_version', { serviceType, version });
 };
 
 export const getAvailableVersions = async (service: string, forceRefresh?: boolean): Promise<ServiceVersion[]> => {

@@ -58,6 +58,43 @@ pub fn regenerate_site_config(app: AppHandle, domain: String) -> Result<String, 
     Ok("Config regenerated successfully".to_string())
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct RegenerateAllResult {
+    pub regenerated: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
+}
+
+#[command]
+pub fn regenerate_all_site_configs(app: AppHandle) -> Result<RegenerateAllResult, String> {
+    let store = SiteStore::load(&app)?;
+    let domains: Vec<String> = store.sites.iter().map(|s| s.domain.clone()).collect();
+
+    let mut regenerated = 0;
+    let mut failed = 0;
+    let mut errors: Vec<String> = vec![];
+
+    for domain in domains {
+        match SiteManager::regenerate_config(&app, &domain) {
+            Ok(_) => regenerated += 1,
+            Err(e) => {
+                failed += 1;
+                errors.push(format!("{domain}: {e}"));
+            }
+        }
+    }
+
+    // Reload nginx & apache once at the end
+    let _ = NginxManager::reload(&app);
+    let _ = crate::services::apache::ApacheManager::reload(&app);
+
+    Ok(RegenerateAllResult {
+        regenerated,
+        failed,
+        errors,
+    })
+}
+
 // Nginx management commands
 #[command]
 pub fn nginx_test_config(app: AppHandle) -> Result<String, String> {

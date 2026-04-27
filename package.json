@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "TAURI_DIR=core tauri",
-    "bump": "node scripts/bump-version.cjs"
+    "bump": "node scripts/bump-version.cjs",
+    "release": "node scripts/bump-version.cjs --release"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
