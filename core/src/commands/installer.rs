@@ -1,6 +1,9 @@
 use tauri::command;
 use std::path::{Path, PathBuf};
 use crate::services::download::{download_file, extract_archive};
+// `hidden_command` is only needed on Windows (taskkill / mklink). Importing
+// it unconditionally trips `unused_imports` in CI's clippy-with-Dwarnings.
+#[cfg(target_os = "windows")]
 use crate::services::hidden_command;
 use tauri::AppHandle;
 use tauri::Manager;
@@ -514,13 +517,21 @@ fn drain_directory_aside(path: &Path, ts: u64) -> std::io::Result<usize> {
     Ok(stuck)
 }
 
-/// Walk a directory and clear the read-only attribute from every file/dir.
-/// Best-effort: errors are swallowed because this is just preparation for
-/// a delete that may itself succeed without it.
+/// Walk a directory and clear the Windows read-only attribute from every
+/// file/dir. Best-effort: errors are swallowed because this is just
+/// preparation for a delete that may itself succeed without it.
+///
+/// On non-Windows platforms `set_readonly(false)` would set mode 0o666
+/// (world-writable), which clippy correctly flags as wrong. The whole
+/// flag-clearing dance is only meaningful for Windows ZIP-extracted
+/// installs (nginx, MariaDB) where ZIP preserves read-only attrs that
+/// `remove_dir_all` then refuses; on Unix-likes it's a no-op.
+#[cfg(target_os = "windows")]
 fn clear_readonly_recursive(path: &Path) -> std::io::Result<()> {
     let meta = std::fs::metadata(path)?;
     let mut perms = meta.permissions();
     if perms.readonly() {
+        #[allow(clippy::permissions_set_readonly_false)]
         perms.set_readonly(false);
         let _ = std::fs::set_permissions(path, perms);
     }
@@ -531,6 +542,14 @@ fn clear_readonly_recursive(path: &Path) -> std::io::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Non-Windows stub: read-only attribute clearing is a Windows-only concern
+/// (see Windows impl above). The function exists so `clean_target_dir` can
+/// call it unconditionally.
+#[cfg(not(target_os = "windows"))]
+fn clear_readonly_recursive(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
