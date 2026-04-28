@@ -125,6 +125,33 @@ function bumpDocsBadge(filePath) {
   );
 }
 
+// ── Pre-flight: mirror CI's compile/lint gate ───────────────────────
+// Only run for flows that produce a release artifact (--commit / --push).
+// File-only `bump` skips this so quick edits stay fast.
+//
+// Skipped with --skip-preflight when the user is iterating on a release
+// fix and has already run the checks manually.
+if (
+  (flags.has('--commit') || flags.has('--push')) &&
+  !flags.has('--skip-preflight')
+) {
+  console.log('Running pre-flight checks (mirrors CI)…\n');
+  // CI runs `cargo clippy -- -D warnings` from `core/` on Linux. Most
+  // release-blockers we've hit are platform-specific lints (e.g.
+  // permissions_set_readonly_false, unused_imports under cfg gates) that
+  // local `cargo check` doesn't surface. Clippy with -D warnings catches
+  // those before we waste a CI run.
+  try {
+    runPreflight('cargo clippy -- -D warnings', path.join(root, 'core'));
+  } catch (e) {
+    console.error(
+      '\n✗ Pre-flight failed. Fix the issues above, or re-run with --skip-preflight if you know what you are doing.'
+    );
+    process.exit(1);
+  }
+  console.log('✓ Pre-flight clean — proceeding with release.\n');
+}
+
 // ── Run file edits ──────────────────────────────────────────────────
 console.log(`Bumping to v${version}…\n`);
 bumpToml(path.join(root, 'core', 'Cargo.toml'));
@@ -150,6 +177,13 @@ Or run:
 function run(cmd, opts = {}) {
   console.log(`  $ ${cmd}`);
   execSync(cmd, { stdio: 'inherit', cwd: root, ...opts });
+}
+
+/// Like `run`, but used during pre-flight: prints command, inherits stdio,
+/// throws on non-zero so the caller can decide whether to abort the release.
+function runPreflight(cmd, cwd) {
+  console.log(`  $ ${cmd}  (cwd: ${path.relative(root, cwd) || '.'})`);
+  execSync(cmd, { stdio: 'inherit', cwd });
 }
 
 if (flags.has('--commit')) {
@@ -209,6 +243,8 @@ Flags:
   --release           shortcut for --commit --push (CI triggers on tag push)
   --tagline "..."     rewrite the hero-badge tagline in docs/index.html
                       (preserves existing tagline if omitted)
+  --skip-preflight    skip the local \`cargo clippy -- -D warnings\` gate
+                      (only honored alongside --commit / --push / --release)
 
 Examples:
   bun run bump 1.5.0
