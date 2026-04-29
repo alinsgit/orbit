@@ -529,6 +529,7 @@ export function ServiceManager() {
                         {MULTI_VERSION_SERVICES.has(service.service_type) ? (
                           <VersionPicker
                             serviceType={service.service_type}
+                            serviceName={service.name}
                             currentVersion={service.version}
                             serviceStatus={service.status}
                             onChanged={async () => {
@@ -921,6 +922,7 @@ function ServiceGroup({
 
 function VersionPicker({
   serviceType,
+  serviceName,
   currentVersion,
   serviceStatus,
   onChanged,
@@ -929,6 +931,10 @@ function VersionPicker({
   onToggleVersion,
 }: {
   serviceType: string;
+  /// Service name as known to ServiceManager (== service.name). Used to
+  /// auto-restart through startServiceByName after a successful switch.
+  /// Optional because PHP-mode picker doesn't switch.
+  serviceName?: string;
   currentVersion: string;
   serviceStatus: string;
   onChanged: () => void | Promise<void>;
@@ -949,7 +955,7 @@ function VersionPicker({
     currentStatus: string,
   ) => Promise<void> | void;
 }) {
-  const { addToast } = useApp();
+  const { addToast, startServiceByName } = useApp();
   const [open, setOpen] = useState(false);
   const [installed, setInstalled] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
@@ -992,14 +998,28 @@ function VersionPicker({
     if (version === active) return;
     setBusy(version);
     try {
-      // set_active_service_version kills the running binary first; warn
-      // the user the service will need a restart.
+      // set_active_service_version kills the running binary first as part
+      // of the junction repoint. If the service was running, we now bring
+      // it back up automatically so the user doesn't have to remember.
       const wasRunning = serviceStatus === 'running';
       await setActiveServiceVersion(serviceType, version);
+
+      let restartedOk = false;
+      if (wasRunning && serviceName) {
+        try {
+          await startServiceByName(serviceName);
+          restartedOk = true;
+        } catch (restartErr) {
+          console.error(`Auto-restart of ${serviceName} failed:`, restartErr);
+        }
+      }
+
       addToast({
         type: 'success',
         message: wasRunning
-          ? `Switched ${serviceType} to v${version}. Restart the service to apply.`
+          ? restartedOk
+            ? `Switched ${serviceType} to v${version} and restarted.`
+            : `Switched ${serviceType} to v${version}. Auto-restart failed — start it manually.`
           : `Switched ${serviceType} to v${version}.`,
       });
       setActive(version);

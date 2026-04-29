@@ -160,6 +160,7 @@ pub fn run() {
         commands::sites::start_site_app,
         commands::sites::stop_site_app,
         commands::sites::get_site_app_status,
+        commands::sites::read_site_app_log,
         // Export/Import
         commands::sites::export_sites,
         commands::sites::import_sites,

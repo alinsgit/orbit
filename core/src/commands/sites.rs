@@ -284,6 +284,28 @@ pub fn write_site_config(app: AppHandle, domain: String, content: String) -> Res
 
 // Site app process management commands
 
+/// Per-domain log path. Sanitized to keep filesystem-unfriendly characters
+/// out of file names (windows is strict about :, /, etc.).
+fn site_app_log_path(app: &AppHandle, domain: &str) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("logs")
+        .join("site-apps");
+    let safe: String = domain
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    Ok(dir.join(format!("{safe}.log")))
+}
+
 #[command]
 pub fn start_site_app(
     app: AppHandle,
@@ -300,7 +322,14 @@ pub fn start_site_app(
         .as_ref()
         .ok_or_else(|| format!("Site {domain} has no dev_command configured"))?;
 
-    state.start(&domain, dev_command, &site.path, site.dev_port)
+    let log_path = site_app_log_path(&app, &domain)?;
+    state.start(
+        &domain,
+        dev_command,
+        &site.path,
+        site.dev_port,
+        Some(&log_path),
+    )
 }
 
 #[command]
@@ -309,6 +338,61 @@ pub fn stop_site_app(
     domain: String,
 ) -> Result<(), String> {
     state.stop(&domain)
+}
+
+/// Read the tail of a site app's captured log. `max_bytes` (default 64 KiB)
+/// caps how much is sent to the UI so a runaway dev server can't blow up
+/// the IPC channel. Returns `None` if the log file doesn't exist yet (the
+/// app has never been started).
+#[derive(Serialize, Deserialize)]
+pub struct SiteAppLog {
+    pub path: String,
+    pub content: Option<String>,
+    pub size_bytes: u64,
+    pub truncated: bool,
+}
+
+#[command]
+pub fn read_site_app_log(
+    app: AppHandle,
+    domain: String,
+    max_bytes: Option<u64>,
+) -> Result<SiteAppLog, String> {
+    let path = site_app_log_path(&app, &domain)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    if !path.exists() {
+        return Ok(SiteAppLog {
+            path: path_str,
+            content: None,
+            size_bytes: 0,
+            truncated: false,
+        });
+    }
+
+    let metadata = fs::metadata(&path).map_err(|e| format!("stat({path_str}): {e}"))?;
+    let size = metadata.len();
+    let limit = max_bytes.unwrap_or(64 * 1024);
+
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = fs::File::open(&path).map_err(|e| format!("open({path_str}): {e}"))?;
+    let truncated = size > limit;
+    if truncated {
+        file.seek(SeekFrom::Start(size - limit))
+            .map_err(|e| format!("seek({path_str}): {e}"))?;
+    }
+    let mut buf = Vec::with_capacity(limit.min(size) as usize);
+    file.read_to_end(&mut buf)
+        .map_err(|e| format!("read({path_str}): {e}"))?;
+
+    // Lossy is fine — log can carry partial UTF-8 sequences when truncated.
+    let content = String::from_utf8_lossy(&buf).to_string();
+    Ok(SiteAppLog {
+        path: path_str,
+        content: Some(content),
+        size_bytes: size,
+        truncated,
+    })
 }
 
 #[command]
@@ -394,18 +478,67 @@ pub fn list_recoverable_sites(app: AppHandle) -> Result<Vec<RecoverableSite>, St
     Ok(out)
 }
 
+/// Try to find the project root for a domain by scanning the configured
+/// workspace dir for a folder whose name matches the domain or its prefix.
+/// Returns the first existing dir; None when nothing reasonable is found.
+fn guess_local_path_for_domain(workspace: &std::path::Path, domain: &str) -> Option<String> {
+    if !workspace.is_dir() {
+        return None;
+    }
+    // Domain → candidate folder names. We try, in order:
+    //   1. exact match ("foo.local")
+    //   2. domain prefix before first dot ("foo.local" → "foo")
+    //   3. dot-replaced ("foo.local" → "foo-local")
+    //   4. dash variants for multi-segment domains ("foo.bar.lokal" → "foo-bar")
+    let prefix = domain.split('.').next().unwrap_or(domain).to_string();
+    let dotless = domain.replace('.', "-");
+    let candidates = [
+        domain.to_string(),
+        prefix.clone(),
+        dotless.clone(),
+        domain.replace('.', "_"),
+    ];
+
+    for cand in candidates.iter() {
+        let p = workspace.join(cand);
+        if p.is_dir() {
+            return Some(p.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    None
+}
+
+/// Read the workspace path from settings.json. Errors fall through to None
+/// so recovery still works without auto-suggest.
+fn workspace_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let settings_path = app
+        .path()
+        .app_local_data_dir()
+        .ok()?
+        .join(".settings.json");
+    let raw = fs::read_to_string(settings_path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    v.get("workspace_path")
+        .or_else(|| v.get("workspace_dir"))
+        .or_else(|| v.get("general").and_then(|g| g.get("workspace_path")))
+        .and_then(|s| s.as_str())
+        .map(std::path::PathBuf::from)
+}
+
 /// Write stub Site entries into `sites.json` for every domain in
-/// `deploy-targets.json` that's missing from the store. Stubs have an empty
-/// `path` and a generic `http` template — the user must fill the local path
-/// from the UI before regenerating the nginx config. We deliberately do NOT
-/// generate nginx configs here because we'd need the path to do that
-/// usefully; that's a per-site action through the existing edit flow.
+/// `deploy-targets.json` that's missing from the store. When the workspace
+/// path is configured and a same-named folder exists there, the local
+/// `path` is filled in automatically — the user just clicks Save. Domains
+/// without a guessable folder still get a stub with empty path; the edit
+/// flow handles those.
 #[command]
 pub fn recover_sites_from_deploy_targets(app: AppHandle) -> Result<RecoveryReport, String> {
     let deploy_domains = read_deploy_target_domains(&app)?;
     let mut store = SiteStore::load(&app)?;
     let existing: std::collections::HashSet<String> =
         store.sites.iter().map(|s| s.domain.clone()).collect();
+
+    let workspace = workspace_path(&app);
 
     let mut recovered = Vec::new();
     let mut skipped_existing = Vec::new();
@@ -416,9 +549,13 @@ pub fn recover_sites_from_deploy_targets(app: AppHandle) -> Result<RecoveryRepor
             skipped_existing.push(domain);
             continue;
         }
+        let guessed_path = workspace
+            .as_deref()
+            .and_then(|w| guess_local_path_for_domain(w, &domain))
+            .unwrap_or_default();
         store.add_site(SiteMetadata {
             domain: domain.clone(),
-            path: String::new(),
+            path: guessed_path,
             port: 80,
             php_version: None,
             php_port: None,

@@ -140,7 +140,12 @@ export function Terminal({ className, onClose }: TerminalProps) {
   const toggleSidebar = useCallback(() => {
     setSidebarOpen(prev => {
       const next = !prev;
-      try { localStorage.setItem('terminal-sidebar-open', String(next)); } catch {}
+      try {
+        localStorage.setItem('terminal-sidebar-open', String(next));
+      } catch {
+        // localStorage may be disabled (private browsing, quota); the
+        // sidebar state simply won't persist across sessions.
+      }
       return next;
     });
   }, []);

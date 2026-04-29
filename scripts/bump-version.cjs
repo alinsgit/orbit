@@ -142,7 +142,12 @@ if (
   // local `cargo check` doesn't surface. Clippy with -D warnings catches
   // those before we waste a CI run.
   try {
+    // Backend: full clippy strictness — same flags CI uses.
     runPreflight('cargo clippy -- -D warnings', path.join(root, 'core'));
+    // Frontend: TypeScript type-check only (skip Vite bundle to keep
+    // pre-flight fast; bundle errors are practically always type errors
+    // anyway). `tsc --noEmit` is what `bun run build` runs first too.
+    runPreflight('npx --yes -- tsc --noEmit', root);
   } catch (e) {
     console.error(
       '\n✗ Pre-flight failed. Fix the issues above, or re-run with --skip-preflight if you know what you are doing.'

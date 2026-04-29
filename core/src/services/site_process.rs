@@ -24,12 +24,15 @@ impl SiteProcessManager {
     /// `dev_command` — the command to run (e.g., "npm run dev")
     /// `working_dir` — the site's root path
     /// `dev_port` — optional port override (injected as PORT env var)
+    /// `log_path` — optional file to capture child stdout+stderr; truncated
+    ///              at start of each run so users see the latest invocation.
     pub fn start(
         &self,
         domain: &str,
         dev_command: &str,
         working_dir: &str,
         dev_port: Option<u16>,
+        log_path: Option<&std::path::Path>,
     ) -> Result<u32, String> {
         // Check if already running
         {
@@ -70,6 +73,39 @@ impl SiteProcessManager {
         // Set PORT env var if dev_port is specified
         if let Some(port) = dev_port {
             command.env("PORT", port.to_string());
+        }
+
+        // Pipe child output into a per-domain log file when requested.
+        // Without this, `npm run dev` errors disappeared into the void
+        // (Windows hidden process), so users just saw "crashed" with no
+        // way to debug. The file is truncated at the start of each run
+        // so stale errors from a previous session don't pollute the view.
+        if let Some(lp) = log_path {
+            if let Some(parent) = lp.parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+            // Header: timestamp + invocation, helps when scrolling logs.
+            let header = format!(
+                "── orbit site app start ──\n  domain: {domain}\n  cwd:    {working_dir}\n  cmd:    {dev_command}\n  port:   {}\n  time:   {}\n────────────────────────────\n",
+                dev_port.map(|p| p.to_string()).unwrap_or_else(|| "—".to_string()),
+                chrono::Utc::now().to_rfc3339(),
+            );
+            let _ = std::fs::write(lp, header);
+
+            match std::fs::OpenOptions::new().append(true).open(lp) {
+                Ok(stdout_file) => match stdout_file.try_clone() {
+                    Ok(stderr_file) => {
+                        command.stdout(std::process::Stdio::from(stdout_file));
+                        command.stderr(std::process::Stdio::from(stderr_file));
+                    }
+                    Err(e) => {
+                        log::warn!("site app log clone failed for {domain}: {e}");
+                    }
+                },
+                Err(e) => {
+                    log::warn!("site app log open failed for {domain}: {e}");
+                }
+            }
         }
 
         #[cfg(target_os = "windows")]
