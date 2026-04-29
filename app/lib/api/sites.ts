@@ -115,6 +115,27 @@ export const regenerateAllSiteConfigs = async (): Promise<RegenerateAllResult> =
   }
 };
 
+// ─── Site recovery (post-incident: see commands/sites.rs) ─────────────
+
+export interface RecoverableSite {
+  domain: string;
+  already_present: boolean;
+  deploy_connections: string[];
+}
+
+export interface RecoveryReport {
+  recovered: string[];
+  skipped_existing: string[];
+}
+
+export const listRecoverableSites = async (): Promise<RecoverableSite[]> => {
+  return await invoke('list_recoverable_sites');
+};
+
+export const recoverSitesFromDeployTargets = async (): Promise<RecoveryReport> => {
+  return await invoke('recover_sites_from_deploy_targets');
+};
+
 export const startSiteApp = async (domain: string): Promise<number> => {
   return await invoke('start_site_app', { domain });
 };

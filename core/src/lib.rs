@@ -147,6 +147,8 @@ pub fn run() {
         commands::sites::delete_site,
         commands::sites::regenerate_site_config,
         commands::sites::regenerate_all_site_configs,
+        commands::sites::list_recoverable_sites,
+        commands::sites::recover_sites_from_deploy_targets,
         commands::sites::read_site_config,
         commands::sites::write_site_config,
         commands::sites::scaffold_basic_project,

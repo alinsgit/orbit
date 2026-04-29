@@ -63,6 +63,9 @@ import {
   getSiteAppStatus,
   readSiteConfig,
   writeSiteConfig,
+  listRecoverableSites,
+  recoverSitesFromDeployTargets,
+  RecoverableSite,
   listBlueprints,
   createFromBlueprint,
   Blueprint,
@@ -395,6 +398,48 @@ export function SitesManager() {
     }
   };
 
+  // ─── Recovery banner ─────────────────────────────────────────────
+  // Detects domains that exist in deploy-targets.json but are missing from
+  // sites.json — happens when a previous bad migration wiped the site
+  // store. The banner offers a one-click rebuild from those domains; the
+  // user then fills in the local path per site through the normal edit UI.
+  const [recoverable, setRecoverable] = useState<RecoverableSite[]>([]);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryDismissed, setRecoveryDismissed] = useState(false);
+
+  const refreshRecoverable = async () => {
+    try {
+      const list = await listRecoverableSites();
+      setRecoverable(list.filter((r) => !r.already_present));
+    } catch (e) {
+      console.error("Failed to query recoverable sites:", e);
+    }
+  };
+
+  const handleRecover = async () => {
+    setRecovering(true);
+    try {
+      const report = await recoverSitesFromDeployTargets();
+      if (report.recovered.length > 0) {
+        addToast({
+          type: "success",
+          message: `${report.recovered.length} site(s) recovered as stubs. Open each to set the local path, then save to regenerate config.`,
+        });
+        await refreshSites();
+      } else {
+        addToast({
+          type: "info",
+          message: "Nothing to recover — every deploy-target domain already has a site entry.",
+        });
+      }
+      await refreshRecoverable();
+    } catch (e) {
+      addToast({ type: "error", message: `Recovery failed: ${e}` });
+    } finally {
+      setRecovering(false);
+    }
+  };
+
   // Refresh app status for sites with dev_command
   const refreshAppStatus = async (siteList: SiteWithStatus[]) => {
     const withCommand = siteList.filter((s) => s.dev_command);
@@ -416,6 +461,8 @@ export function SitesManager() {
     refreshSites().then(() => {
       // App status will be refreshed after sites load
     });
+    // Detect orphaned deploy-target domains so the recovery banner can show.
+    refreshRecoverable();
   }, []);
 
   // Poll app status when sites change + every 4s so external kills/crashes
@@ -1184,6 +1231,67 @@ export function SitesManager() {
           </button>
         </div>
       </header>
+
+      {/* Recovery banner — fires only when sites.json is missing entries
+          that still exist in deploy-targets.json (post-incident remediation
+          for the v1.2.x migration that wiped sites-enabled). */}
+      {recoverable.length > 0 && !recoveryDismissed && (
+        <div className="mb-4 p-4 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-100">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
+              <div>
+                <div className="font-semibold text-amber-300">
+                  {recoverable.length} site
+                  {recoverable.length === 1 ? "" : "s"} can be recovered from
+                  deploy targets
+                </div>
+                <p className="text-sm text-amber-200/90 mt-1 leading-relaxed">
+                  These domains are present in <code>deploy-targets.json</code>
+                  {" "}but missing from your site list. Recovery creates a
+                  stub for each so you only need to set the local project
+                  path before regenerating its nginx config.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {recoverable.slice(0, 8).map((r) => (
+                    <span
+                      key={r.domain}
+                      className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200"
+                    >
+                      {r.domain}
+                    </span>
+                  ))}
+                  {recoverable.length > 8 && (
+                    <span className="text-[11px] text-amber-300/80">
+                      +{recoverable.length - 8} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleRecover}
+                disabled={recovering}
+                className="px-3 py-1.5 rounded-md text-sm font-medium bg-amber-500 hover:bg-amber-400 text-black disabled:opacity-50 cursor-pointer"
+              >
+                {recovering ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  `Recover ${recoverable.length}`
+                )}
+              </button>
+              <button
+                onClick={() => setRecoveryDismissed(true)}
+                className="p-1.5 rounded-md text-amber-300/70 hover:text-amber-200 hover:bg-amber-500/15 cursor-pointer"
+                title="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Nginx Message */}
       {nginxMessage && (

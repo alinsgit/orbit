@@ -1,12 +1,13 @@
 use crate::services::nginx::NginxManager;
 use crate::services::site_process::SiteProcessManager;
-use crate::services::site_store::SiteStore;
+use crate::services::site_store::{SiteMetadata, SiteStore};
 use crate::services::sites::{Site, SiteManager, SiteWithStatus};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use tauri::command;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 #[derive(Serialize, Deserialize)]
 pub struct SiteExport {
@@ -316,4 +317,131 @@ pub fn get_site_app_status(
     domain: String,
 ) -> Result<String, String> {
     Ok(state.status(&domain))
+}
+
+// ─── Site recovery (post-incident) ──────────────────────────────────
+//
+// Background: a regression in `version_manager::migrate_legacy` deleted the
+// user's `bin/nginx/conf/sites-enabled/*.conf` files when migrating an old
+// flat install whose target version dir already existed. The deploy-targets
+// store, which holds domain → remote_path mappings, was unaffected. This
+// command rebuilds `sites.json` stubs from the surviving deploy targets so
+// the user only needs to fill in the local path per site.
+
+#[derive(Serialize, Deserialize)]
+pub struct RecoverableSite {
+    pub domain: String,
+    /// Already exists in sites.json — recovery would skip this one.
+    pub already_present: bool,
+    /// Remote deploy targets attached to this domain (just for display).
+    pub deploy_connections: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RecoveryReport {
+    pub recovered: Vec<String>,
+    pub skipped_existing: Vec<String>,
+}
+
+fn read_deploy_target_domains(app: &AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
+    let targets_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("config")
+        .join("deploy-targets.json");
+    if !targets_path.exists() {
+        return Ok(HashMap::new());
+    }
+    let raw = fs::read_to_string(&targets_path)
+        .map_err(|e| format!("Failed to read deploy-targets.json: {e}"))?;
+    // The file is `{ "domain": [{ "connection": "...", "remote_path": "..." }, ...] }`.
+    let parsed: HashMap<String, Vec<serde_json::Value>> =
+        serde_json::from_str(&raw).map_err(|e| format!("Malformed deploy-targets.json: {e}"))?;
+    let mut out = HashMap::new();
+    for (domain, targets) in parsed {
+        let conns: Vec<String> = targets
+            .iter()
+            .filter_map(|t| t.get("connection").and_then(|v| v.as_str()).map(String::from))
+            .collect();
+        out.insert(domain, conns);
+    }
+    Ok(out)
+}
+
+/// Inspect what could be recovered. Returns one entry per domain that
+/// appears in `deploy-targets.json`, flagging which already exist in the
+/// site store so the UI can show "X of Y can be recovered".
+#[command]
+pub fn list_recoverable_sites(app: AppHandle) -> Result<Vec<RecoverableSite>, String> {
+    let deploy_domains = read_deploy_target_domains(&app)?;
+    if deploy_domains.is_empty() {
+        return Ok(Vec::new());
+    }
+    let store = SiteStore::load(&app)?;
+    let existing: std::collections::HashSet<String> =
+        store.sites.iter().map(|s| s.domain.clone()).collect();
+
+    let mut out: Vec<RecoverableSite> = deploy_domains
+        .into_iter()
+        .map(|(domain, conns)| RecoverableSite {
+            already_present: existing.contains(&domain),
+            domain,
+            deploy_connections: conns,
+        })
+        .collect();
+    out.sort_by(|a, b| a.domain.cmp(&b.domain));
+    Ok(out)
+}
+
+/// Write stub Site entries into `sites.json` for every domain in
+/// `deploy-targets.json` that's missing from the store. Stubs have an empty
+/// `path` and a generic `http` template — the user must fill the local path
+/// from the UI before regenerating the nginx config. We deliberately do NOT
+/// generate nginx configs here because we'd need the path to do that
+/// usefully; that's a per-site action through the existing edit flow.
+#[command]
+pub fn recover_sites_from_deploy_targets(app: AppHandle) -> Result<RecoveryReport, String> {
+    let deploy_domains = read_deploy_target_domains(&app)?;
+    let mut store = SiteStore::load(&app)?;
+    let existing: std::collections::HashSet<String> =
+        store.sites.iter().map(|s| s.domain.clone()).collect();
+
+    let mut recovered = Vec::new();
+    let mut skipped_existing = Vec::new();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    for (domain, _conns) in deploy_domains {
+        if existing.contains(&domain) {
+            skipped_existing.push(domain);
+            continue;
+        }
+        store.add_site(SiteMetadata {
+            domain: domain.clone(),
+            path: String::new(),
+            port: 80,
+            php_version: None,
+            php_port: None,
+            ssl_enabled: false,
+            ssl_cert_path: None,
+            ssl_key_path: None,
+            template: Some("http".to_string()),
+            web_server: "nginx".to_string(),
+            dev_port: None,
+            dev_command: None,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        });
+        recovered.push(domain);
+    }
+
+    if !recovered.is_empty() {
+        store.save(&app)?;
+    }
+    recovered.sort();
+    skipped_existing.sort();
+    Ok(RecoveryReport {
+        recovered,
+        skipped_existing,
+    })
 }

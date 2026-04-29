@@ -99,30 +99,24 @@ pub fn link_shared_dirs(
         }
 
         if install_sub.exists() {
-            // Real directory left over from extraction. Copy any new content
-            // into shared, then move it aside.
-            if directory_has_files(&install_sub)? && !directory_has_files(&shared_sub)? {
-                copy_dir_recursive(&install_sub, &shared_sub).map_err(|e| {
+            // Real directory left over from extraction. Merge anything in it
+            // INTO shared first (only adding files shared doesn't already
+            // have — never overwrite user data), then move the install dir
+            // aside as a timestamped bak. This is the safety net for the
+            // case where user-authored content (nginx sites-enabled/*.conf,
+            // ssl certs, custom html) lives in the install dir from a
+            // previous version of Orbit and we're seeing it for the first
+            // time in shared.
+            if directory_has_files(&install_sub)? {
+                merge_into_shared(&install_sub, &shared_sub).map_err(|e| {
                     format!(
-                        "Failed to seed '{}' from '{}': {e}",
-                        shared_sub.display(),
-                        install_sub.display()
+                        "Failed to merge '{}' into '{}': {e}",
+                        install_sub.display(),
+                        shared_sub.display()
                     )
                 })?;
                 log::info!(
-                    "shared_data: seeded {service_type}/{sub} from install dir into {}",
-                    shared_sub.display()
-                );
-            } else if directory_has_files(&install_sub)? {
-                // Both have content — keep both. Move install copy aside as
-                // backup so the junction can take its place. New writes go
-                // into shared. Manual reconciliation may be needed; we log
-                // a warning so the user knows.
-                log::warn!(
-                    "shared_data: '{}' has content but shared '{}' is non-empty; \
-                     moving install copy aside as bak so shared takes precedence.",
-                    install_sub.display(),
-                    shared_sub.display()
+                    "shared_data: merged {service_type}/{sub} into shared (shared wins on conflicts)"
                 );
             }
 
@@ -165,6 +159,7 @@ fn directory_has_files(path: &Path) -> Result<bool, String> {
     }
 }
 
+#[allow(dead_code)] // kept for explicit "copy everything" callers; merge_into_shared is the safe default
 fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     if !dst.exists() {
         std::fs::create_dir_all(dst)?;
@@ -180,6 +175,33 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
             std::fs::copy(&from, &to)?;
         }
         // Skip symlinks/junctions silently.
+    }
+    Ok(())
+}
+
+/// Recursively copy entries from `src` to `dst`, but ONLY for paths that
+/// don't already exist in `dst`. Used during shared-data wiring to recover
+/// user-authored files from an install dir we're about to junction over —
+/// without ever overwriting whatever is already canonical in `.shared/`.
+fn merge_into_shared(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        std::fs::create_dir_all(dst)?;
+    }
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        let ft = entry.file_type()?;
+        if ft.is_dir() {
+            // Recurse so a partial overlap (e.g. shared has nginx.conf but
+            // not sites-enabled/) still picks up missing subtrees.
+            merge_into_shared(&from, &to)?;
+        } else if ft.is_file() {
+            if to.exists() {
+                continue; // shared wins
+            }
+            std::fs::copy(&from, &to)?;
+        }
     }
     Ok(())
 }

@@ -231,15 +231,35 @@ pub fn migrate_legacy(bin_path: &Path) -> Vec<String> {
 
         let dest = version_dir(bin_path, service, &version);
         if dest.exists() {
-            // Same version was already migrated previously by some other means
-            // (or there's a leftover folder). Don't overwrite it; just promote
-            // the existing one to active and remove the legacy dir.
-            log::info!(
-                "Existing version dir '{}' found; rebuilding junction without re-moving.",
-                dest.display()
+            // The destination version dir already exists (leftover from an
+            // earlier install or test). NEVER delete the legacy dir — it
+            // may contain user data (nginx sites-enabled/*.conf, ssl certs,
+            // logs) that's NOT mirrored anywhere else yet at this point in
+            // the boot sequence (link_shared_dirs hasn't run for this dir).
+            //
+            // The previous implementation called `clean_target_dir(&link)`
+            // here, which destroyed user-authored site configs in
+            // bin/nginx/conf/sites-enabled/. We park the legacy dir under
+            // a timestamped sibling instead so the user can recover it
+            // manually if needed.
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let parking = bin_path.join(format!("{service}.legacy-bak-{ts}"));
+            log::warn!(
+                "Existing version dir '{}' already present. Parking legacy install at '{}' instead of deleting it.",
+                dest.display(),
+                parking.display()
             );
-            // Best-effort: drop the legacy dir if it still exists.
-            let _ = crate::commands::installer::clean_target_dir(&link);
+            if let Err(e) = std::fs::rename(&link, &parking) {
+                log::error!(
+                    "Failed to park legacy '{}' at '{}': {e}. Leaving legacy install untouched and skipping junction setup.",
+                    link.display(),
+                    parking.display()
+                );
+                continue;
+            }
         } else {
             if let Some(parent) = dest.parent() {
                 if let Err(e) = std::fs::create_dir_all(parent) {
