@@ -106,6 +106,7 @@ export const regenerateSiteConfig = async (domain: string): Promise<string> => {
 export interface RegenerateAllResult {
   regenerated: number;
   failed: number;
+  skipped_empty_path: string[];
   errors: string[];
 }
 

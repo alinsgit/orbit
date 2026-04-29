@@ -969,15 +969,29 @@ export function SitesManager() {
     setProcessing("__all__");
     try {
       const result = await regenerateAllSiteConfigs();
-      if (result.failed === 0) {
-        addToast({
-          type: "success",
-          message: `${result.regenerated} site config'i yeniden oluşturuldu.`,
-        });
+      const skipped = result.skipped_empty_path?.length ?? 0;
+
+      const parts: string[] = [`${result.regenerated} regenerated`];
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (skipped > 0) parts.push(`${skipped} skipped (no path)`);
+
+      if (result.failed === 0 && skipped === 0) {
+        addToast({ type: "success", message: parts.join(", ") + "." });
       } else {
+        const detail: string[] = [];
+        if (skipped > 0) {
+          detail.push(
+            `Skipped (open the site to set a local path first):\n  ${result.skipped_empty_path.slice(0, 5).join(", ")}${
+              skipped > 5 ? `, +${skipped - 5} more` : ""
+            }`,
+          );
+        }
+        if (result.errors.length > 0) {
+          detail.push(`Errors:\n  ${result.errors.slice(0, 3).join("\n  ")}`);
+        }
         addToast({
           type: "warning",
-          message: `${result.regenerated} başarılı, ${result.failed} başarısız:\n${result.errors.slice(0, 3).join("\n")}`,
+          message: `${parts.join(", ")}.\n${detail.join("\n")}`,
         });
       }
       await refreshSites();
@@ -2378,11 +2392,15 @@ export function SitesManager() {
                       {site.path}
                     </div>
 
-                    {/* Config Warning */}
+                    {/* Config Warning — distinguish "no path yet" (recovery
+                        stub waiting on user input) from a genuinely missing
+                        nginx config file. */}
                     {!site.config_valid && (
-                      <div className="flex items-center gap-1 text-xs text-red-400 mb-3">
+                      <div className="flex items-center gap-1 text-xs text-amber-400 mb-3">
                         <AlertTriangle size={12} />
-                        Config invalid - click refresh to regenerate
+                        {!site.path || site.path.trim() === ""
+                          ? "Local path not set — open the site to fill it in, then save."
+                          : "Config missing — click refresh to regenerate."}
                       </div>
                     )}
 

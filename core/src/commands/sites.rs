@@ -63,19 +63,34 @@ pub fn regenerate_site_config(app: AppHandle, domain: String) -> Result<String, 
 pub struct RegenerateAllResult {
     pub regenerated: usize,
     pub failed: usize,
+    /// Sites with no local path set (recovery stubs etc.) — counted
+    /// separately from `failed` because they need user action, not a fix.
+    pub skipped_empty_path: Vec<String>,
     pub errors: Vec<String>,
 }
 
 #[command]
 pub fn regenerate_all_site_configs(app: AppHandle) -> Result<RegenerateAllResult, String> {
     let store = SiteStore::load(&app)?;
-    let domains: Vec<String> = store.sites.iter().map(|s| s.domain.clone()).collect();
+    // Snapshot domain + path so we can pre-filter; otherwise we'd hit
+    // regenerate_config with empty paths and rely on its own guard. Doing
+    // the filter at this layer also keeps these out of the failure count.
+    let entries: Vec<(String, String)> = store
+        .sites
+        .iter()
+        .map(|s| (s.domain.clone(), s.path.clone()))
+        .collect();
 
     let mut regenerated = 0;
     let mut failed = 0;
+    let mut skipped_empty_path: Vec<String> = vec![];
     let mut errors: Vec<String> = vec![];
 
-    for domain in domains {
+    for (domain, path) in entries {
+        if path.trim().is_empty() {
+            skipped_empty_path.push(domain);
+            continue;
+        }
         match SiteManager::regenerate_config(&app, &domain) {
             Ok(_) => regenerated += 1,
             Err(e) => {
@@ -89,9 +104,11 @@ pub fn regenerate_all_site_configs(app: AppHandle) -> Result<RegenerateAllResult
     let _ = NginxManager::reload(&app);
     let _ = crate::services::apache::ApacheManager::reload(&app);
 
+    skipped_empty_path.sort();
     Ok(RegenerateAllResult {
         regenerated,
         failed,
+        skipped_empty_path,
         errors,
     })
 }

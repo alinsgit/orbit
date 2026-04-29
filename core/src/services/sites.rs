@@ -566,7 +566,13 @@ impl SiteManager {
         Ok(())
     }
 
-    /// Regenerate config for a site
+    /// Regenerate config for a site.
+    ///
+    /// Atomic: validates the site's data BEFORE removing it from the store,
+    /// so a stub with an empty path (recovery flow) returns a friendly
+    /// error instead of silently deleting the entry. Earlier versions
+    /// removed first and recreated, which lost the site whenever validation
+    /// failed during recreation.
     pub fn regenerate_config(app: &AppHandle, domain: &str) -> Result<(), String> {
         let store = SiteStore::load(app)?;
         let site = store
@@ -586,6 +592,16 @@ impl SiteManager {
             dev_command: site.dev_command.clone(),
             dev_working_dir: site.dev_working_dir.clone(),
         };
+
+        // Validate first; only proceed with the destructive remove + recreate
+        // dance if the data is good. Empty path is the common stub case —
+        // surface it with a hint instead of the raw "Path cannot be empty".
+        if site_data.path.trim().is_empty() {
+            return Err(format!(
+                "Site '{domain}' has no local path set. Open the site to fill in the project directory before regenerating."
+            ));
+        }
+        Self::validate_site_input(&site_data)?;
 
         // Delete old config from appropriate directory
         let use_apache = site.web_server.to_lowercase() == "apache";
