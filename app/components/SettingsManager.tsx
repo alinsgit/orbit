@@ -413,7 +413,7 @@ export function SettingsManager() {
               </div>
             </div>
 
-            <div className="p-4">
+            <div className="p-4 space-y-3">
               <div className="flex items-center justify-between p-4 bg-surface-inset rounded-lg border border-edge-subtle">
                 <div>
                   <h4 className="font-medium">Clear All Caches</h4>
@@ -428,6 +428,8 @@ export function SettingsManager() {
                   Clear Caches
                 </button>
               </div>
+
+              <MigrationBackupsPanel />
             </div>
           </section>
         </div>
@@ -746,6 +748,180 @@ export function SettingsManager() {
       
       {showHostsEditor && (
         <HostsEditorModal onClose={() => setShowHostsEditor(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─── Migration backups cleanup ─────────────────────────────────────────
+// Surfaces `.legacy-bak-<ts>` (top-level legacy installs parked aside by
+// migrate_legacy when a destination version dir already existed) and the
+// `<sub>.bak-<ts>` directories produced by shared-data wiring. Lets the
+// user free disk once they've confirmed the migration completed cleanly.
+
+import { listMigrationBackups, deleteMigrationBackup, MigrationBackup } from '../lib/api';
+
+function MigrationBackupsPanel() {
+  const { addToast } = useApp();
+  const [backups, setBackups] = useState<MigrationBackup[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const list = await listMigrationBackups();
+      setBackups(list);
+    } catch (e) {
+      console.error('Failed to list migration backups:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const handleDelete = async (path: string) => {
+    if (
+      !window.confirm(
+        `Delete this migration backup?\n\n${path}\n\nThis is irreversible. Skip if you haven't verified the matching live install works.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(path);
+    try {
+      await deleteMigrationBackup(path);
+      addToast({ type: 'success', message: 'Backup deleted.' });
+      await refresh();
+    } catch (e: any) {
+      addToast({ type: 'error', message: `Delete failed: ${e}` });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (
+      !window.confirm(
+        `Delete ALL ${backups.length} migration backups? This frees disk but is irreversible.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting('__all__');
+    let ok = 0;
+    let failed = 0;
+    for (const b of backups) {
+      try {
+        await deleteMigrationBackup(b.path);
+        ok++;
+      } catch (e) {
+        console.error(`Failed to delete ${b.path}:`, e);
+        failed++;
+      }
+    }
+    setDeleting(null);
+    addToast({
+      type: failed === 0 ? 'success' : 'warning',
+      message: `Deleted ${ok}; ${failed} failed.`,
+    });
+    await refresh();
+  };
+
+  const totalBytes = backups.reduce((s, b) => s + b.size_bytes, 0);
+
+  const fmt = (n: number) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  };
+
+  return (
+    <div className="p-4 bg-surface-inset rounded-lg border border-edge-subtle">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h4 className="font-medium">Migration Backups</h4>
+          <p className="text-xs text-content-muted">
+            Leftover dirs from version migrations (`.legacy-bak-*` /
+            `.bak-*`). Safe to remove once your installs work.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="p-2 rounded-md hover:bg-hover text-content-muted transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          {backups.length > 0 && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={deleting !== null}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 rounded-md text-xs font-medium text-white cursor-pointer disabled:cursor-not-allowed"
+            >
+              {deleting === '__all__' ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Trash2 size={12} />
+              )}
+              Delete all ({fmt(totalBytes)})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {backups.length === 0 ? (
+        <div className="text-xs text-content-muted py-2">
+          {loading ? 'Scanning…' : 'No migration backups on disk.'}
+        </div>
+      ) : (
+        <ul className="space-y-1.5 max-h-64 overflow-auto">
+          {backups.map((b) => (
+            <li
+              key={b.path}
+              className="flex items-center justify-between gap-3 p-2 bg-surface rounded border border-edge-subtle"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      b.kind === 'legacy'
+                        ? 'bg-amber-500/15 text-amber-400'
+                        : 'bg-blue-500/15 text-blue-400'
+                    }`}
+                  >
+                    {b.kind}
+                  </span>
+                  <span className="text-content-secondary font-medium">
+                    {b.service}
+                  </span>
+                  <span className="text-content-muted">{fmt(b.size_bytes)}</span>
+                </div>
+                <div className="text-[11px] text-content-muted font-mono truncate mt-0.5">
+                  {b.path}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(b.path)}
+                disabled={deleting !== null}
+                className="p-1.5 rounded-md hover:bg-red-500/15 hover:text-red-400 text-content-muted transition-colors cursor-pointer disabled:opacity-50"
+                title="Delete this backup"
+              >
+                {deleting === b.path ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Trash2 size={12} />
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

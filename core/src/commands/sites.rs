@@ -210,6 +210,7 @@ pub fn import_sites(app: AppHandle, import_data: SiteExport, skip_existing: bool
             web_server: entry.web_server,
             dev_port: None,
             dev_command: None,
+            dev_working_dir: None,
         };
 
         match SiteManager::create_site(&app, site) {
@@ -323,10 +324,19 @@ pub fn start_site_app(
         .ok_or_else(|| format!("Site {domain} has no dev_command configured"))?;
 
     let log_path = site_app_log_path(&app, &domain)?;
+    // Prefer the explicit dev_working_dir when set — handles Laravel-style
+    // sites where path is the doc-root but `php artisan serve` must run
+    // from the project parent. Falls back to `path` for the common case
+    // (reverse-proxy templates already point path at the project root).
+    let working_dir = site
+        .dev_working_dir
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(&site.path);
     state.start(
         &domain,
         dev_command,
-        &site.path,
+        working_dir,
         site.dev_port,
         Some(&log_path),
     )
@@ -566,6 +576,7 @@ pub fn recover_sites_from_deploy_targets(app: AppHandle) -> Result<RecoveryRepor
             web_server: "nginx".to_string(),
             dev_port: None,
             dev_command: None,
+            dev_working_dir: None,
             created_at: now.clone(),
             updated_at: now.clone(),
         });

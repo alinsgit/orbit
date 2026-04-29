@@ -13,11 +13,14 @@ export interface Site {
   web_server?: WebServer;
   dev_port?: number;
   dev_command?: string;
+  /// Working directory for `dev_command`. Falls back to `path` when empty.
+  dev_working_dir?: string;
 }
 
 export interface SiteWithStatus extends Site {
   dev_port?: number;
   dev_command?: string;
+  dev_working_dir?: string;
   created_at?: string;
   config_valid: boolean;
   warning?: string;
@@ -134,6 +137,22 @@ export const listRecoverableSites = async (): Promise<RecoverableSite[]> => {
 
 export const recoverSitesFromDeployTargets = async (): Promise<RecoveryReport> => {
   return await invoke('recover_sites_from_deploy_targets');
+};
+
+// ─── Site app logs ─────────────────────────────────────────────────────
+
+export interface SiteAppLog {
+  path: string;
+  content: string | null;
+  size_bytes: number;
+  truncated: boolean;
+}
+
+export const readSiteAppLog = async (
+  domain: string,
+  maxBytes?: number,
+): Promise<SiteAppLog> => {
+  return await invoke('read_site_app_log', { domain, maxBytes });
 };
 
 export const startSiteApp = async (domain: string): Promise<number> => {

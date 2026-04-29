@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FolderOpen,
   Plus,
@@ -61,11 +61,13 @@ import {
   startSiteApp,
   stopSiteApp,
   getSiteAppStatus,
+  readSiteAppLog,
   readSiteConfig,
   writeSiteConfig,
   listRecoverableSites,
   recoverSitesFromDeployTargets,
   RecoverableSite,
+  SiteAppLog,
   listBlueprints,
   createFromBlueprint,
   Blueprint,
@@ -407,6 +409,45 @@ export function SitesManager() {
   const [recovering, setRecovering] = useState(false);
   const [recoveryDismissed, setRecoveryDismissed] = useState(false);
 
+  // Site app log viewer modal — domain currently being inspected.
+  // The log itself is fetched lazily when this becomes non-null.
+  const [logViewerDomain, setLogViewerDomain] = useState<string | null>(null);
+  const [logViewerData, setLogViewerData] = useState<SiteAppLog | null>(null);
+  const [logViewerLoading, setLogViewerLoading] = useState(false);
+  const logBodyRef = useRef<HTMLElement | null>(null);
+
+  const fetchLogViewer = async (domain: string) => {
+    setLogViewerLoading(true);
+    try {
+      const data = await readSiteAppLog(domain);
+      setLogViewerData(data);
+      // Auto-scroll to bottom on refresh — that's where new output lands.
+      setTimeout(() => {
+        if (logBodyRef.current) {
+          logBodyRef.current.scrollTop = logBodyRef.current.scrollHeight;
+        }
+      }, 50);
+    } catch (e) {
+      console.error("Failed to read site app log:", e);
+      addToast({ type: "error", message: `Failed to read log: ${e}` });
+    } finally {
+      setLogViewerLoading(false);
+    }
+  };
+
+  // Open / refresh + 2s auto-poll while the modal is visible (so users
+  // watching `npm run dev` output see new lines without manual refresh).
+  useEffect(() => {
+    if (!logViewerDomain) {
+      setLogViewerData(null);
+      return;
+    }
+    fetchLogViewer(logViewerDomain);
+    const id = window.setInterval(() => fetchLogViewer(logViewerDomain), 2000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logViewerDomain]);
+
   const refreshRecoverable = async () => {
     try {
       const list = await listRecoverableSites();
@@ -699,6 +740,7 @@ export function SitesManager() {
         web_server: defaultWebServer,
         dev_command: undefined,
         dev_port: undefined,
+        dev_working_dir: undefined,
       });
       setShowAddForm(false);
       await refreshSites();
@@ -749,6 +791,7 @@ export function SitesManager() {
       web_server: site.web_server || "nginx",
       dev_command: site.dev_command,
       dev_port: site.dev_port,
+      dev_working_dir: site.dev_working_dir,
     });
   };
 
@@ -1901,6 +1944,25 @@ export function SitesManager() {
                       Injected as PORT env var.
                     </p>
                   </div>
+
+                  <div className="col-span-3 flex flex-col gap-1">
+                    <label className="text-xs text-content-secondary">
+                      Dev Working Directory
+                      <span className="text-content-muted ml-1">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newSite.dev_working_dir || ""}
+                      placeholder="Defaults to site path. Set when dev_command should run from a different folder (e.g. Laravel project root vs `/public` doc-root)."
+                      onChange={(e) =>
+                        setNewSite({
+                          ...newSite,
+                          dev_working_dir: e.target.value || undefined,
+                        })
+                      }
+                      className="px-3 py-2 bg-surface-inset rounded-lg text-sm border border-edge focus:border-emerald-500 focus:outline-none font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2171,6 +2233,23 @@ export function SitesManager() {
                           className="px-2 py-1 bg-surface-inset rounded text-xs border border-edge focus:border-emerald-500 focus:outline-none"
                         />
                       </div>
+                      <div className="col-span-3 flex flex-col gap-1">
+                        <label className="text-[11px] text-content-secondary">
+                          Dev Working Dir
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.dev_working_dir || ""}
+                          placeholder="Defaults to site path"
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              dev_working_dir: e.target.value || undefined,
+                            })
+                          }
+                          className="px-2 py-1 bg-surface-inset rounded text-xs border border-edge focus:border-emerald-500 focus:outline-none font-mono"
+                        />
+                      </div>
                     </div>
 
                     {/* Actions */}
@@ -2353,6 +2432,14 @@ export function SitesManager() {
                               Start App
                             </button>
                           )}
+                          <button
+                            onClick={() => setLogViewerDomain(site.domain)}
+                            className="flex items-center gap-1 text-xs text-content-muted hover:text-content-secondary transition-colors cursor-pointer"
+                            title="View dev server log output"
+                          >
+                            <FileCode size={12} />
+                            Logs
+                          </button>
                         </>
                       )}
 
@@ -2495,6 +2582,79 @@ export function SitesManager() {
               <code className="bg-surface px-1 rounded">nginx -t</code> before
               saving. Invalid config will be rolled back automatically.
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Site App Log Viewer modal — surfaces stdout+stderr captured by
+          start_site_app. Auto-polls every 2s so users see live dev-server
+          output (Vite/webpack/etc.) without an explicit refresh. */}
+      {logViewerDomain && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6"
+          onClick={() => setLogViewerDomain(null)}
+        >
+          <div
+            className="bg-surface border border-edge rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
+              <div className="flex items-center gap-2">
+                <FileCode size={16} className="text-emerald-500" />
+                <span className="font-semibold">{logViewerDomain}</span>
+                <span className="text-xs text-content-muted">
+                  dev server output
+                </span>
+                {logViewerData?.truncated && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                    showing tail
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchLogViewer(logViewerDomain)}
+                  disabled={logViewerLoading}
+                  className="p-1.5 rounded-md hover:bg-hover text-content-muted transition-colors cursor-pointer disabled:opacity-50"
+                  title="Refresh"
+                >
+                  <RefreshCw
+                    size={14}
+                    className={logViewerLoading ? "animate-spin" : ""}
+                  />
+                </button>
+                <button
+                  onClick={() => setLogViewerDomain(null)}
+                  className="p-1.5 rounded-md hover:bg-hover text-content-muted transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            <pre
+              ref={logBodyRef}
+              className="flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap text-content-secondary bg-surface-inset"
+            >
+              {logViewerData === null ? (
+                <span className="text-content-muted">Loading…</span>
+              ) : logViewerData.content === null ? (
+                <span className="text-content-muted">
+                  No log yet. Start the dev server to capture output here.
+                </span>
+              ) : logViewerData.content.length === 0 ? (
+                <span className="text-content-muted">
+                  Log file exists but is empty.
+                </span>
+              ) : (
+                logViewerData.content
+              )}
+            </pre>
+            {logViewerData?.path && (
+              <div className="px-4 py-2 border-t border-edge text-[11px] text-content-muted font-mono truncate">
+                {logViewerData.path}
+              </div>
+            )}
           </div>
         </div>
       )}

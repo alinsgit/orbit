@@ -147,7 +147,19 @@ if (
     // Frontend: TypeScript type-check only (skip Vite bundle to keep
     // pre-flight fast; bundle errors are practically always type errors
     // anyway). `tsc --noEmit` is what `bun run build` runs first too.
-    runPreflight('npx --yes -- tsc --noEmit', root);
+    // Resolve tsc through the local devDependency rather than `npx tsc`
+    // (which on a fresh shell tries to fetch the npm package and then
+    // refuses with a "this is not the tsc you're looking for" error).
+    const tscBin = process.platform === 'win32'
+      ? path.join(root, 'node_modules', '.bin', 'tsc.cmd')
+      : path.join(root, 'node_modules', '.bin', 'tsc');
+    if (fs.existsSync(tscBin)) {
+      runPreflight(`"${tscBin}" --noEmit`, root);
+    } else {
+      console.warn(
+        '  · tsc not found in node_modules — run `bun install` to enable the type-check step. Continuing without it.'
+      );
+    }
   } catch (e) {
     console.error(
       '\n✗ Pre-flight failed. Fix the issues above, or re-run with --skip-preflight if you know what you are doing.'

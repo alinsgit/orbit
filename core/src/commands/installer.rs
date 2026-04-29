@@ -389,7 +389,167 @@ pub fn remove_service_version(
         }
     }
 
+    // PHP-specific: drop the matching entry from php_services.json so a
+    // subsequent reinstall doesn't pick up the dead PID/port mapping
+    // (and so the registry doesn't accumulate orphan rows). Best-effort —
+    // an error here only logs because the actual files are already gone.
+    if service_type == "php" {
+        match crate::services::php_registry::PhpRegistry::load(&app) {
+            Ok(mut registry) => {
+                if registry.unregister_php(&version) {
+                    if let Err(e) = registry.save(&app) {
+                        log::warn!(
+                            "Removed php-{version} files but failed to update php_services.json: {e}"
+                        );
+                    }
+                }
+            }
+            Err(e) => log::warn!("Could not load PHP registry to clean up php-{version}: {e}"),
+        }
+    }
+
     Ok(format!("Removed {service_type}@{version}"))
+}
+
+// ─── Migration backup cleanup ────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct MigrationBackup {
+    /// Absolute path of the backup directory.
+    pub path: String,
+    /// "legacy" — top-level `bin/<svc>.legacy-bak-<ts>/` from migrate_legacy.
+    /// "shared" — `bin/.versions/<svc>/<ver>/<sub>.bak-<ts>/` from
+    /// shared-data wiring.
+    pub kind: String,
+    /// Service this backup belongs to (e.g. "nginx").
+    pub service: String,
+    /// Total size in bytes (best-effort; missing/locked files counted as 0).
+    pub size_bytes: u64,
+}
+
+fn dir_size(path: &Path) -> u64 {
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_dir() {
+                    total = total.saturating_add(dir_size(&p));
+                } else if meta.is_file() {
+                    total = total.saturating_add(meta.len());
+                }
+            }
+        }
+    }
+    total
+}
+
+/// Enumerate `.bak-*` / `.legacy-bak-*` directories left over by migrations
+/// and shared-data wiring. The user can list them, see how much disk they
+/// hold, and delete individually or all at once.
+#[command]
+pub fn list_migration_backups(app: AppHandle) -> Result<Vec<MigrationBackup>, String> {
+    let bin_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin");
+    if !bin_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut out: Vec<MigrationBackup> = Vec::new();
+
+    // Top-level legacy backups: bin/<svc>.legacy-bak-<ts>/
+    if let Ok(entries) = std::fs::read_dir(&bin_path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !entry.path().is_dir() {
+                continue;
+            }
+            if let Some(svc) = name.split(".legacy-bak-").next() {
+                if name.contains(".legacy-bak-") {
+                    out.push(MigrationBackup {
+                        path: entry.path().to_string_lossy().to_string(),
+                        kind: "legacy".into(),
+                        service: svc.to_string(),
+                        size_bytes: dir_size(&entry.path()),
+                    });
+                }
+            }
+        }
+    }
+
+    // Shared-data backups: bin/.versions/<svc>/<ver>/<sub>.bak-<ts>/
+    let versions_root = bin_path.join(".versions");
+    if let Ok(svc_entries) = std::fs::read_dir(&versions_root) {
+        for svc_entry in svc_entries.flatten() {
+            let svc_name = svc_entry.file_name().to_string_lossy().to_string();
+            if !svc_entry.path().is_dir() {
+                continue;
+            }
+            if let Ok(ver_entries) = std::fs::read_dir(svc_entry.path()) {
+                for ver_entry in ver_entries.flatten() {
+                    if !ver_entry.path().is_dir() {
+                        continue;
+                    }
+                    if let Ok(sub_entries) = std::fs::read_dir(ver_entry.path()) {
+                        for sub_entry in sub_entries.flatten() {
+                            let sub_name = sub_entry.file_name().to_string_lossy().to_string();
+                            if !sub_entry.path().is_dir() {
+                                continue;
+                            }
+                            if sub_name.contains(".bak-") {
+                                out.push(MigrationBackup {
+                                    path: sub_entry.path().to_string_lossy().to_string(),
+                                    kind: "shared".into(),
+                                    service: svc_name.clone(),
+                                    size_bytes: dir_size(&sub_entry.path()),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(out)
+}
+
+/// Delete a single migration backup directory. The path MUST be under the
+/// orbit bin dir to prevent users (or buggy callers) from passing arbitrary
+/// paths into a remove_dir_all.
+#[command]
+pub fn delete_migration_backup(app: AppHandle, path: String) -> Result<String, String> {
+    let bin_path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("bin");
+    let target = std::path::PathBuf::from(&path);
+
+    let canonical_target = std::fs::canonicalize(&target)
+        .map_err(|e| format!("canonicalize({}): {e}", target.display()))?;
+    let canonical_bin = std::fs::canonicalize(&bin_path)
+        .map_err(|e| format!("canonicalize({}): {e}", bin_path.display()))?;
+    if !canonical_target.starts_with(&canonical_bin) {
+        return Err("Refusing to delete: path is outside the orbit bin directory.".into());
+    }
+
+    // Sanity: only paths whose name contains the bak markers.
+    let name = target
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if !(name.contains(".bak-") || name.contains(".legacy-bak-")) {
+        return Err("Refusing to delete: directory name does not look like a migration backup."
+            .into());
+    }
+
+    clean_target_dir(&target).map_err(|e| format!("Failed to delete: {e}"))?;
+    Ok(format!("Deleted {}", target.display()))
 }
 
 // ─── Robust target directory cleanup ────────────────────────────────────

@@ -61,6 +61,7 @@ pub fn create_from_blueprint(
         web_server: "nginx".into(),
         dev_port: None,
         dev_command: bp.dev_command.clone(),
+        dev_working_dir: None,
     };
 
     let created_site = SiteManager::create_site(&app, site)?;

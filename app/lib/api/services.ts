@@ -91,6 +91,23 @@ export const removeServiceVersion = async (
   return await invoke('remove_service_version', { serviceType, version });
 };
 
+// ─── Migration backups (one-shot cleanup of `.bak-*` / `.legacy-bak-*`) ──
+
+export interface MigrationBackup {
+  path: string;
+  kind: 'legacy' | 'shared';
+  service: string;
+  size_bytes: number;
+}
+
+export const listMigrationBackups = async (): Promise<MigrationBackup[]> => {
+  return await invoke('list_migration_backups');
+};
+
+export const deleteMigrationBackup = async (path: string): Promise<string> => {
+  return await invoke('delete_migration_backup', { path });
+};
+
 export const getAvailableVersions = async (service: string, forceRefresh?: boolean): Promise<ServiceVersion[]> => {
   try {
     return await invoke('get_available_versions', { service, forceRefresh });

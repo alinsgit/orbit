@@ -28,6 +28,14 @@ pub struct Site {
     pub dev_port: Option<u16>,
     #[serde(default)]
     pub dev_command: Option<String>,
+    /// Working directory for `dev_command`. Defaults to `path` when empty.
+    /// Useful for Laravel-style sites where `path` is the doc-root
+    /// (`<project>/public`) but `php artisan serve` / `composer dev` must
+    /// run from the project parent. For reverse-proxy templates (Astro,
+    /// Next.js, SvelteKit) the project root is normally already `path`,
+    /// so leaving this empty does the right thing.
+    #[serde(default)]
+    pub dev_working_dir: Option<String>,
 }
 
 fn default_web_server() -> String {
@@ -46,6 +54,7 @@ pub struct SiteWithStatus {
     pub web_server: String,
     pub dev_port: Option<u16>,
     pub dev_command: Option<String>,
+    pub dev_working_dir: Option<String>,
     pub created_at: Option<String>,
     pub config_valid: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -304,6 +313,7 @@ impl SiteManager {
             web_server: site.web_server.clone(),
             dev_port: stored_dev_port,
             dev_command: site.dev_command.clone(),
+            dev_working_dir: site.dev_working_dir.clone(),
             created_at: now.clone(),
             updated_at: now.clone(),
         };
@@ -330,6 +340,7 @@ impl SiteManager {
             web_server: site.web_server,
             dev_port: stored_dev_port,
             dev_command: site.dev_command,
+            dev_working_dir: site.dev_working_dir,
             created_at: Some(now),
             config_valid: true,
             warning: hosts_warning,
@@ -376,6 +387,7 @@ impl SiteManager {
                     web_server: s.web_server.clone(),
                     dev_port: s.dev_port,
                     dev_command: s.dev_command.clone(),
+                    dev_working_dir: s.dev_working_dir.clone(),
                     created_at: Some(s.created_at.clone()),
                     config_valid,
                     warning: None,
@@ -413,6 +425,7 @@ impl SiteManager {
                 web_server: s.web_server.clone(),
                 dev_port: s.dev_port,
                 dev_command: s.dev_command.clone(),
+                dev_working_dir: s.dev_working_dir.clone(),
                 created_at: Some(s.created_at.clone()),
                 config_valid,
                 warning: None,
@@ -487,6 +500,7 @@ impl SiteManager {
             web_server: updates.web_server,
             dev_port: updates.dev_port,
             dev_command: updates.dev_command,
+            dev_working_dir: updates.dev_working_dir,
         };
 
         Self::create_site(app, new_site)
@@ -570,6 +584,7 @@ impl SiteManager {
             web_server: site.web_server.clone(),
             dev_port: site.dev_port,
             dev_command: site.dev_command.clone(),
+            dev_working_dir: site.dev_working_dir.clone(),
         };
 
         // Delete old config from appropriate directory

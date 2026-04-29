@@ -136,6 +136,8 @@ pub fn run() {
         commands::installer::list_service_versions,
         commands::installer::set_active_service_version,
         commands::installer::remove_service_version,
+        commands::installer::list_migration_backups,
+        commands::installer::delete_migration_backup,
         commands::versions::get_available_versions,
         commands::versions::refresh_all_versions,
         commands::scanner::get_installed_services,
