@@ -414,7 +414,8 @@ export function SitesManager() {
   const [logViewerDomain, setLogViewerDomain] = useState<string | null>(null);
   const [logViewerData, setLogViewerData] = useState<SiteAppLog | null>(null);
   const [logViewerLoading, setLogViewerLoading] = useState(false);
-  const logBodyRef = useRef<HTMLElement | null>(null);
+  // eslint-disable-next-line no-undef
+  const logBodyRef = useRef<HTMLPreElement | null>(null);
 
   const fetchLogViewer = async (domain: string) => {
     setLogViewerLoading(true);
