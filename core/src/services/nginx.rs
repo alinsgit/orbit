@@ -232,6 +232,9 @@ http {
     sendfile        on;
     keepalive_timeout  65;
 
+    # Max upload size (matches PHP defaults for dev)
+    client_max_body_size 128m;
+
     # Gzip compression
     gzip  on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;

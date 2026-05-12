@@ -29,6 +29,7 @@ import {
   Rocket,
   Check,
   ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   getSites,
@@ -64,9 +65,7 @@ import {
   readSiteAppLog,
   readSiteConfig,
   writeSiteConfig,
-  listRecoverableSites,
-  recoverSitesFromDeployTargets,
-  RecoverableSite,
+
   SiteAppLog,
   listBlueprints,
   createFromBlueprint,
@@ -237,6 +236,19 @@ export function SitesManager() {
   const [showSslDropdown, setShowSslDropdown] = useState(false);
   const [sslStatus, setSslStatus] = useState<SslStatus | null>(null);
   const [sslLoading, setSslLoading] = useState(false);
+  const sslDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Close SSL dropdown on outside click
+  useEffect(() => {
+    if (!showSslDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (sslDropdownRef.current && !sslDropdownRef.current.contains(e.target as HTMLElement)) {
+        setShowSslDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSslDropdown]);
 
   // Export/Import State
   const [exporting, setExporting] = useState(false);
@@ -400,14 +412,7 @@ export function SitesManager() {
     }
   };
 
-  // ─── Recovery banner ─────────────────────────────────────────────
-  // Detects domains that exist in deploy-targets.json but are missing from
-  // sites.json — happens when a previous bad migration wiped the site
-  // store. The banner offers a one-click rebuild from those domains; the
-  // user then fills in the local path per site through the normal edit UI.
-  const [recoverable, setRecoverable] = useState<RecoverableSite[]>([]);
-  const [recovering, setRecovering] = useState(false);
-  const [recoveryDismissed, setRecoveryDismissed] = useState(false);
+
 
   // Site app log viewer modal — domain currently being inspected.
   // The log itself is fetched lazily when this becomes non-null.
@@ -449,38 +454,7 @@ export function SitesManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logViewerDomain]);
 
-  const refreshRecoverable = async () => {
-    try {
-      const list = await listRecoverableSites();
-      setRecoverable(list.filter((r) => !r.already_present));
-    } catch (e) {
-      console.error("Failed to query recoverable sites:", e);
-    }
-  };
 
-  const handleRecover = async () => {
-    setRecovering(true);
-    try {
-      const report = await recoverSitesFromDeployTargets();
-      if (report.recovered.length > 0) {
-        addToast({
-          type: "success",
-          message: `${report.recovered.length} site(s) recovered as stubs. Open each to set the local path, then save to regenerate config.`,
-        });
-        await refreshSites();
-      } else {
-        addToast({
-          type: "info",
-          message: "Nothing to recover — every deploy-target domain already has a site entry.",
-        });
-      }
-      await refreshRecoverable();
-    } catch (e) {
-      addToast({ type: "error", message: `Recovery failed: ${e}` });
-    } finally {
-      setRecovering(false);
-    }
-  };
 
   // Refresh app status for sites with dev_command
   const refreshAppStatus = async (siteList: SiteWithStatus[]) => {
@@ -503,8 +477,7 @@ export function SitesManager() {
     refreshSites().then(() => {
       // App status will be refreshed after sites load
     });
-    // Detect orphaned deploy-target domains so the recovery banner can show.
-    refreshRecoverable();
+
   }, []);
 
   // Poll app status when sites change + every 4s so external kills/crashes
@@ -636,7 +609,9 @@ export function SitesManager() {
 
       const projectName = newSite.domain.split(".")[0];
       const template = newSite.template || "";
-      const separator = navigator.userAgent.includes("Win") ? "\\" : "/";
+      // Detect separator from the workspace path itself — Tauri’s dialog
+      // returns native paths, so backslashes on Windows, forward on Unix.
+      const separator = wp.includes("\\") ? "\\" : "/";
       const projectPath = `${wp}${separator}${projectName}`;
 
       // Basic templates: create files directly via backend
@@ -760,8 +735,26 @@ export function SitesManager() {
 
   // Handle delete site
   const handleDeleteSite = async (domain: string, webServer?: WebServer) => {
+    // Always confirm before deleting — this is irreversible (removes config,
+    // hosts entry, SSL certs, and nginx/apache vhost).
+    const { ask } = await import("@tauri-apps/plugin-dialog");
+    const confirmed = await ask(
+      `"${domain}" sitesini silmek istediğinize emin misiniz?\n\nBu işlem web server config, hosts girişi ve SSL sertifikalarını kalıcı olarak siler.`,
+      { title: "Site Silme Onayı", kind: "warning" },
+    );
+    if (!confirmed) return;
+
     setProcessing(domain);
     try {
+      // Stop dev app process if running to avoid orphan processes
+      if (appStatus[domain] === "running") {
+        try {
+          await stopSiteApp(domain);
+        } catch {
+          // Best-effort — don't block deletion if stop fails
+        }
+      }
+
       await deleteSite(domain);
       // Reload appropriate web server
       if (webServer === "apache") {
@@ -770,6 +763,7 @@ export function SitesManager() {
         await nginxReload();
       }
       await refreshSites();
+      addToast({ type: "success", message: `Site "${domain}" deleted.` });
     } catch (e: any) {
       console.error(e);
       addToast({ type: "error", message: "Failed to delete site: " + e });
@@ -902,7 +896,8 @@ export function SitesManager() {
         return;
       }
       const projectName = blueprintDomain.replace(/\..*$/, "");
-      const fullPath = `${wp}/${projectName}`;
+      const separator = wp.includes("\\") ? "\\" : "/";
+      const fullPath = `${wp}${separator}${projectName}`;
       setBlueprintPath(fullPath);
     } catch (e: any) {
       addToast({ type: "error", message: `Failed to get workspace: ${e}` });
@@ -1117,9 +1112,9 @@ export function SitesManager() {
             Manage your local development sites
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* SSL Tools */}
-          <div className="relative">
+        <div className="flex items-center gap-2">
+          {/* SSL Status */}
+          <div className="relative" ref={sslDropdownRef}>
             <button
               onClick={() => setShowSslDropdown(!showSslDropdown)}
               className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer flex items-center gap-2 border border-edge"
@@ -1206,80 +1201,46 @@ export function SitesManager() {
             )}
           </div>
 
-          {/* Export/Import Backup */}
-          <div className="flex items-center bg-surface-raised rounded-lg border border-edge">
-            <button
-              onClick={handleImportSites}
-              disabled={importing}
-              className="p-2 hover:bg-hover rounded-l-lg transition-colors cursor-pointer disabled:opacity-50 border-r border-edge"
-              title="Import Sites Config"
-            >
-              {importing ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <FileUp size={16} />
-              )}
-            </button>
-            <button
-              onClick={handleExportSites}
-              disabled={exporting}
-              className="p-2 hover:bg-hover rounded-r-lg transition-colors cursor-pointer disabled:opacity-50"
-              title="Export Sites Config"
-            >
-              {exporting ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <FileDown size={16} />
-              )}
-            </button>
-          </div>
-
-          {/* Nginx Status & Reload */}
+          {/* Nginx Status & Reload — labeled so it's distinct from Refresh */}
           <div className="flex items-center gap-2 px-3 py-2 bg-surface-raised rounded-lg border border-edge">
             <div
               className={`w-2 h-2 rounded-full ${isNginxRunning ? "bg-emerald-500" : "bg-red-500"}`}
             />
-            <span className="text-sm text-content-secondary hidden lg:inline">
-              Nginx
-            </span>
+            <span className="text-xs text-content-secondary">Nginx</span>
             <button
               onClick={handleNginxReload}
               disabled={reloadingNginx}
-              className="p-1 hover:bg-hover rounded transition-colors cursor-pointer disabled:opacity-50"
-              title="Reload Nginx"
+              className="text-xs text-content-muted hover:text-content transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
             >
               <RefreshCw
-                size={14}
+                size={12}
                 className={reloadingNginx ? "animate-spin" : ""}
               />
+              <span className="hidden sm:inline">Reload</span>
             </button>
           </div>
 
-          {/* Refresh */}
+          {/* Refresh Sites — labeled */}
           <button
             onClick={refreshSites}
             disabled={refreshing}
-            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50 border border-edge"
-            title="Refresh Sites"
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50 border border-edge text-xs text-content-secondary"
           >
-            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
 
-          {/* Regenerate All Configs */}
-          <button
-            onClick={handleRegenerateAllConfigs}
-            disabled={processing === "__all__"}
-            className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer disabled:opacity-50 border border-edge"
-            title="Tüm site config'lerini yeniden oluştur (IPv6 vb. şablon güncellemelerini uygulamak için)"
-          >
-            <RotateCw
-              size={16}
-              className={processing === "__all__" ? "animate-spin" : ""}
-            />
-            <span className="sr-only">Regenerate All</span>
-          </button>
+          {/* ⋯ More Actions (rare operations) */}
+          <MoreActionsMenu
+            onExport={handleExportSites}
+            exporting={exporting}
+            onImport={handleImportSites}
+            importing={importing}
+            onRegenerateAll={handleRegenerateAllConfigs}
+            regenerating={processing === "__all__"}
+          />
 
-          {/* Add Site */}
+          {/* Add Site — primary action */}
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-900/20 text-white"
@@ -1290,66 +1251,6 @@ export function SitesManager() {
         </div>
       </header>
 
-      {/* Recovery banner — fires only when sites.json is missing entries
-          that still exist in deploy-targets.json (post-incident remediation
-          for the v1.2.x migration that wiped sites-enabled). */}
-      {recoverable.length > 0 && !recoveryDismissed && (
-        <div className="mb-4 p-4 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-100">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
-              <div>
-                <div className="font-semibold text-amber-300">
-                  {recoverable.length} site
-                  {recoverable.length === 1 ? "" : "s"} can be recovered from
-                  deploy targets
-                </div>
-                <p className="text-sm text-amber-200/90 mt-1 leading-relaxed">
-                  These domains are present in <code>deploy-targets.json</code>
-                  {" "}but missing from your site list. Recovery creates a
-                  stub for each so you only need to set the local project
-                  path before regenerating its nginx config.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {recoverable.slice(0, 8).map((r) => (
-                    <span
-                      key={r.domain}
-                      className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200"
-                    >
-                      {r.domain}
-                    </span>
-                  ))}
-                  {recoverable.length > 8 && (
-                    <span className="text-[11px] text-amber-300/80">
-                      +{recoverable.length - 8} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={handleRecover}
-                disabled={recovering}
-                className="px-3 py-1.5 rounded-md text-sm font-medium bg-amber-500 hover:bg-amber-400 text-black disabled:opacity-50 cursor-pointer"
-              >
-                {recovering ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  `Recover ${recoverable.length}`
-                )}
-              </button>
-              <button
-                onClick={() => setRecoveryDismissed(true)}
-                className="p-1.5 rounded-md text-amber-300/70 hover:text-amber-200 hover:bg-amber-500/15 cursor-pointer"
-                title="Dismiss"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Nginx Message */}
       {nginxMessage && (
@@ -2675,6 +2576,85 @@ export function SitesManager() {
               </div>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MoreActionsMenu ─────────────────────────────────────────────────
+// Overflow menu for rare toolbar operations. Keeps the main toolbar clean
+// while still providing one-click access to export, import, and bulk
+// config regeneration.
+
+function MoreActionsMenu({
+  onExport,
+  exporting,
+  onImport,
+  importing,
+  onRegenerateAll,
+  regenerating,
+}: {
+  onExport: () => void;
+  exporting: boolean;
+  onImport: () => void;
+  importing: boolean;
+  onRegenerateAll: () => void;
+  regenerating: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as HTMLElement)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const item =
+    "flex items-center gap-2.5 w-full px-3 py-2 text-xs text-content-secondary hover:bg-hover rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default";
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="p-2 bg-surface-raised hover:bg-hover rounded-lg transition-colors cursor-pointer border border-edge"
+      >
+        <MoreHorizontal size={16} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 w-52 bg-surface-raised border border-edge rounded-lg shadow-xl overflow-hidden py-1">
+          <button
+            className={item}
+            disabled={exporting}
+            onClick={() => { onExport(); setOpen(false); }}
+          >
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+            Export Sites
+          </button>
+          <button
+            className={item}
+            disabled={importing}
+            onClick={() => { onImport(); setOpen(false); }}
+          >
+            {importing ? <Loader2 size={14} className="animate-spin" /> : <FileUp size={14} />}
+            Import Sites
+          </button>
+          <div className="my-1 border-t border-edge/50" />
+          <button
+            className={item}
+            disabled={regenerating}
+            onClick={() => { onRegenerateAll(); setOpen(false); }}
+          >
+            {regenerating ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+            Regenerate All Configs
+          </button>
         </div>
       )}
     </div>

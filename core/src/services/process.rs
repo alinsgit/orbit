@@ -26,15 +26,14 @@ pub enum ServiceType {
 #[cfg(target_os = "windows")]
 use super::hidden_command;
 
-/// Check if a port is in use
+/// Check if a port is in use on the loopback interface
 fn is_port_in_use(port: u16) -> bool {
     use std::net::TcpListener;
-    // Check IPv4 and IPv6 (loopback + any) — on Windows, services may bind
-    // to any of these interfaces independently.
+    // Only check loopback addresses — Orbit services bind to localhost.
+    // Checking 0.0.0.0 / [::] caused false positives when other apps
+    // (e.g. Docker, WSL) bind to wildcard addresses independently.
     TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
-        || TcpListener::bind(format!("0.0.0.0:{port}")).is_err()
         || TcpListener::bind(format!("[::1]:{port}")).is_err()
-        || TcpListener::bind(format!("[::]:{port}")).is_err()
 }
 
 /// Get expected port for a service by name

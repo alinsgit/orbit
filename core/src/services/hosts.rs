@@ -22,8 +22,12 @@ impl HostsManager {
         let content = fs::read_to_string(HOSTS_PATH)
             .map_err(|e| format!("Failed to read hosts file: {e}"))?;
 
-        let has_v4 = content.contains(&format!("127.0.0.1 {domain}"));
-        let has_v6 = content.contains(&format!("::1 {domain}"));
+        // Use line-by-line exact matching to avoid substring false positives
+        // e.g. "127.0.0.1 test.local" should NOT match "127.0.0.1 my-test.local"
+        let v4_entry = format!("127.0.0.1 {domain}");
+        let v6_entry = format!("::1 {domain}");
+        let has_v4 = content.lines().any(|line| line.trim() == v4_entry);
+        let has_v6 = content.lines().any(|line| line.trim() == v6_entry);
 
         if has_v4 && has_v6 {
             return Ok(()); // Both already exist
@@ -58,12 +62,14 @@ impl HostsManager {
         // Sanitize for PowerShell (extra safety layer)
         let safe_domain = sanitize_for_powershell(domain);
 
-        // Check if already exists (both IPv4 and IPv6)
+        // Check if already exists (both IPv4 and IPv6) — line-exact match
         let content = fs::read_to_string(HOSTS_PATH)
             .map_err(|e| format!("Failed to read hosts file: {e}"))?;
 
-        let has_v4 = content.contains(&format!("127.0.0.1 {safe_domain}"));
-        let has_v6 = content.contains(&format!("::1 {safe_domain}"));
+        let v4_entry = format!("127.0.0.1 {safe_domain}");
+        let v6_entry = format!("::1 {safe_domain}");
+        let has_v4 = content.lines().any(|line| line.trim() == v4_entry);
+        let has_v6 = content.lines().any(|line| line.trim() == v6_entry);
 
         if has_v4 && has_v6 {
             return Ok(()); // Both already exist
@@ -129,12 +135,14 @@ $domain = @'
             return Err(format!("Failed to add domain: {stderr}"));
         }
 
-        // Verify both entries were added
+        // Verify both entries were added (line-exact match)
         let new_content = fs::read_to_string(HOSTS_PATH)
             .map_err(|e| format!("Failed to verify: {e}"))?;
 
-        let v4_ok = new_content.contains(&format!("127.0.0.1 {safe_domain}"));
-        let v6_ok = new_content.contains(&format!("::1 {safe_domain}"));
+        let v4_check = format!("127.0.0.1 {safe_domain}");
+        let v6_check = format!("::1 {safe_domain}");
+        let v4_ok = new_content.lines().any(|line| line.trim() == v4_check);
+        let v6_ok = new_content.lines().any(|line| line.trim() == v6_check);
 
         if v4_ok && v6_ok {
             Ok(())
@@ -156,6 +164,9 @@ $domain = @'
         let content = fs::read_to_string(HOSTS_PATH)
             .map_err(|e| format!("Failed to read hosts file: {e}"))?;
 
+        // Detect original line ending style to preserve it (Windows uses CRLF)
+        let line_ending = if content.contains("\r\n") { "\r\n" } else { "\n" };
+
         // Remove both IPv4 and IPv6 entries; filter line-by-line to avoid
         // partial-substring matches on similar domains.
         let v4_entry = format!("127.0.0.1 {domain}");
@@ -168,12 +179,101 @@ $domain = @'
                 trimmed != v4_entry && trimmed != v6_entry
             })
             .collect::<Vec<_>>()
-            .join("\n");
+            .join(line_ending);
 
         fs::write(HOSTS_PATH, new_content.trim_end())
             .map_err(|e| format!("Failed to write to hosts file: {e}"))?;
 
         Ok(())
+    }
+
+    /// Remove domain using elevated PowerShell (triggers UAC prompt)
+    #[cfg(target_os = "windows")]
+    pub fn remove_domain_elevated(domain: &str) -> Result<(), String> {
+        // Validate domain before any operation
+        validate_domain(domain).map_err(|e| e.to_string())?;
+
+        // Sanitize for PowerShell
+        let safe_domain = sanitize_for_powershell(domain);
+
+        // Check if domain actually exists in hosts file
+        let content = fs::read_to_string(HOSTS_PATH)
+            .map_err(|e| format!("Failed to read hosts file: {e}"))?;
+
+        let v4_entry = format!("127.0.0.1 {safe_domain}");
+        let v6_entry = format!("::1 {safe_domain}");
+        let has_v4 = content.lines().any(|line| line.trim() == v4_entry);
+        let has_v6 = content.lines().any(|line| line.trim() == v6_entry);
+
+        if !has_v4 && !has_v6 {
+            return Ok(()); // Nothing to remove
+        }
+
+        // Create a temporary PowerShell script
+        let temp_dir = std::env::temp_dir();
+        let random_suffix: u64 = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        let script_path = temp_dir.join(format!("orbit_rmhost_{random_suffix}.ps1"));
+
+        // Use here-string to avoid injection — filter out matching lines
+        let script_content = format!(
+            r#"$hostsPath = @'
+{HOSTS_PATH}
+'@
+$domain = @'
+{safe_domain}
+'@
+$v4 = "127.0.0.1 $domain"
+$v6 = "::1 $domain"
+$content = Get-Content -Path $hostsPath -Encoding ASCII
+$filtered = $content | Where-Object {{ $_.Trim() -ne $v4 -and $_.Trim() -ne $v6 }}
+Set-Content -Path $hostsPath -Value $filtered -Force -Encoding ASCII"#
+        );
+
+        fs::write(&script_path, &script_content)
+            .map_err(|e| format!("Failed to create temp script: {e}"))?;
+
+        let mut ps_command = Command::new("powershell");
+        ps_command.args([
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-WindowStyle", "Hidden",
+            "-Command",
+            &format!(
+                "Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', '{}'",
+                script_path.display()
+            ),
+        ]);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            ps_command.creation_flags(CREATE_NO_WINDOW);
+        }
+        let output = ps_command.output()
+            .map_err(|e| format!("Failed to execute PowerShell: {e}"))?;
+
+        // Clean up temp script immediately
+        if let Err(e) = fs::remove_file(&script_path) {
+            log::warn!("Failed to remove temp script: {e}");
+        }
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("canceled") || stderr.contains("denied") {
+                return Err("User cancelled UAC prompt".to_string());
+            }
+            return Err(format!("Failed to remove domain: {stderr}"));
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn remove_domain_elevated(domain: &str) -> Result<(), String> {
+        Self::remove_domain(domain)
     }
 
     #[cfg(target_os = "windows")]
@@ -183,13 +283,15 @@ $domain = @'
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+        // Use exit code instead of parsing stdout — works on all Windows locales
+        // ("Administrator" text differs by language but exit code is universal)
         let output = Command::new("net")
             .args(["session"])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 
         match output {
-            Ok(out) => String::from_utf8_lossy(&out.stdout).contains("Administrator"),
+            Ok(out) => out.status.success(),
             Err(_) => false,
         }
     }

@@ -172,7 +172,7 @@ types {
                 r#"[mysqld]
 datadir={data_path_str}
 port=3306
-bind-address=*
+bind-address=127.0.0.1
 
 [client]
 port=3306

@@ -1088,7 +1088,7 @@ function VersionPicker({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] bg-surface-raised border border-edge rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute left-0 top-full mt-1 z-30 min-w-[220px] bg-surface-raised border border-edge rounded-lg shadow-xl overflow-hidden">
           <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-content-muted border-b border-edge/50">
             {headerLabel}
           </div>

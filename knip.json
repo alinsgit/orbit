@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "project": ["app/**/*.{ts,tsx}"],
+  "ignoreDependencies": [
+    "@fontsource/jetbrains-mono",
+    "tailwindcss"
+  ],
+  "ignore": ["app/lib/api/**", "app/lib/db-api.ts"],
+  "exclude": ["enumMembers", "duplicates"]
+}

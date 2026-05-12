@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Database, RefreshCw, AlertCircle, CheckCircle, Server, Play, Trash2, Wrench, Settings, ExternalLink, ArrowLeft, Loader2 } from 'lucide-react';
+import { Database, RefreshCw, AlertCircle, CheckCircle, Play, Trash2, Wrench, Settings, ExternalLink, ArrowLeft, Loader2 } from 'lucide-react';
 import {
   getDatabaseToolsStatus,
   installAdminer,
@@ -57,69 +57,24 @@ export default function DatabaseViewer() {
       setStatus(toolsStatus);
       setServices(installedServices);
 
-      // Auto-repair: ensure nginx configs exist for installed tools
-      const phpSvc = installedServices.find(s => s.service_type === 'php' || s.service_type.startsWith('php'));
-      if (phpSvc) {
-        const versionMatch = phpSvc.name.match(/php-(\d+)\.(\d+)/);
-        let phpPort = 9004;
-        if (versionMatch) {
-          const major = parseInt(versionMatch[1]);
-          const minor = parseInt(versionMatch[2]);
-          phpPort = major === 8 ? 9000 + minor : major === 7 ? 9070 + minor : 9004;
-        }
 
-        try {
-          if (toolsStatus.adminer.adminer_installed) {
-            await setupAdminerNginx(phpPort);
-          }
-          if (toolsStatus.phpmyadmin.installed) {
-            await setupPhpMyAdminNginx(phpPort);
-          }
-        } catch {
-          // Ignore - configs may already exist
-        }
-      }
-
+      // Check service statuses in parallel
       const mariadbService = installedServices.find(s => s.service_type === 'mariadb');
       const postgresService = installedServices.find(s => s.service_type === 'postgresql');
       const phpService = installedServices.find(s => s.service_type.startsWith('php'));
       const nginxService = installedServices.find(s => s.service_type === 'nginx');
 
-      if (mariadbService) {
-        try {
-          const mariadbStatus = await getServiceStatus(mariadbService.name);
-          setMariadbRunning(mariadbStatus === 'running');
-        } catch {
-          setMariadbRunning(false);
-        }
-      }
+      const [mariadbRes, postgresRes, phpRes, nginxRes] = await Promise.allSettled([
+        mariadbService ? getServiceStatus(mariadbService.name) : Promise.resolve('stopped'),
+        postgresService ? getServiceStatus(postgresService.name) : Promise.resolve('stopped'),
+        phpService ? getServiceStatus(phpService.name) : Promise.resolve('stopped'),
+        nginxService ? getServiceStatus(nginxService.name) : Promise.resolve('stopped'),
+      ]);
 
-      if (postgresService) {
-        try {
-          const postgresStatus = await getServiceStatus(postgresService.name);
-          setPostgresRunning(postgresStatus === 'running');
-        } catch {
-          setPostgresRunning(false);
-        }
-      }
-
-      if (phpService) {
-        try {
-          const phpStatus = await getServiceStatus(phpService.name);
-          setPhpRunning(phpStatus === 'running');
-        } catch {
-          setPhpRunning(false);
-        }
-      }
-
-      if (nginxService) {
-        try {
-          const nginxStatus = await getServiceStatus(nginxService.name);
-          setNginxRunning(nginxStatus === 'running');
-        } catch {
-          setNginxRunning(false);
-        }
-      }
+      setMariadbRunning(mariadbRes.status === 'fulfilled' && mariadbRes.value === 'running');
+      setPostgresRunning(postgresRes.status === 'fulfilled' && postgresRes.value === 'running');
+      setPhpRunning(phpRes.status === 'fulfilled' && phpRes.value === 'running');
+      setNginxRunning(nginxRes.status === 'fulfilled' && nginxRes.value === 'running');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load status');
     } finally {
@@ -434,65 +389,36 @@ export default function DatabaseViewer() {
               </div>
             )}
 
-            {/* Service Status */}
-            <div className="bg-surface-raised rounded-xl p-4 space-y-3">
-              <h3 className="text-sm font-medium text-content-secondary mb-3">Required Services</h3>
-
-              {(() => {
-                const engineRunning = engineTab === 'mariadb' ? mariadbRunning : postgresRunning;
-                const engineName = engineTab === 'mariadb' ? 'MariaDB' : 'PostgreSQL';
-
-                return (
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className={`p-3 rounded-lg ${engineRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
-                      <div className="flex items-center gap-2">
-                        <Server className={`w-4 h-4 ${engineRunning ? 'text-green-500' : 'text-content-muted'}`} />
-                        <span className="text-sm font-medium">{engineName}</span>
-                      </div>
-                      <p className={`text-xs mt-1 ${engineRunning ? 'text-green-400' : 'text-content-muted'}`}>
-                        {engineRunning ? 'Running' : 'Stopped'}
-                      </p>
-                    </div>
-
-                <div className={`p-3 rounded-lg ${phpRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
-                  <div className="flex items-center gap-2">
-                    <Server className={`w-4 h-4 ${phpRunning ? 'text-green-500' : 'text-content-muted'}`} />
-                    <span className="text-sm font-medium">PHP</span>
-                  </div>
-                  <p className={`text-xs mt-1 ${phpRunning ? 'text-green-400' : 'text-content-muted'}`}>
-                    {phpRunning ? 'Running' : 'Stopped'}
-                  </p>
+            {/* Service Status — compact inline bar */}
+            {!hasRequiredServices ? (
+              <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <p className="text-sm">
+                  Install {engineTab === 'mariadb' ? 'MariaDB' : 'PostgreSQL'}, PHP, and Nginx from the Services tab to use web tools.
+                </p>
+              </div>
+            ) : !allServicesRunning ? (
+              <div className="flex items-center justify-between p-3 bg-surface-raised border border-edge rounded-lg">
+                <div className="flex items-center gap-3 text-sm">
+                  {[{
+                    label: engineTab === 'mariadb' ? 'MariaDB' : 'PostgreSQL',
+                    ok: engineTab === 'mariadb' ? mariadbRunning : postgresRunning,
+                  }, { label: 'PHP', ok: phpRunning }, { label: 'Nginx', ok: nginxRunning }].map(s => (
+                    <span key={s.label} className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${s.ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                      <span className={s.ok ? 'text-content-secondary' : 'text-content-muted'}>{s.label}</span>
+                    </span>
+                  ))}
                 </div>
-
-                  <div className={`p-3 rounded-lg ${nginxRunning ? 'bg-green-500/10 border border-green-500/20' : 'bg-surface-raised border border-edge'}`}>
-                    <div className="flex items-center gap-2">
-                      <Server className={`w-4 h-4 ${nginxRunning ? 'text-green-500' : 'text-content-muted'}`} />
-                      <span className="text-sm font-medium">Nginx</span>
-                    </div>
-                    <p className={`text-xs mt-1 ${nginxRunning ? 'text-green-400' : 'text-content-muted'}`}>
-                      {nginxRunning ? 'Running' : 'Stopped'}
-                    </p>
-                  </div>
-                </div>
-                );
-              })()}
-
-              {hasRequiredServices && !allServicesRunning && (
                 <button
                   onClick={handleStartServices}
-                  className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors text-white"
                 >
-                  <Play className="w-4 h-4" />
-                  Start Required Services
+                  <Play className="w-3.5 h-3.5" />
+                  Start All
                 </button>
-              )}
-
-              {!hasRequiredServices && (
-                <p className="text-sm text-amber-400 mt-3">
-                  Please install {engineTab === 'mariadb' ? 'MariaDB' : 'PostgreSQL'}, PHP, and Nginx from the Services tab first. Web tools (Adminer{engineTab === 'mariadb' ? ', phpMyAdmin' : ''}) require PHP and Nginx to run.
-                </p>
-              )}
-            </div>
+              </div>
+            ) : null}
 
             {/* Database Tools */}
             <div className="space-y-4">

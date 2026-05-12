@@ -18,7 +18,8 @@
     "preview": "vite preview",
     "tauri": "TAURI_DIR=core tauri",
     "bump": "node scripts/bump-version.cjs",
-    "release": "node scripts/bump-version.cjs --release"
+    "release": "node scripts/bump-version.cjs --release",
+    "knip": "knip"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
@@ -50,6 +51,7 @@
     "eslint": "^10.0.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "knip": "^6.12.2",
     "tailwindcss": "^4.1.18",
     "typescript": "^6.0.2",
     "vite": "^8.0.3"

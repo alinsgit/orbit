@@ -533,11 +533,14 @@ impl SiteManager {
             }
         }
 
-        // Remove from hosts
-        let _ = HostsManager::remove_domain(domain);
+        // Remove from hosts — try normal first, then elevated (mirrors create_site pattern)
+        if HostsManager::remove_domain(domain).is_err() {
+            let _ = HostsManager::remove_domain_elevated(domain);
+        }
 
-        // Delete site-specific nginx log files
+        // Delete site-specific log files (nginx and apache use different naming)
         if let Ok(logs_dir) = NginxManager::get_logs_dir(app) {
+            // Nginx logs: {domain}.access.log, {domain}.error.log
             let access_log = logs_dir.join(format!("{domain}.access.log"));
             let error_log = logs_dir.join(format!("{domain}.error.log"));
             if access_log.exists() {
@@ -545,6 +548,15 @@ impl SiteManager {
             }
             if error_log.exists() {
                 let _ = fs::remove_file(&error_log);
+            }
+            // Apache logs: {domain}-access.log, {domain}-error.log
+            let apache_access = logs_dir.join(format!("{domain}-access.log"));
+            let apache_error = logs_dir.join(format!("{domain}-error.log"));
+            if apache_access.exists() {
+                let _ = fs::remove_file(&apache_access);
+            }
+            if apache_error.exists() {
+                let _ = fs::remove_file(&apache_error);
             }
         }
 

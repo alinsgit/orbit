@@ -636,24 +636,7 @@ export default function NativeDatabaseManager({ dbEngine = 'mariadb' }: NativeDa
                       Export All
                     </button>
                 )}
-                {(dbEngine === 'mariadb' || dbEngine === 'postgresql') && (
-                    <button
-                      onClick={() => {
-                        setSelectedDatabase(''); // Clear selection so they must pick
-                        handleImportSql('');
-                      }}
-                      disabled={backupLoading !== null}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-surface-raised hover:bg-surface text-content-secondary hover:text-content rounded-lg transition-colors border border-edge disabled:opacity-50"
-                      title="Import an SQL file into a database"
-                    >
-                      {backupLoading === 'import' ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Upload className="w-4 h-4" />
-                      )}
-                      Import
-                    </button>
-                )}
+
                 <button
                   onClick={() => setDialog({ type: 'createDb' })}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white transition-colors"

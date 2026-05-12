@@ -39,10 +39,11 @@ export function HostsEditorModal({ onClose }: HostsEditorModalProps) {
       onClose();
     } catch (e: any) {
       // Show elevated permission failures distinctly
-      if (e.includes("Elevation was denied")) {
+      const msg = typeof e === 'string' ? e : e?.message || String(e);
+      if (msg.includes("Elevation was denied")) {
         addToast({ type: 'error', message: "Administrative privileges are required to save changes." });
       } else {
-        addToast({ type: 'error', message: `Save error: ${e}` });
+        addToast({ type: 'error', message: `Save error: ${msg}` });
       }
     } finally {
       setSaving(false);
@@ -85,7 +86,7 @@ export function HostsEditorModal({ onClose }: HostsEditorModalProps) {
           <div className="flex-1 min-h-0 border border-edge rounded-lg bg-surface-inset relative overflow-hidden flex flex-col">
             {loading ? (
               <div className="absolute inset-0 flex items-center justify-center bg-surface-inset text-content-muted gap-2 z-10">
-                <Loader2 size={18} className="animate-spin" /> Loadings Hosts...
+                <Loader2 size={18} className="animate-spin" /> Loading Hosts...
               </div>
             ) : null}
             <textarea

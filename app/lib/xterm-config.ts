@@ -1,6 +1,6 @@
 import type { ITheme } from 'xterm'
 
-export const XTERM_FONT_FAMILY = "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace"
+const XTERM_FONT_FAMILY = "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace"
 
 export const XTERM_THEME_DARK: ITheme = {
   background: '#0d1117',
