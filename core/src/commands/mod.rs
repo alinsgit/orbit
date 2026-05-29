@@ -29,3 +29,4 @@ pub mod mongodb;
 pub mod blueprints;
 pub mod ai_tools;
 pub mod deploy;
+pub mod remote;

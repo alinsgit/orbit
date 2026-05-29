@@ -35,6 +35,7 @@ pub mod blueprints;
 pub mod ai_tools;
 pub mod deploy_store;
 pub mod deploy;
+pub mod ssh_session;
 
 use std::process::Command;
 

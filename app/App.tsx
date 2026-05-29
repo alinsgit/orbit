@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Server, Settings, Minus, Square, X, Database, Globe, TerminalSquare, Loader2, BrainCircuit } from 'lucide-react'
+import { Server, Settings, Minus, Square, X, Database, Globe, TerminalSquare, Loader2, BrainCircuit, Network } from 'lucide-react'
 import { useApp } from './lib/AppContext'
 import { ServiceManager } from './components/ServiceManager'
 import { SitesManager } from './components/SitesManager'
@@ -7,6 +7,7 @@ import { SettingsManager } from './components/SettingsManager'
 import DatabaseViewer from './components/DatabaseViewer'
 import { Terminal } from './components/Terminal'
 import { AiPanel } from './components/AiPanel'
+import { RemoteManager } from './components/remote/RemoteManager'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const appWindow = getCurrentWindow()
@@ -171,6 +172,12 @@ function App() {
             icon={<BrainCircuit size={24} />}
             title="AI Tools"
           />
+          <NavButton
+            active={activeTab === 'remote'}
+            onClick={() => setActiveTab('remote')}
+            icon={<Network size={24} />}
+            title="Remote (SSH/SFTP)"
+          />
           <div className="flex-1" />
           <NavButton
             active={isTerminalOpen}
@@ -207,6 +214,11 @@ function App() {
             {mountedTabs.has('ai') && (
               <div className="h-full overflow-auto" style={{ display: activeTab === 'ai' ? undefined : 'none' }}>
                 <AiPanel />
+              </div>
+            )}
+            {mountedTabs.has('remote') && (
+              <div className="h-full overflow-hidden" style={{ display: activeTab === 'remote' ? undefined : 'none' }}>
+                <RemoteManager />
               </div>
             )}
             {mountedTabs.has('settings') && (

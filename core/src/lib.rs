@@ -22,6 +22,8 @@ pub fn run() {
     .manage(service_manager) // Register state
     .manage(site_process_manager) // Register site app process state
     .manage(services::terminal::TerminalState::default()) // Register terminal state
+    .manage(services::ssh_session::SshConnPool::default()) // Register SFTP session pool
+    .manage(services::ssh_session::SshTerminalState::default()) // Register SSH terminal state
     .setup(|app| {
         // One-shot migration of any legacy flat installs (`bin/<svc>/<exe>`)
         // into the new multi-version layout (`bin/.versions/<svc>/<ver>/`
@@ -357,6 +359,23 @@ pub fn run() {
         // Deploy — File Transfer
         commands::deploy::deploy_sftp_download,
         commands::deploy::deploy_sftp_upload,
+        // ── Remote workspace: SFTP browsing + local fs + SSH PTY ──
+        commands::remote::local_list_dir,
+        commands::remote::local_mkdir,
+        commands::remote::local_delete,
+        commands::remote::local_rename,
+        commands::remote::local_home_dir,
+        commands::remote::sftp_list_dir,
+        commands::remote::sftp_mkdir,
+        commands::remote::sftp_delete,
+        commands::remote::sftp_rename,
+        commands::remote::sftp_download_path,
+        commands::remote::sftp_upload_path,
+        commands::remote::sftp_disconnect,
+        commands::remote::ssh_spawn_terminal,
+        commands::remote::ssh_write_terminal,
+        commands::remote::ssh_resize_terminal,
+        commands::remote::ssh_close_terminal,
     ])
     .run(tauri::generate_context!())
     .unwrap_or_else(|e| {

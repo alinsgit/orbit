@@ -10,6 +10,7 @@ AI-ready local development environment for **Windows, Linux and macOS**. 17 serv
 - **AI Tools** — Launch Claude Code and Gemini CLI directly from Orbit with project context and MCP auto-config
 - **Site Management** — Local sites with custom domains (.test), Nginx/Apache vhosts, templates
 - **Deploy** — SSH/SFTP/FTP deploy with diff-based sync, global connections and per-site targets
+- **Remote Workspace** — Interactive SSH terminal and dual-pane SFTP file explorer for browsing, transferring and managing remote server files without leaving Orbit
 - **Local SSL** — Self-signed certificates via mkcert, one-click HTTPS
 - **Database Tools** — MariaDB + PostgreSQL management, Adminer, phpMyAdmin
 - **Multi-version PHP** — Run multiple PHP versions side by side with per-site selection

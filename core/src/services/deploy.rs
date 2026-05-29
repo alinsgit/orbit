@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use ssh2::Session;
 use std::fs;
 use std::io::Read;
-use std::net::TcpStream;
 use std::path::Path;
 use suppaftp::FtpStream;
 use tauri::{AppHandle, Emitter, Manager};
@@ -84,35 +83,8 @@ impl DeployService {
     // ─── SSH Session Factory ─────────────────────────────────────────
 
     fn create_ssh_session(conn: &ServerConnection) -> Result<Session, String> {
-        let addr = format!("{}:{}", conn.host, conn.port);
-        let tcp =
-            TcpStream::connect(&addr).map_err(|e| format!("Connection failed: {e}"))?;
-        let mut session = Session::new().map_err(|e| format!("SSH error: {e}"))?;
-        session.set_tcp_stream(tcp);
-        session
-            .handshake()
-            .map_err(|e| format!("Handshake failed: {e}"))?;
-
-        match &conn.auth {
-            AuthMethod::Password => {
-                let password = DeployStore::get_password(&conn.name)?;
-                session
-                    .userauth_password(&conn.username, &password)
-                    .map_err(|e| format!("Auth failed: {e}"))?;
-            }
-            AuthMethod::KeyFile(path) => {
-                session
-                    .userauth_pubkey_file(
-                        &conn.username,
-                        None,
-                        Path::new(path),
-                        None,
-                    )
-                    .map_err(|e| format!("Key auth failed: {e}"))?;
-            }
-        }
-
-        Ok(session)
+        // Shared factory: includes TOFU host-key verification before auth.
+        crate::services::ssh_session::create_session(conn)
     }
 
     // ─── Remote Execution ────────────────────────────────────────────
