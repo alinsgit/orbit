@@ -55,15 +55,26 @@ pub fn create_session(conn: &ServerConnection) -> Result<Session, String> {
         return Err("Authentication failed".to_string());
     }
 
+    // Keep idle connections alive so pooled SFTP sessions and interactive
+    // shells aren't dropped by the server's idle timeout — the "connection
+    // clogs after a while" symptom.
+    session.set_keepalive(true, 30);
+
     Ok(session)
 }
 
-/// Trust-on-first-use host-key verification against the user's OpenSSH
-/// `~/.ssh/known_hosts`. Blocks the connection only on a definitive key
+/// Trust-on-first-use host-key verification against Orbit's *own*
+/// `~/.orbit/known_hosts`. Blocks the connection only on a definitive key
 /// MISMATCH (changed key / possible MITM); unknown hosts are pinned on first
 /// use. Failures to initialize the checker never block (best-effort), so the
-/// guarantee matches a normal SSH client's TOFU model without breaking
-/// connections to servers the user already trusts via their CLI.
+/// guarantee matches a normal SSH client's TOFU model.
+///
+/// We deliberately do NOT touch the user's `~/.ssh/known_hosts`: libssh2's
+/// `write_file` rewrites the whole file from its in-memory parse and silently
+/// drops entry types it doesn't understand (certificates, `sk-` keys, CA
+/// markers), which would corrupt the file the user's CLI relies on and cause
+/// spurious "host key changed" errors. A separate Orbit file keeps the two
+/// independent.
 fn verify_host_key(session: &Session, host: &str, port: u16) -> Result<(), String> {
     let mut known = match session.known_hosts() {
         Ok(k) => k,
@@ -85,7 +96,7 @@ fn verify_host_key(session: &Session, host: &str, port: u16) -> Result<(), Strin
         ssh2::CheckResult::Mismatch => Err(format!(
             "Host key MISMATCH for {host}:{port} — possible man-in-the-middle. \
              If the server key legitimately changed, remove the old entry from \
-             your ~/.ssh/known_hosts and reconnect."
+             your ~/.orbit/known_hosts and reconnect."
         )),
         // Unknown host (or transient check failure): trust on first use + pin.
         ssh2::CheckResult::NotFound | ssh2::CheckResult::Failure => {
@@ -115,7 +126,7 @@ fn verify_host_key(session: &Session, host: &str, port: u16) -> Result<(), Strin
 fn known_hosts_path() -> Option<std::path::PathBuf> {
     std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
-        .map(|h| std::path::PathBuf::from(h).join(".ssh").join("known_hosts"))
+        .map(|h| std::path::PathBuf::from(h).join(".orbit").join("known_hosts"))
 }
 
 // ─── SFTP Connection Pool ────────────────────────────────────────────
@@ -131,6 +142,11 @@ pub struct SshConnPool {
 impl SshConnPool {
     /// Return the pooled session for `name`, opening (and caching) one if
     /// absent. The connection metadata is loaded from the deploy store.
+    ///
+    /// A cached session is reused only after a liveness probe succeeds — a
+    /// dead pooled session (server idle-timeout, network blip) would otherwise
+    /// make every subsequent file operation fail forever, the "connection
+    /// clogs" symptom. A failed probe evicts the entry and reconnects.
     pub fn get_or_connect(
         &self,
         app: &AppHandle,
@@ -139,9 +155,17 @@ impl SshConnPool {
         {
             let map = self.sessions.lock().map_err(|_| "pool poisoned")?;
             if let Some(s) = map.get(name) {
-                return Ok(s.clone());
+                let alive = s
+                    .lock()
+                    .map(|sess| sess.keepalive_send().is_ok())
+                    .unwrap_or(false);
+                if alive {
+                    return Ok(s.clone());
+                }
             }
         }
+        // Absent or stale — drop any dead entry, then connect fresh.
+        self.disconnect(name);
 
         let conn = DeployStore::get_connection(app, name)?
             .ok_or_else(|| format!("Connection not found: {name}"))?;
@@ -151,6 +175,27 @@ impl SshConnPool {
         let mut map = self.sessions.lock().map_err(|_| "pool poisoned")?;
         // Another thread may have raced us — keep whichever landed first.
         Ok(map.entry(name.to_string()).or_insert(arc).clone())
+    }
+
+    /// Run `f` against the pooled session, evicting the session if it fails so
+    /// the next call reconnects. Centralizes the get → lock → operate pattern
+    /// and guarantees a half-open connection (which the up-front liveness probe
+    /// can miss) never stays cached after an operation error.
+    pub fn with_session<T>(
+        &self,
+        app: &AppHandle,
+        name: &str,
+        f: impl FnOnce(&Session) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let arc = self.get_or_connect(app, name)?;
+        let result = {
+            let sess = arc.lock().map_err(|_| "session poisoned")?;
+            f(&sess)
+        };
+        if result.is_err() {
+            self.disconnect(name);
+        }
+        result
     }
 
     /// Drop a pooled session (e.g. user disconnected or it went stale).

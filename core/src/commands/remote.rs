@@ -126,46 +126,46 @@ pub fn sftp_list_dir(
     connection: String,
     path: String,
 ) -> Result<DirListing, String> {
-    let session = pool.get_or_connect(&app, &connection)?;
-    let sess = session.lock().map_err(|_| "session poisoned")?;
-    let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+    pool.with_session(&app, &connection, |sess| {
+        let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
 
-    // Default to the connection's home directory when no path is given.
-    let base = if path.is_empty() {
-        sftp_home(&sftp).unwrap_or_else(|| ".".to_string())
-    } else {
-        path
-    };
-    let base = normalize_remote(&base);
+        // Default to the connection's home directory when no path is given.
+        let base = if path.is_empty() {
+            sftp_home(&sftp).unwrap_or_else(|| ".".to_string())
+        } else {
+            path
+        };
+        let base = normalize_remote(&base);
 
-    let mut entries = Vec::new();
-    let readdir = sftp
-        .readdir(Path::new(&base))
-        .map_err(|e| format!("Failed to list '{base}': {e}"))?;
+        let mut entries = Vec::new();
+        let readdir = sftp
+            .readdir(Path::new(&base))
+            .map_err(|e| format!("Failed to list '{base}': {e}"))?;
 
-    for (entry_path, stat) in readdir {
-        let name = entry_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        if name.is_empty() || name == "." || name == ".." {
-            continue;
+        for (entry_path, stat) in readdir {
+            let name = entry_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if name.is_empty() || name == "." || name == ".." {
+                continue;
+            }
+            let full = join_remote(&base, &name);
+            entries.push(FileEntry {
+                name,
+                path: full,
+                is_dir: stat.is_dir(),
+                size: stat.size.unwrap_or(0),
+                modified: stat.mtime.unwrap_or(0),
+                permissions: stat.perm.unwrap_or(0),
+            });
         }
-        let full = join_remote(&base, &name);
-        entries.push(FileEntry {
-            name,
-            path: full,
-            is_dir: stat.is_dir(),
-            size: stat.size.unwrap_or(0),
-            modified: stat.mtime.unwrap_or(0),
-            permissions: stat.perm.unwrap_or(0),
-        });
-    }
 
-    sort_entries(&mut entries);
-    Ok(DirListing {
-        path: base,
-        entries,
+        sort_entries(&mut entries);
+        Ok(DirListing {
+            path: base,
+            entries,
+        })
     })
 }
 
@@ -176,11 +176,11 @@ pub fn sftp_mkdir(
     connection: String,
     path: String,
 ) -> Result<(), String> {
-    let session = pool.get_or_connect(&app, &connection)?;
-    let sess = session.lock().map_err(|_| "session poisoned")?;
-    let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
-    sftp.mkdir(Path::new(&normalize_remote(&path)), 0o755)
-        .map_err(|e| format!("mkdir failed: {e}"))
+    pool.with_session(&app, &connection, |sess| {
+        let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+        sftp.mkdir(Path::new(&normalize_remote(&path)), 0o755)
+            .map_err(|e| format!("mkdir failed: {e}"))
+    })
 }
 
 #[command]
@@ -191,16 +191,16 @@ pub fn sftp_delete(
     path: String,
     is_dir: bool,
 ) -> Result<(), String> {
-    let session = pool.get_or_connect(&app, &connection)?;
-    let sess = session.lock().map_err(|_| "session poisoned")?;
-    let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
-    let p = normalize_remote(&path);
-    if is_dir {
-        sftp_remove_dir_recursive(&sftp, &p)
-    } else {
-        sftp.unlink(Path::new(&p))
-            .map_err(|e| format!("delete failed: {e}"))
-    }
+    pool.with_session(&app, &connection, |sess| {
+        let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+        let p = normalize_remote(&path);
+        if is_dir {
+            sftp_remove_dir_recursive(&sftp, &p)
+        } else {
+            sftp.unlink(Path::new(&p))
+                .map_err(|e| format!("delete failed: {e}"))
+        }
+    })
 }
 
 #[command]
@@ -211,15 +211,15 @@ pub fn sftp_rename(
     from: String,
     to: String,
 ) -> Result<(), String> {
-    let session = pool.get_or_connect(&app, &connection)?;
-    let sess = session.lock().map_err(|_| "session poisoned")?;
-    let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
-    sftp.rename(
-        Path::new(&normalize_remote(&from)),
-        Path::new(&normalize_remote(&to)),
-        None,
-    )
-    .map_err(|e| format!("rename failed: {e}"))
+    pool.with_session(&app, &connection, |sess| {
+        let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+        sftp.rename(
+            Path::new(&normalize_remote(&from)),
+            Path::new(&normalize_remote(&to)),
+            None,
+        )
+        .map_err(|e| format!("rename failed: {e}"))
+    })
 }
 
 /// Download a remote file or directory (recursive) to a local destination.
@@ -231,21 +231,21 @@ pub fn sftp_download_path(
     remote_path: String,
     local_path: String,
 ) -> Result<String, String> {
-    let session = pool.get_or_connect(&app, &connection)?;
-    let sess = session.lock().map_err(|_| "session poisoned")?;
-    let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
-    let remote = normalize_remote(&remote_path);
+    pool.with_session(&app, &connection, |sess| {
+        let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+        let remote = normalize_remote(&remote_path);
 
-    let stat = sftp
-        .stat(Path::new(&remote))
-        .map_err(|e| format!("stat failed: {e}"))?;
-    let count = if stat.is_dir() {
-        sftp_download_dir(&sftp, &remote, Path::new(&local_path))?
-    } else {
-        sftp_download_file(&sftp, &remote, Path::new(&local_path))?;
-        1
-    };
-    Ok(format!("Downloaded {count} file(s)"))
+        let stat = sftp
+            .stat(Path::new(&remote))
+            .map_err(|e| format!("stat failed: {e}"))?;
+        let count = if stat.is_dir() {
+            sftp_download_dir(&sftp, &remote, Path::new(&local_path))?
+        } else {
+            sftp_download_file(&sftp, &remote, Path::new(&local_path))?;
+            1
+        };
+        Ok(format!("Downloaded {count} file(s)"))
+    })
 }
 
 /// Upload a local file or directory (recursive) to a remote destination.
@@ -257,19 +257,19 @@ pub fn sftp_upload_path(
     local_path: String,
     remote_path: String,
 ) -> Result<String, String> {
-    let session = pool.get_or_connect(&app, &connection)?;
-    let sess = session.lock().map_err(|_| "session poisoned")?;
-    let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
-    let local = Path::new(&local_path);
-    let remote = normalize_remote(&remote_path);
+    pool.with_session(&app, &connection, |sess| {
+        let sftp = sess.sftp().map_err(|e| format!("SFTP error: {e}"))?;
+        let local = Path::new(&local_path);
+        let remote = normalize_remote(&remote_path);
 
-    let count = if local.is_dir() {
-        sftp_upload_dir(&sftp, local, &remote)?
-    } else {
-        sftp_upload_file(&sftp, local, &remote)?;
-        1
-    };
-    Ok(format!("Uploaded {count} file(s)"))
+        let count = if local.is_dir() {
+            sftp_upload_dir(&sftp, local, &remote)?
+        } else {
+            sftp_upload_file(&sftp, local, &remote)?;
+            1
+        };
+        Ok(format!("Uploaded {count} file(s)"))
+    })
 }
 
 #[command]

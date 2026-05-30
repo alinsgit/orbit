@@ -12,7 +12,11 @@ interface SshTerminalPaneProps {
 
 /** Interactive SSH shell for a connection, rendered via the shared xterm hook. */
 export function SshTerminalPane({ connection }: SshTerminalPaneProps) {
-  const id = `ssh-${connection}`
+  // The id flows into Tauri event names (`ssh-pty-output-${id}`), which only
+  // allow [A-Za-z0-9-/:_]. Connection names can contain spaces ("Alins Cloud")
+  // and other characters, so slugify before use — the real connection name is
+  // passed to spawn() separately and is unaffected.
+  const id = `ssh-${connection.replace(/[^A-Za-z0-9_/:-]/g, '-')}`
   const { containerRef } = useXterm({
     id,
     spawn: (sid, cols, rows) => sshSpawnTerminal(connection, sid, cols, rows),
